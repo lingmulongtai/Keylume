@@ -13,7 +13,7 @@ Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー�
 
 ![Keylume のライティングエディター](docs/images/keylume.png)
 
-Windows 用インストーラーは `artifacts/Keylume_0.1.0_x64-setup.exe`、ポータブル実行ファイルは `artifacts/Keylume.exe` に出力します。ZIP 版 `artifacts/Keylume_0.1.0_windows-x64.zip` は展開して直下の `Keylume.exe` を実行してください。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.1.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.1.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
