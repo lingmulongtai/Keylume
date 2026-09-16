@@ -3,14 +3,14 @@ name = "keylume"
 version = "0.1.0"
 description = "Independent lighting controller for Launchkey MK4 61"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [lib]
 name = "keylume_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
-default = []
+default = ["desktop"]
 desktop = ["dep:tauri", "dep:tauri-plugin-autostart", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-dialog", "dep:tauri-plugin-opener", "dep:midir", "dep:sysinfo", "dep:cpal", "dep:rustfft", "dep:windows-sys"]
 
 [build-dependencies]

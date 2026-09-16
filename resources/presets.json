@@ -409,7 +409,7 @@
       }
     ],
     "post": {
-      "brightness": 0.8,
+      "brightness": 1,
       "saturation": 1,
       "temperatureK": 6500,
       "gamma": 2.2

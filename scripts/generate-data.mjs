@@ -26,7 +26,7 @@ const definitions=[
  ['power-save','省電力',[layer('hardware_fx',{palette:76,mode:'pulse'})]],
  ['vegas','本体デモ',[]]
 ];
-const presets=definitions.map(([id,name,layers])=>({schema:1,id,name,layers,post:{brightness:id==='night'?0.15:0.8,saturation:1,temperatureK:6500,gamma:2.2},display:{enabled:false,widget:'presetName',showOnPresetChange:true},builtin:true}));
+const presets=definitions.map(([id,name,layers])=>({schema:1,id,name,layers,post:{brightness:id==='night'?0.15:id==='power-save'?1:0.8,saturation:1,temperatureK:6500,gamma:2.2},display:{enabled:false,widget:'presetName',showOnPresetChange:true},builtin:true}));
 // Approximate preview palette; these colors are explicitly not hardware measurements.
 const palette=Array.from({length:128},(_,i)=>i===0?[0,0,0]:i===1?[32,32,32]:i===2?[127,127,127]:i===3?[255,255,255]:hsv((i-4)/124));
 function hsv(h){return [0,2,1].map(k=>Math.round(255*(1-Math.max(0,Math.min(1,Math.min((k+h*6)%6,4-(k+h*6)%6))))));}

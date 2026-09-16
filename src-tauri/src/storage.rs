@@ -196,6 +196,9 @@ mod tests {
         fs::write(root.join("settings.json"), b"broken").unwrap();
         assert_eq!(s.settings().fps, 30);
         assert_eq!(s.notices.len(), 1);
+        let backup: Settings =
+            serde_json::from_slice(&fs::read(root.join("settings.json.bak")).unwrap()).unwrap();
+        assert_eq!(backup.fps, 30);
         fs::remove_dir_all(root).unwrap();
     }
 }

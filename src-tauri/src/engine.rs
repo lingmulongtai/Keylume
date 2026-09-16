@@ -20,7 +20,7 @@ pub struct Engine {
     pub time: f32,
     previous: Vec<Color>,
     transition_at: f32,
-    clock_last: Option<f32>,
+    clock_last: Option<f64>,
 }
 impl Default for Engine {
     fn default() -> Self {
@@ -44,14 +44,14 @@ impl Engine {
         }
         self.hits.push(hit);
     }
-    pub fn clock(&mut self) {
+    pub fn clock(&mut self, received_at: f64) {
         if let Some(last) = self.clock_last {
-            let delta = self.time - last;
+            let delta = received_at - last;
             if (0.005..0.2).contains(&delta) {
-                self.bpm = self.bpm * 0.8 + 60. / (delta * 24.) * 0.2;
+                self.bpm = self.bpm * 0.8 + (60. / (delta * 24.)) as f32 * 0.2;
             }
         }
-        self.clock_last = Some(self.time);
+        self.clock_last = Some(received_at);
     }
     pub fn transition(&mut self, frame: Vec<Color>) {
         self.previous = frame;
@@ -266,7 +266,7 @@ impl Engine {
                 scale(
                     color,
                     if l.effect == "metronome"
-                        && beat as u32 % l.number("beats", 4.).max(1.) as u32 != 0
+                        && !(beat as u32).is_multiple_of(l.number("beats", 4.).max(1.) as u32)
                     {
                         v * 0.25
                     } else {
@@ -361,6 +361,14 @@ mod tests {
     use super::*;
     use crate::model::builtin_presets;
     #[test]
+    fn clock_uses_arrival_times_even_when_ticks_are_processed_in_one_frame() {
+        let mut engine = Engine::default();
+        for tick in 0..100 {
+            engine.clock(259_200. + f64::from(tick) * 60. / (180. * 24.));
+        }
+        assert!((engine.bpm - 180.).abs() < 0.01);
+    }
+    #[test]
     fn blend_modes_obey_alpha() {
         for mode in ["normal", "add", "multiply", "screen", "max"] {
             assert_eq!(blend([0.2; 3], [0.7; 3], 0., mode), [0.2; 3]);
@@ -380,6 +388,7 @@ mod tests {
         assert_eq!(quantize([1.; 3], &p, 0., false), [0; 3]);
         assert_eq!(quantize([0.5; 3], &p, 1., false), [28; 3]);
         let mono = quantize([1., 0., 0.], &p, 1., true);
+        assert_eq!(mono, [27; 3]);
         assert_eq!(mono[0], mono[1]);
         assert!(mono[0] < 127);
     }

@@ -1,0 +1,104 @@
+{
+  "cargo:alloc-stdlib@0.2.4": [
+    {
+      "file": "alloc-stdlib-BSD.txt",
+      "url": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/ae42d22078b98549e987d2f03d12df7b984fde47/LICENSE"
+    }
+  ],
+  "cargo:dasp_sample@0.11.0": [
+    {
+      "file": "dasp-sample-MIT.txt",
+      "url": "https://raw.githubusercontent.com/rustaudio/sample/97c3bb9b2363c0b46ac1633858bf1054fd02a980/LICENSE-MIT"
+    }
+  ],
+  "cargo:defmt-parser@1.0.0": [
+    {
+      "file": "defmt-parser-MIT.txt",
+      "url": "https://raw.githubusercontent.com/knurling-rs/defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-MIT"
+    }
+  ],
+  "cargo:tauri-plugin@2.6.3": [
+    {
+      "file": "tauri-plugin-MIT.txt",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/6f6ab1207bb3923c2721fbc67d2fdb1c8deb0c7a/LICENSE_MIT"
+    }
+  ],
+  "cargo:selectors@0.36.1": [
+    {
+      "file": "selectors-MPL-2.0.txt",
+      "url": "https://www.mozilla.org/media/MPL/2.0/index.815ca599c9df.txt"
+    }
+  ],
+  "cargo:unic-char-property@0.9.0": [
+    {
+      "file": "unic-MIT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT"
+    },
+    {
+      "file": "unic-COPYRIGHT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md"
+    }
+  ],
+  "cargo:unic-char-range@0.9.0": [
+    {
+      "file": "unic-MIT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT"
+    },
+    {
+      "file": "unic-COPYRIGHT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md"
+    }
+  ],
+  "cargo:unic-common@0.9.0": [
+    {
+      "file": "unic-MIT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT"
+    },
+    {
+      "file": "unic-COPYRIGHT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md"
+    }
+  ],
+  "cargo:unic-ucd-version@0.9.0": [
+    {
+      "file": "unic-MIT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT"
+    },
+    {
+      "file": "unic-COPYRIGHT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md"
+    }
+  ],
+  "cargo:unic-ucd-ident@0.9.0": [
+    {
+      "file": "unic-ident-MIT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT"
+    },
+    {
+      "file": "unic-ident-COPYRIGHT.txt",
+      "url": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md"
+    }
+  ],
+  "cargo:webview2-com@0.38.2": [
+    {
+      "file": "webview2-MIT.txt",
+      "url": "https://raw.githubusercontent.com/wravery/webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE"
+    }
+  ],
+  "cargo:webview2-com-sys@0.38.2": [
+    {
+      "file": "webview2-MIT.txt",
+      "url": "https://raw.githubusercontent.com/wravery/webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE"
+    },
+    {
+      "file": "webview2-sdk-BSD.txt",
+      "url": "https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3650.58/License"
+    }
+  ],
+  "cargo:webview2-com-macros@0.8.1": [
+    {
+      "file": "webview2-macros-MIT.txt",
+      "url": "https://raw.githubusercontent.com/wravery/webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE"
+    }
+  ]
+}
