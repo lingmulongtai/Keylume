@@ -731,11 +731,11 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     if pressed {
                         engine.hit(Hit {
                             x: led
-                                .map(|l| l.pos.x / desired.layout.canvas.w)
-                                .unwrap_or(0.22 + (b[1] as f32 - 36.).clamp(0., 60.) / 60. * 0.74),
+                                .map(|l| (l.pos.x + l.size.w / 2.) / desired.layout.canvas.w)
+                                .unwrap_or_else(|| desired.layout.key_position(b[1])),
                             y: led
-                                .map(|l| l.pos.y / desired.layout.canvas.h)
-                                .unwrap_or(0.48),
+                                .map(|l| (l.pos.y + l.size.h / 2.) / desired.layout.canvas.h)
+                                .unwrap_or_else(|| desired.layout.keybed_y()),
                             at: now,
                             velocity: b[2] as f32 / 127.,
                             led: led.map(|l| l.id.clone()),

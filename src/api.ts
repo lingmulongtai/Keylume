@@ -5,6 +5,7 @@ import { effects, uid } from './types';
 import layout from '../resources/layout.json';
 import presets from '../resources/presets.json';
 import { previewInput, renderPreview } from './preview';
+import { upgradeLayout } from './layout';
 export const native = isTauri();
 export const defaults: Settings = {
   schema: 1,
@@ -83,7 +84,7 @@ let mock: AppState = {
 try {
   const saved = JSON.parse(localStorage.getItem('keylume-preview-v1') ?? 'null');
   if (saved?.settings && saved?.presets && saved?.layout) {
-    saved.layout = validateLayout(saved.layout);
+    saved.layout = upgradeLayout(validateLayout(saved.layout));
     mock = { ...mock, ...saved, status: { ...defaultStatus } };
     mock.status.activePreset = mock.settings.activePreset;
     mock.status.effectiveMode = mock.settings.coexistMode;
@@ -135,6 +136,29 @@ export function validateLayout(value: unknown): Layout {
     !fieldsValid(decor.display, ['x', 'y', 'w', 'h'])
   )
     throw Error('鍵盤 / 画面の描画データが不正です');
+  if (
+    l.geometryRevision != null &&
+    (!Number.isInteger(l.geometryRevision) || l.geometryRevision < 0)
+  )
+    throw Error('レイアウトのリビジョンが不正です');
+  if (decor.keybed != null && !fieldsValid(decor.keybed, ['y', 'h', 'blackHeight']))
+    throw Error('鍵盤のサイズが不正です');
+  if (
+    decor.controls != null &&
+    (!Array.isArray(decor.controls) ||
+      decor.controls.length > 64 ||
+      decor.controls.some(
+        (c) =>
+          !c ||
+          typeof c.id !== 'string' ||
+          c.id.length > 80 ||
+          typeof c.label !== 'string' ||
+          c.label.length > 80 ||
+          !fieldsValid(c.pos, ['x', 'y']) ||
+          !fieldsValid(c.size, ['w', 'h']),
+      ))
+  )
+    throw Error('ボタンの描画データが不正です');
   const ids = new Set<string>();
   for (const led of l.leds) {
     if (
@@ -142,6 +166,7 @@ export function validateLayout(value: unknown): Layout {
       typeof led.id !== 'string' ||
       !led.id ||
       led.id.length > 80 ||
+      (led.label != null && (typeof led.label !== 'string' || led.label.length > 80)) ||
       ids.has(led.id) ||
       !['rgb', 'mono', 'none'].includes(led.kind) ||
       !['pads', 'faderButtons', 'buttons'].includes(led.group) ||

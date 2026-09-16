@@ -159,7 +159,7 @@ export default function Editor({
               <button
                 className="icon-button"
                 aria-label="拡大"
-                onClick={() => setZoom(Math.min(1.15, zoom + 0.1))}
+                onClick={() => setZoom(Math.min(2, zoom + 0.1))}
               >
                 <Plus size={14} />
               </button>

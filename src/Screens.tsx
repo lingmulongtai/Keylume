@@ -29,38 +29,17 @@ import { native, exportJson, openLink } from './api';
 import { renderPreview, ditherImage } from './preview';
 import { Card, PageTitle, Note, Toggle, Slider, Modal } from './components';
 import { appVersion } from './version';
+import HardwareFace from './HardwareFace';
 const serviceUrl = 'https://microsoft.github.io/MIDI/get-latest/';
 const loopbackUrl = 'https://microsoft.github.io/MIDI/kb/virtual-loopback/';
 function Miniature({ preset, layout }: { preset: Preset; layout: Layout }) {
-  const colors = renderPreview(preset, layout, 18.4, 1);
   return (
-    <svg viewBox="0 0 240 90" aria-hidden="true">
-      <rect x="8" y="8" width="224" height="74" rx="7" fill="#171b20" stroke="#3a4148" />
-      {colors.slice(0, 16).map((c, i) => (
-        <rect
-          key={i}
-          x={42 + (i % 8) * 14}
-          y={27 + Math.floor(i / 8) * 14}
-          width="10"
-          height="10"
-          rx="2"
-          fill={`rgb(${c.map((v) => Math.round((v / 127) ** (1 / preset.post.gamma) * 255)).join(',')})`}
-        />
-      ))}
-      {colors.slice(16, 25).map((c, i) => (
-        <rect
-          key={i}
-          x={160 + i * 6}
-          y="43"
-          width="4"
-          height="5"
-          rx="1"
-          fill={`rgb(${c.map((v) => Math.round((v / 127) ** (1 / preset.post.gamma) * 255)).join(',')})`}
-        />
-      ))}
-      {Array.from({ length: 30 }, (_, i) => (
-        <rect key={i} x={29 + i * 6.3} y="59" width="5.5" height="14" rx="1" fill="#75817f" />
-      ))}
+    <svg viewBox={`0 0 ${layout.canvas.w} ${layout.canvas.h}`} aria-hidden="true">
+      <HardwareFace
+        layout={layout}
+        colors={renderPreview(preset, layout, 18.4, 1)}
+        gamma={preset.post.gamma}
+      />
     </svg>
   );
 }

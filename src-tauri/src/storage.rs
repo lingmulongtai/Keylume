@@ -67,8 +67,20 @@ impl Storage {
             .unwrap_or_default()
     }
     pub fn layout(&mut self) -> DeviceLayout {
-        self.load("layouts/layout.json", DeviceLayout::validate)
-            .unwrap_or_default()
+        let mut layout = self
+            .load("layouts/layout.json", DeviceLayout::validate)
+            .unwrap_or_default();
+        if layout.upgrade_geometry() {
+            if let Err(error) = self.save("layouts/layout.json", &layout) {
+                self.notices
+                    .push(format!("レイアウト移行の保存に失敗しました: {error}"));
+            } else {
+                self.notices.push(
+                    "61鍵の本体配置を更新しました。LED アドレスと検証状態は保持しています".into(),
+                );
+            }
+        }
+        layout
     }
     pub fn presets(&mut self) -> Vec<Preset> {
         let mut presets = builtin_presets();
@@ -174,6 +186,38 @@ pub fn import_preset(json: &str) -> Result<Preset, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn geometry_migration_keeps_calibration_and_original_backup() {
+        let root = std::env::temp_dir().join(format!(
+            "keylume-layout-test-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let mut storage = Storage::new(root.clone()).unwrap();
+        let mut old: DeviceLayout =
+            serde_json::from_str(include_str!("../../resources/layout-v1.json")).unwrap();
+        old.leds[20].verified = true;
+        old.leds[20].address.sysex_id = Some(65);
+        old.leds[20].kind = "none".into();
+        old.leds[20].group = "buttons".into();
+        storage.save("layouts/layout.json", &old).unwrap();
+        let mut updated = storage.layout();
+        assert_eq!(updated.geometry_revision, 2);
+        assert!(updated.leds[20].verified);
+        assert_eq!(updated.leds[20].address.sysex_id, Some(65));
+        assert_eq!(updated.leds[20].kind, "none");
+        assert_eq!(updated.leds[20].group, "buttons");
+        assert!(!updated.upgrade_geometry());
+        assert!(updated.key_position(36) < 0.05 && updated.key_position(96) > 0.95);
+        let backup: DeviceLayout =
+            serde_json::from_slice(&fs::read(root.join("layouts/layout.json.bak")).unwrap())
+                .unwrap();
+        assert_eq!(backup.geometry_revision, 0);
+        assert_eq!(backup.leds[20].address.sysex_id, Some(65));
+        old.leds[0].pos.x += 1.;
+        assert!(!old.upgrade_geometry());
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn migration_rejects_future_schema() {
         let mut v = serde_json::to_value(&builtin_presets()[0]).unwrap();

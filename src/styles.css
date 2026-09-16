@@ -546,8 +546,12 @@ code {
 .device-wrap {
   position: relative;
   width: 100%;
-  aspect-ratio: 1040 / 400;
-  transform-origin: center;
+  margin: auto;
+}
+.device-viewport {
+  width: 100%;
+  max-height: 420px;
+  overflow: auto;
 }
 .device-base,
 .device-glow,

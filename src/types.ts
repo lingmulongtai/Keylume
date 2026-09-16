@@ -1,6 +1,7 @@
 export type Color = [number, number, number];
 export interface Led {
   id: string;
+  label?: string;
   kind: 'rgb' | 'mono' | 'none';
   group: 'pads' | 'faderButtons' | 'buttons';
   pos: { x: number; y: number };
@@ -16,10 +17,18 @@ export interface Led {
 }
 export interface Layout {
   schema: 1;
+  geometryRevision?: number;
   model: string;
   canvas: { w: number; h: number };
   leds: Led[];
   decor: {
+    keybed?: { y: number; h: number; blackHeight: number };
+    controls?: {
+      id: string;
+      label: string;
+      pos: { x: number; y: number };
+      size: { w: number; h: number };
+    }[];
     keys: { note: number; x: number; w: number; black: boolean }[];
     encoders: { x: number; y: number; r: number }[];
     faders: { x: number; y: number; h: number }[];
