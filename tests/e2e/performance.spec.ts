@@ -15,6 +15,8 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
     for (const [source, bytes] of [
       ['daw', [191, 5, 127]],
       ['daw', [191, 21, 96]],
+      ['daw', [182, 73, 1]],
+      ['daw', [190, 5, 127]],
       ['keyboard', [224, 0, 64]],
       ['keyboard', [176, 64, 127]],
       ['keyboard', [144, 60, 100]],
@@ -22,6 +24,7 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
       await api.command('simulate_input', { source, bytes });
   });
   await expect(fader).toHaveAttribute('data-value', '127');
+  await expect(page.locator('[data-control=arp]')).toHaveAttribute('data-active', '1');
   await expect(page.locator('[data-control="encoder-1"]')).toHaveAttribute('data-value', '96');
   await expect(page.locator('[data-control="pitch-wheel"]')).toHaveAttribute('data-value', '8192');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
@@ -44,7 +47,7 @@ test('piano preferences persist and screen keys release on focus loss', async ({
   await page.getByLabel('音声バッファ', { exact: true }).selectOption('512');
   await expect
     .poll(async () =>
-      page.evaluate(() => JSON.parse(localStorage.getItem('keylume-preview-v1')!).settings.piano),
+      page.evaluate(() => JSON.parse(localStorage.getItem('keylume-preview-v1')!)?.settings.piano),
     )
     .toMatchObject({ enabled: true, octave: 1, volume: 0.3, bufferFrames: 512 });
   await page.reload();

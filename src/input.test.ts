@@ -37,3 +37,20 @@ test('keeps note sources independent and transport lamp hues fixed', () => {
   expect(hardwareColor('btn.record', [0, 80, 127])).toEqual([127, 0, 0]);
   expect(hardwareColor('btn.play', [0, 0, 0])).toEqual([0, 0, 0]);
 });
+
+test('touch and feature replies do not move controls or collide with DAW buttons', () => {
+  const input = new PreviewInput(),
+    l = layout as Layout;
+  input.receive('daw', [0xbe, 5, 127], l);
+  expect(input.state.held).toContain('fader-1');
+  expect(input.state.faders[0]).toBeNull();
+  input.receive('daw', [0xbe, 5, 0], l);
+  expect(input.state.held).not.toContain('fader-1');
+  input.receive('daw', [0xb6, 74, 1], l);
+  expect(input.state.features['74']).toBe(1);
+  expect(input.state.held).not.toContain('btn.capture');
+  input.receive('daw', [0xb6, 63, 127], l);
+  expect(input.state.held).toContain('btn.shift');
+  input.receive('daw', [0xdf, 85], l);
+  expect(input.state.pressure).toBe(85);
+});

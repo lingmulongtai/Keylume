@@ -8,6 +8,7 @@ export interface InputState {
   sustain: number | null;
   pressure: number | null;
   polyPressure: Record<string, number>;
+  features: Record<string, number>;
   held: string[];
   encoderMode: number | null;
   faderMode: number | null;
@@ -23,6 +24,7 @@ export const emptyInput = (): InputState => ({
   sustain: null,
   pressure: null,
   polyPressure: {},
+  features: {},
   held: [],
   encoderMode: null,
   faderMode: null,
@@ -73,6 +75,21 @@ export class PreviewInput {
           delete s.polyPressure[id];
         }
       }
+    } else if (source === 'daw' && kind === 0xd0) {
+      s.pressure = b[1];
+    } else if (source === 'daw' && b[0] === 0xbe) {
+      const id =
+        b[1] >= 5 && b[1] <= 13
+          ? `fader-${b[1] - 4}`
+          : b[1] >= 21 && b[1] <= 28
+            ? `encoder-${b[1] - 20}`
+            : b[1] >= 85 && b[1] <= 92
+              ? `encoder-${b[1] - 84}`
+              : null;
+      if (id) {
+        if (v) this.presses.set(key, id);
+        else this.presses.delete(key);
+      }
     } else if (keyboard) {
       if (kind === 0xe0) s.pitch = b[1] + (v << 7);
       if (kind === 0xd0) s.pressure = b[1];
@@ -106,6 +123,11 @@ export class PreviewInput {
         }
       }
     } else if (source === 'daw' && b[0] === 0xb6) {
+      s.features[b[1]] = v;
+      if (b[1] === 63) {
+        if (v) this.presses.set(key, 'btn.shift');
+        else this.presses.delete(key);
+      }
       if (b[1] === 30) {
         if (s.encoderMode !== v) {
           s.encoders.fill(null);

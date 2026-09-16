@@ -677,9 +677,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     let init = [
                         INQUIRY.to_vec(),
                         DAW_ON.to_vec(),
+                        vec![0x9f, 0x0b, 127],
                         vec![0xb6, PAD_MODE, 2],
                         vec![0xb7, 0x1e, 0],
                         vec![0xb7, 0x1f, 0],
+                        vec![0xb7, 0x49, 0],
+                        vec![0xb7, 0x4a, 0],
                         vec![0xb6, DAW_DRUM, if settings.daw_drum { 1 } else { 0 }],
                     ];
                     let mut success = true;
@@ -729,6 +732,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         core.notify(&app, "Launchkey のライティングを開始しました");
                     } else {
                         let _ = t.send_raw(&[0xb6, DAW_DRUM, 0]);
+                        let _ = t.send_raw(&[0x9f, 0x0b, 0]);
                         let _ = t.send_raw(&DAW_OFF);
                         next_connect = now + 5.;
                         attempts += 1;
@@ -1302,7 +1306,7 @@ fn release(
                 }
             }
         }
-        for b in [[0xb6, DAW_DRUM, 0], DAW_OFF] {
+        for b in [[0x9f, 0x0b, 0], [0xb6, DAW_DRUM, 0], DAW_OFF] {
             let _ = send(&mut **t, &b, status, monitor, settings.midi_log);
         }
     }

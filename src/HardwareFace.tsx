@@ -191,7 +191,7 @@ function HardwareFace({
             height="6.5"
             rx="1.2"
             fill="#101013"
-            stroke="#505056"
+            stroke={held?.has(`fader-${i + 1}`) ? '#e8c48e' : '#505056'}
             strokeWidth=".7"
           />
           <path
@@ -251,7 +251,7 @@ function HardwareFace({
             cy={encoder.y}
             r={encoder.r}
             fill="#333337"
-            stroke="#525257"
+            stroke={held?.has(`encoder-${i + 1}`) ? '#e8c48e' : '#525257'}
             strokeWidth=".7"
           />
           <path
@@ -263,14 +263,30 @@ function HardwareFace({
         </g>
       ))}
       {layout.decor.controls?.map((control) => (
-        <g key={control.id} data-control={control.id}>
+        <g
+          key={control.id}
+          data-control={control.id}
+          data-active={
+            control.id === 'arp'
+              ? input?.features['73']
+              : control.id === 'scale'
+                ? input?.features['74']
+                : undefined
+          }
+        >
           <rect
             x={control.pos.x}
             y={control.pos.y}
             width={control.size.w}
             height={control.size.h}
             rx="1.4"
-            fill={held?.has(control.id) ? '#73634b' : '#1b1b1e'}
+            fill={
+              held?.has(control.id) ||
+              (control.id === 'arp' && input?.features['73']) ||
+              (control.id === 'scale' && input?.features['74'])
+                ? '#73634b'
+                : '#1b1b1e'
+            }
             stroke="#0d0d10"
             strokeWidth=".8"
           />

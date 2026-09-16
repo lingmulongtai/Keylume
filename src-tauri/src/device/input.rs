@@ -14,6 +14,7 @@ pub struct InputState {
     pub sustain: Option<u8>,
     pub pressure: Option<u8>,
     pub poly_pressure: BTreeMap<String, u8>,
+    pub features: BTreeMap<u8, u8>,
     pub held: Vec<String>,
     pub encoder_mode: Option<u8>,
     pub fader_mode: Option<u8>,
@@ -76,6 +77,23 @@ impl InputState {
                     }
                 }
             }
+        } else if source == "daw" && kind == 0xd0 {
+            self.pressure = Some(b[1]);
+        } else if source == "daw" && b[0] == 0xbe {
+            let id = match b[1] {
+                5..=13 => Some(format!("fader-{}", b[1] - 4)),
+                21..=28 => Some(format!("encoder-{}", b[1] - 20)),
+                85..=92 => Some(format!("encoder-{}", b[1] - 84)),
+                _ => None,
+            };
+            if let Some(id) = id {
+                let key = (source.into(), ch, b[1]);
+                if v > 0 {
+                    self.presses.insert(key, id);
+                } else {
+                    self.presses.remove(&key);
+                }
+            }
         } else if keyboard {
             match kind {
                 0xe0 => self.pitch = Some(b[1] as u16 + ((v as u16) << 7)),
@@ -132,7 +150,16 @@ impl InputState {
                 }
             }
         } else if source == "daw" && b[0] == 0xb6 {
+            self.features.insert(b[1], v);
             match b[1] {
+                0x3f => {
+                    let key = (source.into(), ch, b[1]);
+                    if v > 0 {
+                        self.presses.insert(key, "btn.shift".into());
+                    } else {
+                        self.presses.remove(&key);
+                    }
+                }
                 0x1e => {
                     if self.encoder_mode != Some(v) {
                         self.encoders = [None; 8];
@@ -198,5 +225,22 @@ mod tests {
         assert!(s.held.contains(&"btn.play".into()));
         s.receive("daw", &[0xbf, 115, 0], &l);
         assert!(s.held.is_empty());
+    }
+    #[test]
+    fn touches_and_feature_replies_are_separate_from_positions_and_buttons() {
+        let mut s = InputState::default();
+        let l = DeviceLayout::default();
+        s.receive("daw", &[0xbe, 5, 127], &l);
+        assert!(s.held.contains(&"fader-1".into()));
+        assert_eq!(s.faders[0], None);
+        s.receive("daw", &[0xbe, 5, 0], &l);
+        assert!(!s.held.contains(&"fader-1".into()));
+        s.receive("daw", &[0xb6, 74, 1], &l);
+        assert_eq!(s.features.get(&74), Some(&1));
+        assert!(!s.held.contains(&"btn.capture".into()));
+        s.receive("daw", &[0xb6, 63, 127], &l);
+        assert!(s.held.contains(&"btn.shift".into()));
+        s.receive("daw", &[0xdf, 85], &l);
+        assert_eq!(s.pressure, Some(85));
     }
 }
