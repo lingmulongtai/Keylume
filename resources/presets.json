@@ -1,0 +1,442 @@
+[
+  {
+    "schema": 1,
+    "id": "aurora",
+    "name": "オーロラ",
+    "layers": [
+      {
+        "id": "d641b5ad-e40a-4641-9e2b-44d4c10cba30",
+        "effect": "aurora",
+        "params": {
+          "colors": [
+            "#43ffc2",
+            "#38a7bf",
+            "#a574f9"
+          ],
+          "speed": 0.6
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "spectrum-wave",
+    "name": "スペクトラムウェーブ",
+    "layers": [
+      {
+        "id": "6e322b71-03db-41da-9fc6-87f76091b779",
+        "effect": "wave",
+        "params": {
+          "speed": 0.5,
+          "wavelength": 0.8
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "white-breeze",
+    "name": "ホワイトブリーズ",
+    "layers": [
+      {
+        "id": "e4d70715-b338-4c71-bdbd-dd7aff19713f",
+        "effect": "breathing",
+        "params": {
+          "color": "#fff0d8",
+          "period": 6
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "sunset",
+    "name": "サンセット",
+    "layers": [
+      {
+        "id": "4335c204-269f-4614-b466-80095ebf6c41",
+        "effect": "gradient",
+        "params": {
+          "colors": [
+            "#ff883e",
+            "#f65c9d",
+            "#8a5bf7"
+          ],
+          "angle": 0
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "neon",
+    "name": "ネオンリアクティブ",
+    "layers": [
+      {
+        "id": "bb2e6170-90c4-4184-933b-7258ef962d70",
+        "effect": "ripple",
+        "params": {
+          "color": "#42fbe5",
+          "decay": 2,
+          "speed": 1
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "fdef267a-05f0-4149-a726-4d5c2f17b536",
+        "effect": "static",
+        "params": {
+          "color": "#091635"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "starlight",
+    "name": "星空",
+    "layers": [
+      {
+        "id": "df67540b-c591-42af-9acf-e981bd2d450a",
+        "effect": "starlight",
+        "params": {
+          "color": "#c1d7ff",
+          "density": 0.3,
+          "speed": 0.7
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "d7917823-d550-4f5e-8ec6-48b7aedb1ddc",
+        "effect": "static",
+        "params": {
+          "color": "#07172b"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "fire",
+    "name": "ファイア",
+    "layers": [
+      {
+        "id": "be330226-85ab-44a7-99f3-a2b7aaa21899",
+        "effect": "fire",
+        "params": {
+          "speed": 1,
+          "intensity": 1
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "audio-bars",
+    "name": "オーディオバー",
+    "layers": [
+      {
+        "id": "3d93f3b3-4e86-4433-8a64-cfa107d81527",
+        "effect": "audio_spectrum",
+        "params": {
+          "color": "#52f5be",
+          "sensitivity": 1
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "beat",
+    "name": "ビート",
+    "layers": [
+      {
+        "id": "dd174d76-4859-4118-9ade-fca8d7481c35",
+        "effect": "audio_pulse",
+        "params": {
+          "color": "#ff7cb7",
+          "sensitivity": 1.8
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "a925e8bb-b609-4b3a-9838-765e79cafcd1",
+        "effect": "static",
+        "params": {
+          "color": "#10091b"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "note-rainbow",
+    "name": "キーボードレインボー",
+    "layers": [
+      {
+        "id": "2b7560bf-6f49-40ac-938d-1b3239764aff",
+        "effect": "note_map",
+        "params": {},
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "f387e256-6d74-4bdc-8f1d-d3c430f914f5",
+        "effect": "static",
+        "params": {
+          "color": "#090d17"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "night",
+    "name": "夜間",
+    "layers": [
+      {
+        "id": "3617a71f-7e77-48fc-98c0-97a2f530fa31",
+        "effect": "static",
+        "params": {
+          "color": "#ffd3a3"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.15,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "power-save",
+    "name": "省電力",
+    "layers": [
+      {
+        "id": "4b6d0039-700b-40f4-b17a-ab569c7af76d",
+        "effect": "hardware_fx",
+        "params": {
+          "palette": 76,
+          "mode": "pulse"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "vegas",
+    "name": "本体デモ",
+    "layers": [],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  }
+]
