@@ -59,8 +59,6 @@ export default function DeviceCanvas({
       const { layout, preset, paused } = data.current;
       ctx.clearRect(0, 0, layout.canvas.w, layout.canvas.h);
       const colors = native ? frame.current : frameNow();
-      let accent: Color = [0, 0, 0];
-      let count = 0;
       layout.leds.forEach((led, i) => {
         if (led.kind === 'none') return;
         const raw = paused ? [0, 0, 0] : (colors[i] ?? [0, 0, 0]);
@@ -71,7 +69,7 @@ export default function DeviceCanvas({
         ctx.save();
         ctx.fillStyle = color;
         ctx.shadowColor = color;
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 3;
         ctx.globalAlpha = 0.7;
         ctx.beginPath();
         ctx.roundRect(x, y, w, h, led.group === 'pads' ? 5 : 3);
@@ -82,17 +80,7 @@ export default function DeviceCanvas({
         ctx.fillStyle = 'rgba(255,255,255,.08)';
         ctx.fillRect(x + 3, y + 2, w - 6, 1);
         ctx.restore();
-        if (led.group === 'pads') {
-          accent = accent.map((v, i) => v + c[i]) as Color;
-          count++;
-        }
       });
-      if (Math.floor(now / 500) !== Math.floor((now - 33) / 500)) {
-        const c = count
-          ? accent.map((v) => Math.round(Math.min(220, Math.max(105, v / count))))
-          : [157, 180, 255];
-        document.documentElement.style.setProperty('--accent', `rgb(${c.join(',')})`);
-      }
     }
     animation = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animation);

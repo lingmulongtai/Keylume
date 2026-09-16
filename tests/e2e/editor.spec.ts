@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: '光に、あなたのリズムを。' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ライティング', exact: true })).toBeVisible();
 });
 test('edits, saves, reloads, exports and deletes a preset', async ({ page }) => {
   await page.getByRole('button', { name: 'レイヤーを追加', exact: true }).click();

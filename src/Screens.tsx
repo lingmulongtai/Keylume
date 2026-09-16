@@ -28,6 +28,7 @@ import { uid } from './types';
 import { native, exportJson, openLink } from './api';
 import { renderPreview, ditherImage } from './preview';
 import { Card, PageTitle, Note, Toggle, Slider, Modal } from './components';
+import { appVersion } from './version';
 const serviceUrl = 'https://microsoft.github.io/MIDI/get-latest/';
 const loopbackUrl = 'https://microsoft.github.io/MIDI/kb/virtual-loopback/';
 function Miniature({ preset, layout }: { preset: Preset; layout: Layout }) {
@@ -77,7 +78,11 @@ export function PresetsScreen({ state, act, toast }: ViewProps) {
   };
   return (
     <div className="page">
-      <PageTitle eyebrow="ライブラリ" title="プリセット" description="今日の音に、似合う光を。">
+      <PageTitle
+        eyebrow="ライブラリ"
+        title="プリセット"
+        description="プリセットの適用、複製、読み込みと書き出し。"
+      >
         <button className="secondary" onClick={() => file.current?.click()}>
           <Upload size={16} />
           インポート
@@ -105,7 +110,7 @@ export function PresetsScreen({ state, act, toast }: ViewProps) {
         <div className="segmented">
           {[
             ['all', 'すべて'],
-            ['builtin', 'コレクション'],
+            ['builtin', '標準プリセット'],
             ['custom', 'マイプリセット'],
           ].map(([id, label]) => (
             <button
@@ -152,7 +157,7 @@ export function PresetsScreen({ state, act, toast }: ViewProps) {
                 <div className="preset-name">
                   <h3>{p.name}</h3>
                   <small>
-                    {p.layers.length} レイヤー · {p.builtin ? 'コレクション' : 'カスタム'}
+                    {p.layers.length} レイヤー · {p.builtin ? '標準' : 'カスタム'}
                   </small>
                 </div>
               </button>
@@ -213,7 +218,7 @@ export function ProfilesScreen({ state, act, saveSettings, toast }: ViewProps) {
       <PageTitle
         eyebrow="オートメーション"
         title="プロファイル"
-        description="使うアプリや時間に合わせて、光を自動で切り替える。"
+        description="アプリ、時間帯、アイドル状態に応じた自動切り替え。"
       >
         <button
           className="primary"
@@ -753,7 +758,7 @@ export function DeviceScreen({ state, act, edit, saveSettings, toast }: ViewProp
       <PageTitle
         eyebrow="ハードウェア"
         title="デバイス"
-        description="接続から LED マップまで。実機の状態を確かめる。"
+        description="Launchkey MK4 61 の接続、OLED、LED アドレスの設定。"
       >
         <button className="secondary" onClick={() => void act('reconnect')}>
           <RefreshCw size={16} />
@@ -1146,9 +1151,9 @@ export function SettingsScreen({
   return (
     <div className="page">
       <PageTitle
-        eyebrow="自分らしく使う"
+        eyebrow="アプリケーション"
         title="設定"
-        description="いつもの制作環境に、自然に溶け込むように。"
+        description="起動、描画、音声入力、更新通知。"
       />
       <div className="two-columns">
         <Card title="起動と常駐">
@@ -1310,7 +1315,7 @@ export function SettingsScreen({
           />
         </Card>
       </div>
-      <Card title="Keylume 0.1.0">
+      <Card title={`Keylume ${appVersion}`}>
         <p className="muted">
           Launchkey MK4 61 向けの非公式ライティングコントローラーです。Novation / Focusrite
           とは関係ありません。

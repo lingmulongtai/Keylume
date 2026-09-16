@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Sparkles,
+  SlidersHorizontal,
   LayoutGrid,
   Workflow,
   Radio,
@@ -28,9 +28,10 @@ import {
   SetupWizard,
 } from './Screens';
 import { Modal } from './components';
+import { appVersion } from './version';
 type Page = 'lighting' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
-  { id: 'lighting', name: 'ライティング', icon: Sparkles },
+  { id: 'lighting', name: 'ライティング', icon: SlidersHorizontal },
   { id: 'presets', name: 'プリセット', icon: LayoutGrid },
   { id: 'profiles', name: 'プロファイル', icon: Workflow },
   { id: 'coexist', name: '共存設定', icon: Radio },
@@ -166,7 +167,7 @@ export default function App() {
     setSaveName(state.preset.builtin ? state.preset.name + ' のコピー' : state.preset.name);
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <header className="app-navigation">
         <a
           className="brand"
           href="#"
@@ -177,45 +178,29 @@ export default function App() {
           aria-label="Keylume ライティング"
         >
           <img src="/logo.svg" alt="" />
-          <span>
-            Keylume<small>Light your sound.</small>
-          </span>
+          <span>Keylume</span>
         </a>
-        <div className="sidebar-device">
-          <div className="device-mini-icon">
-            <Keyboard size={29} />
-          </div>
-          <span>Launchkey MK4 61</span>
-          <small>
-            <span className="tiny-dot" />
-            {statusLabels[state.status.connection] ?? state.status.connection}
-          </small>
-        </div>
         <nav aria-label="メインナビゲーション">
           {pages.map((p) => (
             <button
               key={p.id}
               className={page === p.id ? 'active' : ''}
+              aria-current={page === p.id ? 'page' : undefined}
               onClick={() => setPage(p.id)}
             >
               <p.icon size={18} />
               {p.name}
-              {page === p.id && <ChevronRight size={14} />}
             </button>
           ))}
         </nav>
-        <div className="sidebar-bottom">
+        <div className="navigation-utilities">
           <button className="help" onClick={() => setSetup(true)}>
             <CircleHelp size={17} />
             セットアップガイド
-            <ArrowRight />
           </button>
-          <span>
-            Keylume <b>0.1.0</b>
-          </span>
-          <small>Unofficial. Independently made.</small>
+          <span>v{appVersion}</span>
         </div>
-      </aside>
+      </header>
       <div className="app-content">
         <header className="app-header">
           <div className="connection">
@@ -259,11 +244,11 @@ export default function App() {
         {!state.settings.setupComplete && (
           <div className="setup-banner">
             <span>
-              <Sparkles size={15} />
-              はじめての Keylume。プレビューを試してから、実機をセットアップできます。
+              <Keyboard size={15} />
+              プレビューモード · 実機に接続するにはセットアップを開いてください。
             </span>
             <button onClick={() => setSetup(true)}>
-              セットアップを始める
+              セットアップ
               <ChevronRight size={14} />
             </button>
             <button
@@ -361,7 +346,4 @@ export default function App() {
       )}
     </div>
   );
-}
-function ArrowRight() {
-  return <ChevronRight size={13} />;
 }
