@@ -218,6 +218,12 @@ impl Piano {
     }
 }
 
+impl Drop for Piano {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 fn start(
     font: &Arc<rustysynth::SoundFont>,
     settings: &PianoSettings,

@@ -308,6 +308,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut running = vec![];
     let mut foreground = String::new();
     let mut errors = 0u32;
+    let mut had_input = false;
     loop {
         let tick = Instant::now();
         let now = start.elapsed().as_secs_f32();
@@ -769,12 +770,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             *core.input.lock().unwrap() = InputState::default();
             warn(&mut status, "入力が集中したため、転送ノートを解放しました");
         }
-        if (inactive && keyboard.is_none())
-            || (!settings.mock && transport.is_none() && keyboard.is_none())
-        {
+        let has_input = (!inactive && (settings.mock || transport.is_some())) || keyboard.is_some();
+        if had_input && !has_input {
             *core.input.lock().unwrap() = InputState::default();
             engine.held.clear();
         }
+        had_input = has_input;
         for packet in rx.try_iter().take(512) {
             let b = &packet.bytes;
             if !inactive
