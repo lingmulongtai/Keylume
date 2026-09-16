@@ -82,11 +82,11 @@ impl LedTransport for QueuedTransport {
             return Ok(());
         }
         let (tx, rx) = crossbeam_channel::bounded(1);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
         self.commands
-            .send(OutputCommand::Immediate(bytes.to_vec(), tx))
+            .send_deadline(OutputCommand::Immediate(bytes.to_vec(), tx), deadline)
             .map_err(|e| e.to_string())?;
-        rx.recv_timeout(std::time::Duration::from_secs(2))
-            .map_err(|e| e.to_string())?
+        rx.recv_deadline(deadline).map_err(|e| e.to_string())?
     }
     fn flush(&mut self) -> Result<(), String> {
         if let Some(e) = self.failure.lock().unwrap().clone() {
@@ -101,9 +101,13 @@ impl LedTransport for QueuedTransport {
 }
 impl Drop for QueuedTransport {
     fn drop(&mut self) {
-        let _ = self.commands.send(OutputCommand::Stop);
+        let _ = self.commands.try_send(OutputCommand::Stop);
         if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
+            // A native MIDI driver can block indefinitely. Detach a busy worker;
+            // dropping the sender closes its queue once the driver returns.
+            if thread.is_finished() {
+                let _ = thread.join();
+            }
         }
     }
 }
@@ -179,6 +183,47 @@ pub fn differences<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stalled_driver_bounds_immediate_commands_and_drop() {
+        struct StalledSink {
+            started: crossbeam_channel::Sender<()>,
+            resume: crossbeam_channel::Receiver<()>,
+            first: bool,
+        }
+        impl LedTransport for StalledSink {
+            fn send_raw(&mut self, _: &[u8]) -> Result<(), String> {
+                if self.first {
+                    self.first = false;
+                    self.started.send(()).unwrap();
+                    let _ = self.resume.recv();
+                }
+                Ok(())
+            }
+        }
+        let (started_tx, started_rx) = crossbeam_channel::bounded(1);
+        let (resume_tx, resume_rx) = crossbeam_channel::bounded(1);
+        let mut transport = QueuedTransport::new(StalledSink {
+            started: started_tx,
+            resume: resume_rx,
+            first: true,
+        });
+        transport.send_raw(&[0x90, 96, 127]).unwrap();
+        transport.flush().unwrap();
+        started_rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+        transport.flush().unwrap();
+        transport.flush().unwrap();
+        let start = std::time::Instant::now();
+        assert!(transport
+            .send_raw(&super::super::constants::DAW_OFF)
+            .is_err());
+        assert!(start.elapsed() < std::time::Duration::from_secs(3));
+        let start = std::time::Instant::now();
+        drop(transport);
+        assert!(start.elapsed() < std::time::Duration::from_millis(500));
+        resume_tx.send(()).unwrap();
+    }
     #[test]
     fn hardware_queue_keeps_latest_colors_and_orders_release() {
         struct Sink(std::sync::Arc<std::sync::Mutex<Vec<Vec<u8>>>>);
