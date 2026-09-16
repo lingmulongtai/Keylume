@@ -16,6 +16,11 @@ test('edits, saves, reloads, exports and deletes a preset', async ({ page }) => 
     'E2E Sunset',
   );
   await page.getByRole('button', { name: 'プリセット', exact: true }).click();
+  await page.getByLabel('プリセットを検索', { exact: true }).fill('sunset');
+  await expect(page.getByRole('heading', { name: 'E2E Sunset', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'プリセットが見つかりません', exact: true }),
+  ).toHaveCount(0);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'E2E Sunsetを書き出す' }).click();
   expect((await download).suggestedFilename()).toMatch(/\.keylume\.json$/);

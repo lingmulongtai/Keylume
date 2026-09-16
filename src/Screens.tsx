@@ -195,7 +195,7 @@ export function PresetsScreen({ state, act, toast }: ViewProps) {
       {state.presets.filter(
         (p) =>
           (filter === 'all' || (filter === 'builtin' ? p.builtin : !p.builtin)) &&
-          p.name.includes(search),
+          p.name.toLowerCase().includes(search.toLowerCase()),
       ).length === 0 && (
         <div className="empty-state">
           <Search />
