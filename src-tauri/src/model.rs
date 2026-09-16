@@ -434,6 +434,7 @@ pub struct Settings {
     pub audio_device: String,
     pub check_for_updates: bool,
     pub include_prereleases: bool,
+    pub piano: crate::piano::PianoSettings,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -483,11 +484,13 @@ impl Default for Settings {
             audio_device: String::new(),
             check_for_updates: true,
             include_prereleases: true,
+            piano: Default::default(),
         }
     }
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), String> {
+        self.piano.validate()?;
         if self.schema != 1
             || ![15, 30, 60].contains(&self.fps)
             || !(0.0..=1.0).contains(&self.master_brightness)

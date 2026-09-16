@@ -14,3 +14,5 @@ License texts omitted from crate archives are preserved in `licenses/upstream/`;
 The unmodified `selectors` 0.36.1 build dependency is covered by MPL 2.0. Its source is available from [the exact crate archive](https://crates.io/api/v1/crates/selectors/0.36.1/download) and [the upstream revision](https://github.com/servo/stylo/tree/635e1a19d02960588a00e189bd4bd5bdb150ec3d/selectors). Its license is included in the notices above.
 
 Protocol messages were implemented independently from the Novation public programmer documentation. No source code from launchkey-sdk or Ardour was copied.
+
+The embedded FreePats Upright Piano KW small (2019-07-03) SoundFont is published under CC0 1.0. See [source and checksum](resources/piano/SOURCE.md), [original credits](licenses/piano/README.txt), and [CC0 license](licenses/piano/CC0-1.0.txt). The RustySynth renderer is MIT licensed; its complete notice is included in the dependency notices.
