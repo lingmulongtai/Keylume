@@ -2,18 +2,18 @@
 
 Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー。Tauri 2 + Rust + React で、ウィンドウを閉じてもライティングを続けます。
 
-**v0.1 は実機検証前のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
+**v0.2 は実機検証前のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
 
 ## 起動
 
-[GitHub Releases — v0.1.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.1.0) からダウンロードできます。
+[GitHub Releases — v0.2.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.2.0) からダウンロードできます。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.1.0/Keylume_0.1.0_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.1.0/Keylume_0.1.0_windows-x64.zip)
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.2.0/Keylume_0.2.0_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.2.0/Keylume_0.2.0_windows-x64.zip)
 
 ![Keylume のライティングエディター](docs/images/keylume.png)
 
-インストーラーはダウンロードした `Keylume_0.1.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.1.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.2.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.2.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
@@ -25,7 +25,9 @@ Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー�
 
 ## 実装した機能
 
-- 16 パッド、9 フェーダーボタン、17 単色候補、61 鍵をベクター描画。選択、複数選択、範囲選択、ペイント。
+- 公式の61鍵モデルに合わせた本体図。16 パッド、9 フェーダーボタン、17 単色候補、61 鍵、8エンコーダーを描画。選択、範囲選択、ペイント、200%までの拡大。
+- 装飾を抑えた編集UI、上部ナビゲーション、エディターとプリセット一覧の共通本体図。
+- 起動時と12時間ごとの更新確認、手動確認、新バージョンの案内。Preview版の通知と自動確認を設定可能。
 - 18 エフェクト、5 ブレンド、ゾーン、不透明度、輝度・彩度・色温度・ガンマ、0.5 秒の切替。
 - 13 プリセット定義、複製・保存・削除・検索、`.keylume.json` 入出力、schema 0 → 1 移行。
 - Rust の常駐描画、差分送信、LED アドレスごとの最新値を保つ送信スレッド、トレイ、単一インスタンス、自動起動。
@@ -36,6 +38,12 @@ Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー�
 - LED 検証、レイアウト編集・書き出し、MIDI モニタ、設定バックアップ、初回セットアップ案内。
 
 現在の対応範囲と未実装項目は [実装状況](docs/implementation-status.md) を参照してください。「本体デモ」は非揮発設定の未検証値を含むため、自動プリセット切替から実行せずデバイス画面の明示操作に限定しています。
+
+## 更新
+
+**v0.1.0からはv0.2.0を一度手動でインストールしてください。** 以後は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
+
+プリセットと設定はそのまま保持します。旧既定レイアウトは61鍵モデルの配置へ移行し、LEDアドレス・種類・検証状態を保持します。座標を編集したカスタムレイアウトは維持します。[本体図と移行仕様](docs/device-layout.md)
 
 ## DAW と同時に使う
 
