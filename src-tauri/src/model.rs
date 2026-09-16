@@ -15,10 +15,15 @@ pub struct Size {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Address {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub daw_note: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub drum_note: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cc: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sysex_id: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mono_status: Option<u8>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -58,13 +63,59 @@ impl DeviceLayout {
         {
             return Err("レイアウトのサイズが不正です".into());
         }
+        for (key, count, fields) in [
+            ("keys", 61, &["note", "x", "w"][..]),
+            ("encoders", 8, &["x", "y", "r"][..]),
+            ("faders", 9, &["x", "y", "h"][..]),
+            ("wheels", 2, &["x", "y", "w", "h"][..]),
+        ] {
+            let values = self
+                .decor
+                .get(key)
+                .and_then(Value::as_array)
+                .ok_or("デバイス描画データがありません")?;
+            if values.len() != count
+                || values.iter().any(|v| {
+                    fields.iter().any(|field| {
+                        v.get(field)
+                            .and_then(Value::as_f64)
+                            .is_none_or(|n| !n.is_finite() || n.abs() > 10000.)
+                    })
+                })
+            {
+                return Err("デバイス描画データが不正です".into());
+            }
+        }
+        if self.decor["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|k| k.get("black").and_then(Value::as_bool).is_none())
+            || ["x", "y", "w", "h"].iter().any(|key| {
+                self.decor["display"]
+                    .get(key)
+                    .and_then(Value::as_f64)
+                    .is_none_or(|v| !v.is_finite() || v.abs() > 10000.)
+            })
+        {
+            return Err("鍵盤 / 画面の描画データが不正です".into());
+        }
         let mut ids = std::collections::HashSet::new();
         for led in &self.leds {
             if !ids.insert(&led.id)
+                || led.id.is_empty()
+                || led.id.len() > 80
                 || !["rgb", "mono", "none"].contains(&led.kind.as_str())
                 || !["pads", "faderButtons", "buttons"].contains(&led.group.as_str())
             {
                 return Err("LED の定義が不正です".into());
+            }
+            if (led.kind == "rgb" && led.address.sysex_id.is_none())
+                || (led.kind == "mono" && led.address.cc.is_none())
+                || (led.group == "pads"
+                    && (led.address.daw_note.is_none() || led.address.drum_note.is_none()))
+            {
+                return Err("LED のアドレスがありません".into());
             }
             if !led.pos.x.is_finite()
                 || !led.pos.y.is_finite()
@@ -157,6 +208,7 @@ pub struct DisplaySettings {
     pub enabled: bool,
     pub widget: String,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_bits: Option<Vec<u8>>,
     pub show_on_preset_change: bool,
 }
@@ -375,9 +427,13 @@ impl Settings {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileMatch {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub processes: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub foreground_only: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub time_range: Option<[String; 2]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub idle_minutes: Option<u32>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]

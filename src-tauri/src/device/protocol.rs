@@ -130,6 +130,11 @@ mod tests {
     }
     #[test]
     fn text_does_not_emit_utf8() {
+        let messages = display_text("Aurora", 32).unwrap();
+        assert_eq!(
+            messages.last().unwrap(),
+            &vec![240, 0, 32, 41, 2, 20, 4, 32, 127, 247]
+        );
         for msg in display_text("オーロラ Aurora", 32).unwrap() {
             assert!(msg[6..msg.len() - 1].iter().all(|&b| b < 128));
         }

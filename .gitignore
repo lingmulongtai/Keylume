@@ -9,3 +9,12 @@ src-tauri/gen/
 artifacts/
 playwright-report/
 test-results/
+*.tsbuildinfo
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/*.icns
+src-tauri/icons/Square*.png
+src-tauri/icons/StoreLogo.png
+src-tauri/icons/32x32.png
+src-tauri/icons/64x64.png
+src-tauri/icons/128x128*.png
