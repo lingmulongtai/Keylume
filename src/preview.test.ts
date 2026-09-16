@@ -1,10 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import { compose, renderPreview, ditherImage } from './preview';
-import { validatePreset } from './api';
+import { validatePreset, validateLayout } from './api';
 import data from '../resources/presets.json';
 import layout from '../resources/layout.json';
 import type { Preset, Layout } from './types';
 describe('preview and interchange', () => {
+  it('rejects malformed layouts and LED kinds with missing addresses', () => {
+    expect(validateLayout(layout).leds).toHaveLength(42);
+    for (const invalid of [
+      { ...layout, leds: [] },
+      { ...layout, decor: {} },
+      { ...layout, canvas: { w: 0, h: 1 } },
+      { ...layout, leds: [layout.leds[0], layout.leds[0]] },
+      { ...layout, leds: [{ ...layout.leds[0], kind: 'mono' }] },
+      {
+        ...layout,
+        leds: [{ ...layout.leds[0], address: { ...layout.leds[0].address, sysexId: 128 } }],
+      },
+    ])
+      expect(() => validateLayout(invalid)).toThrow();
+    expect(validateLayout({ ...layout, leds: [layout.leds[0]] }).leds).toHaveLength(1);
+  });
   it('composes layers with transparent opacity', () => {
     for (const mode of ['normal', 'add', 'multiply', 'screen', 'max'])
       expect(compose([0.2, 0.2, 0.2], [0.7, 0.7, 0.7], 0, mode)).toEqual([0.2, 0.2, 0.2]);

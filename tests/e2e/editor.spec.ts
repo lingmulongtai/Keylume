@@ -51,11 +51,33 @@ test('probe never claims hardware verification in mock mode', async ({ page }) =
   await page.getByRole('button', { name: 'デバイス', exact: true }).click();
   await page.getByRole('button', { name: '点灯テスト', exact: true }).click();
   await expect(page.getByRole('button', { name: 'テストを再実行', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '光った（白のみ）', exact: true }).click();
+  await page.getByRole('button', { name: '光った（色付き）', exact: true }).click();
   await page.waitForTimeout(300);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('keylume-preview-v1')!));
-  expect(saved.layout.leds[0].kind).toBe('mono');
+  expect(saved.layout.leds[0].kind).toBe('rgb');
   expect(saved.layout.leds[0].verified).toBe(false);
+});
+test('validates edited layouts and keeps selection within a smaller layout', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.getByRole('button', { name: 'デバイス', exact: true }).click();
+  await page.getByRole('button', { name: '光った（白のみ）', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText('LED のアドレスがありません');
+  await page.getByRole('button', { name: '次の LED', exact: true }).click();
+  await page.getByRole('button', { name: 'レイアウト JSON を編集', exact: true }).click();
+  const editor = page.getByLabel('レイアウト JSON', { exact: true });
+  const original = JSON.parse(await editor.inputValue());
+  await editor.fill(JSON.stringify({ ...original, leds: [] }));
+  await page.getByRole('button', { name: 'レイアウトを保存', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('レイアウトのサイズが不正です');
+  await editor.fill(JSON.stringify({ ...original, leds: [original.leds[0]] }));
+  await page.getByRole('button', { name: 'レイアウトを保存', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByLabel('pad.top.1 sysexId', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '次の LED', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '前の LED', exact: true })).toBeDisabled();
+  expect(errors).toEqual([]);
 });
 test('all screens load without browser errors at the minimum window size', async ({ page }) => {
   const errors: string[] = [];

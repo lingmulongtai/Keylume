@@ -731,7 +731,8 @@ export function DeviceScreen({ state, act, edit, saveSettings, toast }: ViewProp
     [layoutJson, setLayoutJson] = useState<string | null>(null),
     [level, setLevel] = useState(100),
     [screenLevel, setScreenLevel] = useState(80);
-  const led = state.layout.leds[index];
+  const selectedIndex = Math.min(index, state.layout.leds.length - 1);
+  const led = state.layout.leds[selectedIndex];
   const display: DisplaySettings = state.preset.display ?? {
     enabled: false,
     widget: 'presetName',
@@ -743,8 +744,8 @@ export function DeviceScreen({ state, act, edit, saveSettings, toast }: ViewProp
   const probe = () => void act('run_led_probe', { id: led.id, variant });
   const address = (field: string, value: number) => {
     const layout = structuredClone(state.layout);
-    layout.leds[index].address = { ...led.address, [field]: value };
-    layout.leds[index].verified = false;
+    layout.leds[selectedIndex].address = { ...led.address, [field]: value };
+    layout.leds[selectedIndex].verified = false;
     void act('save_layout', { layout });
   };
   return (
@@ -931,10 +932,10 @@ export function DeviceScreen({ state, act, edit, saveSettings, toast }: ViewProp
         <div className="probe-header">
           <label className="field grow">
             <span>
-              検証する LED · {index + 1} / {state.layout.leds.length}
+              検証する LED · {selectedIndex + 1} / {state.layout.leds.length}
             </span>
             <select
-              value={index}
+              value={selectedIndex}
               onChange={(e) => {
                 void act('stop_led_probe');
                 setIndex(Number(e.target.value));
@@ -951,10 +952,10 @@ export function DeviceScreen({ state, act, edit, saveSettings, toast }: ViewProp
           <button
             className="icon-button"
             aria-label="前の LED"
-            disabled={index === 0}
+            disabled={selectedIndex === 0}
             onClick={() => {
               void act('stop_led_probe');
-              setIndex(index - 1);
+              setIndex(selectedIndex - 1);
             }}
           >
             <ChevronLeft size={18} />
@@ -962,10 +963,10 @@ export function DeviceScreen({ state, act, edit, saveSettings, toast }: ViewProp
           <button
             className="icon-button"
             aria-label="次の LED"
-            disabled={index === state.layout.leds.length - 1}
+            disabled={selectedIndex === state.layout.leds.length - 1}
             onClick={() => {
               void act('stop_led_probe');
-              setIndex(index + 1);
+              setIndex(selectedIndex + 1);
             }}
           >
             <ChevronRight size={18} />
@@ -1026,7 +1027,7 @@ export function DeviceScreen({ state, act, edit, saveSettings, toast }: ViewProp
                   })
                 ) {
                   toast('検証結果を保存しました');
-                  setIndex(Math.min(state.layout.leds.length - 1, index + 1));
+                  setIndex(Math.min(state.layout.leds.length - 1, selectedIndex + 1));
                 }
               }}
             >

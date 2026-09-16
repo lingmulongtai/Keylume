@@ -83,10 +83,96 @@ let mock: AppState = {
 try {
   const saved = JSON.parse(localStorage.getItem('keylume-preview-v1') ?? 'null');
   if (saved?.settings && saved?.presets && saved?.layout) {
+    saved.layout = validateLayout(saved.layout);
     mock = { ...mock, ...saved, status: { ...defaultStatus } };
   }
 } catch {
   /* Corrupt preview storage is replaced by defaults. */
+}
+export function validateLayout(value: unknown): Layout {
+  if (!value || typeof value !== 'object') throw Error('レイアウトの形式が不正です');
+  const l = structuredClone(value) as Layout;
+  const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+  if (
+    l.schema !== 1 ||
+    l.model !== 'launchkey-mk4-61' ||
+    !finite(l.canvas?.w) ||
+    l.canvas.w <= 0 ||
+    !finite(l.canvas?.h) ||
+    l.canvas.h <= 0 ||
+    !Array.isArray(l.leds) ||
+    !l.leds.length ||
+    l.leds.length > 128
+  )
+    throw Error('レイアウトのサイズが不正です');
+  const decor = l.decor as unknown as Record<string, unknown>;
+  const fieldsValid = (item: unknown, fields: string[]) => {
+    if (!item || typeof item !== 'object') return false;
+    return fields.every((key) => {
+      const n = (item as Record<string, unknown>)[key];
+      return finite(n) && Math.abs(n) <= 10000;
+    });
+  };
+  for (const [key, count, fields] of [
+    ['keys', 61, ['note', 'x', 'w']],
+    ['encoders', 8, ['x', 'y', 'r']],
+    ['faders', 9, ['x', 'y', 'h']],
+    ['wheels', 2, ['x', 'y', 'w', 'h']],
+  ] as [string, number, string[]][]) {
+    const items = decor?.[key];
+    if (
+      !Array.isArray(items) ||
+      items.length !== count ||
+      items.some((v) => !fieldsValid(v, fields))
+    )
+      throw Error('デバイス描画データが不正です');
+  }
+  if (
+    l.decor.keys.some((k) => typeof k.black !== 'boolean') ||
+    !fieldsValid(decor.display, ['x', 'y', 'w', 'h'])
+  )
+    throw Error('鍵盤 / 画面の描画データが不正です');
+  const ids = new Set<string>();
+  for (const led of l.leds) {
+    if (
+      !led ||
+      typeof led.id !== 'string' ||
+      !led.id ||
+      led.id.length > 80 ||
+      ids.has(led.id) ||
+      !['rgb', 'mono', 'none'].includes(led.kind) ||
+      !['pads', 'faderButtons', 'buttons'].includes(led.group) ||
+      typeof led.verified !== 'boolean' ||
+      !led.address ||
+      typeof led.address !== 'object'
+    )
+      throw Error('LED の定義が不正です');
+    ids.add(led.id);
+    if (
+      (led.kind === 'rgb' && led.address.sysexId == null) ||
+      (led.kind === 'mono' && led.address.cc == null) ||
+      (led.group === 'pads' && (led.address.dawNote == null || led.address.drumNote == null))
+    )
+      throw Error('LED のアドレスがありません');
+    if (
+      !finite(led.pos?.x) ||
+      !finite(led.pos?.y) ||
+      !finite(led.size?.w) ||
+      led.size.w <= 0 ||
+      !finite(led.size?.h) ||
+      led.size.h <= 0
+    )
+      throw Error('LED の座標が不正です');
+    if (
+      [led.address.dawNote, led.address.drumNote, led.address.cc, led.address.sysexId].some(
+        (v) => v != null && (!Number.isInteger(v) || v < 0 || v > 127),
+      )
+    )
+      throw Error('MIDI アドレスは 0–127 です');
+    if (led.address.monoStatus != null && ![0xb3, 0x93].includes(led.address.monoStatus))
+      throw Error('単色ステータスは B3 / 93 です');
+  }
+  return l;
 }
 export function validatePreset(value: unknown): Preset {
   if (!value || typeof value !== 'object') throw Error('プリセットの形式が不正です');
@@ -246,7 +332,7 @@ export async function command<T = unknown>(
       break;
     }
     case 'save_layout':
-      mock.layout = structuredClone(args.layout) as Layout;
+      mock.layout = validateLayout(args.layout);
       break;
     case 'save_profile': {
       const p = args.profile as Profile;
@@ -265,12 +351,14 @@ export async function command<T = unknown>(
       mock.status.probe = null;
       break;
     case 'answer_led_probe': {
-      const l = mock.layout.leds.find((l) => l.id === args.id);
+      const staged = structuredClone(mock.layout);
+      const l = staged.leds.find((l) => l.id === args.id);
       if (l) {
         l.kind = args.kind as typeof l.kind;
         l.verified = false;
         if (args.monoStatus) l.address.monoStatus = Number(args.monoStatus);
       }
+      mock.layout = validateLayout(staged);
       mock.status.probe = null;
       break;
     }
