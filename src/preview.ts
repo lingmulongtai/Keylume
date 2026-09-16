@@ -1,5 +1,6 @@
 import type { Color, Preset, Layout, Layer } from './types';
 import { includesLed } from './types';
+import { keyPosition, keybed } from './layout';
 import palette from '../resources/palette.json';
 export const clamp = (n: number, min = 0, max = 1) => Math.max(min, Math.min(max, n));
 export const hex = (s: string): Color =>
@@ -59,8 +60,8 @@ export function previewInput(bytes: number[], source: string, layout: Layout) {
   }
   if (on) {
     hits.push({
-      x: led ? led.pos.x / layout.canvas.w : 0.22 + clamp((n - 36) / 60) * 0.74,
-      y: led ? led.pos.y / layout.canvas.h : 0.48,
+      x: led ? (led.pos.x + led.size.w / 2) / layout.canvas.w : keyPosition(layout, n),
+      y: led ? (led.pos.y + led.size.h / 2) / layout.canvas.h : keybed(layout).y / layout.canvas.h,
       time,
       velocity: v / 127,
       id: led?.id,
@@ -76,7 +77,15 @@ const number = (l: Layer, key: string, d: number) =>
     : d;
 const text = (l: Layer, key: string, d: string) =>
   typeof l.params[key] === 'string' ? (l.params[key] as string) : d;
-function effect(l: Layer, x: number, y: number, i: number, id: string, time: number): Color {
+function effect(
+  l: Layer,
+  x: number,
+  y: number,
+  i: number,
+  id: string,
+  time: number,
+  layout: Layout,
+): Color {
   const color = hex(text(l, 'color', '#43ffc2'));
   const list = Array.isArray(l.params.colors)
     ? l.params.colors.filter((v): v is string => typeof v === 'string').map(hex)
@@ -157,7 +166,7 @@ function effect(l: Layer, x: number, y: number, i: number, id: string, time: num
     case 'note_map': {
       let out: Color = [0, 0, 0];
       for (const n of held)
-        if (Math.abs(x - (0.22 + clamp((n - 36) / 60) * 0.74)) < 0.065)
+        if (Math.abs(x - keyPosition(layout, n)) < 0.065)
           out = compose(out, hsv((n % 12) / 12), 1, 'add');
       return out;
     }
@@ -216,7 +225,15 @@ export function renderPreview(
         continue;
       c = compose(
         c,
-        effect(l, led.pos.x / layout.canvas.w, led.pos.y / layout.canvas.h, i, led.id, time),
+        effect(
+          l,
+          (led.pos.x + led.size.w / 2) / layout.canvas.w,
+          (led.pos.y + led.size.h / 2) / layout.canvas.h,
+          i,
+          led.id,
+          time,
+          layout,
+        ),
         l.opacity,
         l.blend,
       );

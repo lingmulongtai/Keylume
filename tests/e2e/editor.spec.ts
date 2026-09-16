@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: '光に、あなたのリズムを。' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ライティング', exact: true })).toBeVisible();
 });
 test('edits, saves, reloads, exports and deletes a preset', async ({ page }) => {
   await page.getByRole('button', { name: 'レイヤーを追加', exact: true }).click();
@@ -107,4 +107,22 @@ test('all screens load without browser errors at the minimum window size', async
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('hardware face and clickable controls stay aligned at full zoom', async ({ page }) => {
+  await expect(page.locator('.device-base [data-key]')).toHaveCount(61);
+  const physical = await page.locator('.device-base [data-control="pad.top.1"] rect').boundingBox();
+  const hit = await page
+    .getByRole('button', { name: 'pad.top.1 rgb LED', exact: true })
+    .boundingBox();
+  expect(Math.abs(physical!.x + physical!.width / 2 - hit!.x - hit!.width / 2)).toBeLessThan(1);
+  for (let i = 0; i < 10; i++)
+    await page.getByRole('button', { name: '拡大', exact: true }).click();
+  await page.getByRole('button', { name: 'btn.record mono LED', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'btn.record mono LED', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: '表示をリセット', exact: true }).click();
+  await page.getByRole('button', { name: 'プリセット', exact: true }).click();
+  await expect(page.locator('.preset-card').first().locator('[data-key]')).toHaveCount(61);
 });

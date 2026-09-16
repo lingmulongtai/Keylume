@@ -2141,13 +2141,14 @@ dependencies = [
 
 [[package]]
 name = "keylume"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "cpal",
  "crossbeam-channel",
  "midir",
  "rustfft",
+ "semver",
  "serde",
  "serde_json",
  "sysinfo",

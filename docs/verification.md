@@ -1,4 +1,21 @@
-# 検証記録 — 2026-09-16
+# 検証記録
+
+## v0.2.0 — 2026-09-17
+
+61鍵の本体図、編集UI、更新確認を変更しました。ローカルで Rust 33テスト、Vitest 11テスト、Playwright / Edge 8テスト、TypeScript + Vite、Clippy（全target、警告なし）、書式検査が通過しました。明示実行した WinHTTP → GitHub Releases の実通信テストも1件通過しています。通常のテストでは外部通信を実行しません。
+
+追加テストは旧配置からの移行とバックアップ、校正値・カスタム配置の保持、61鍵の相対配置、クリック領域と本体図の一致、200%拡大時の操作、SemVer比較・Preview版選択・不正リリース除外、通知の抑制、手動要求の合流、更新UIのエラーと再試行を対象とします。1280×800の本体図を目視し、最小1024×680でも全画面を操作確認しました。
+
+| SHA | 件名 | 目的 |
+| --- | --- | --- |
+| `f949777` | feat(ui): replace decorative chrome with a compact editing workspace | 上部ナビゲーションと簡潔な編集UI |
+| `cb1bafb` | fix(dev): exclude generated artifacts from file watching | ビルド中の開発サーバー応答を維持 |
+| `c49bc28` | fix(device): match the Launchkey MK4 61 physical layout | 公式61鍵配置・共通描画・設定移行 |
+| `c3df5a5` | feat(updates): prompt for new Windows releases automatically | 自動/手動/トレイ更新確認と通知 |
+
+公開パイプラインでも検証を行います。配布バイナリの自己テスト結果とビルド元は [v0.2.0 Release](https://github.com/lingmulongtai/Keylume/releases/tag/v0.2.0) の `verification.json` と `build-provenance.json` を参照してください。コード署名、実機発光・OLED・DAW共存、スリープ、72時間稼働は未検証です。
+
+## v0.1.0 — 2026-09-16
 
 Windows 上で v0.1.0 を検証しました。自動受け入れテストは MockDevice を基準にしています。接続済み MIDI ポートの列挙も確認していますが、実機の発光・演奏・DAW 共存の正しさは未確認です。
 

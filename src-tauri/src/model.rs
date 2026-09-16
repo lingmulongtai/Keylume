@@ -29,6 +29,8 @@ pub struct Address {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LedDef {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     pub kind: String,
     pub group: String,
     pub pos: Point,
@@ -39,6 +41,8 @@ pub struct LedDef {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeviceLayout {
     pub schema: u32,
+    #[serde(default, rename = "geometryRevision")]
+    pub geometry_revision: u32,
     pub model: String,
     pub canvas: Size,
     pub leds: Vec<LedDef>,
@@ -50,6 +54,55 @@ impl Default for DeviceLayout {
     }
 }
 impl DeviceLayout {
+    pub fn upgrade_geometry(&mut self) -> bool {
+        let old: Self = serde_json::from_str(include_str!("../../resources/layout-v1.json"))
+            .expect("legacy bundled layout");
+        if self.geometry_revision != 0
+            || self.leds.len() != old.leds.len()
+            || self.canvas.w != old.canvas.w
+            || self.canvas.h != old.canvas.h
+            || self.decor != old.decor
+            || self.leds.iter().any(|led| {
+                old.leds.iter().find(|v| v.id == led.id).is_none_or(|v| {
+                    led.pos.x != v.pos.x
+                        || led.pos.y != v.pos.y
+                        || led.size.w != v.size.w
+                        || led.size.h != v.size.h
+                })
+            })
+        {
+            return false;
+        }
+        let mut updated = Self::default();
+        for led in &mut updated.leds {
+            let previous = self.leds.iter().find(|v| v.id == led.id).unwrap();
+            led.address = previous.address.clone();
+            led.kind = previous.kind.clone();
+            led.group = previous.group.clone();
+            if previous.label.is_some() {
+                led.label = previous.label.clone();
+            }
+            led.verified = previous.verified;
+        }
+        *self = updated;
+        true
+    }
+    pub fn key_position(&self, note: u8) -> f32 {
+        self.decor["keys"]
+            .as_array()
+            .and_then(|keys| {
+                keys.iter()
+                    .find(|k| k["note"].as_u64() == Some(note.clamp(36, 96) as u64))
+            })
+            .map(|k| {
+                (k["x"].as_f64().unwrap_or(0.) + k["w"].as_f64().unwrap_or(0.) / 2.) as f32
+                    / self.canvas.w
+            })
+            .unwrap_or(0.5)
+    }
+    pub fn keybed_y(&self) -> f32 {
+        self.decor["keybed"]["y"].as_f64().unwrap_or(239.) as f32 / self.canvas.h
+    }
     pub fn validate(&self) -> Result<(), String> {
         if self.schema != 1 || self.model != "launchkey-mk4-61" {
             return Err("未対応のレイアウトです".into());
@@ -100,11 +153,41 @@ impl DeviceLayout {
         {
             return Err("鍵盤 / 画面の描画データが不正です".into());
         }
+        if let Some(bed) = self.decor.get("keybed") {
+            if ["y", "h", "blackHeight"].iter().any(|key| {
+                bed.get(key)
+                    .and_then(Value::as_f64)
+                    .is_none_or(|n| !n.is_finite() || !(0.0..=10000.0).contains(&n))
+            }) {
+                return Err("鍵盤のサイズが不正です".into());
+            }
+        }
+        if let Some(controls) = self.decor.get("controls") {
+            let controls = controls.as_array().ok_or("ボタンの描画データが不正です")?;
+            if controls.len() > 64
+                || controls.iter().any(|v| {
+                    ["id", "label"].iter().any(|key| {
+                        v.get(key)
+                            .and_then(Value::as_str)
+                            .is_none_or(|s| s.len() > 80)
+                    }) || [("pos", "x"), ("pos", "y"), ("size", "w"), ("size", "h")]
+                        .iter()
+                        .any(|(group, key)| {
+                            v[group][key]
+                                .as_f64()
+                                .is_none_or(|n| !n.is_finite() || !(0.0..=10000.0).contains(&n))
+                        })
+                })
+            {
+                return Err("ボタンの描画データが不正です".into());
+            }
+        }
         let mut ids = std::collections::HashSet::new();
         for led in &self.leds {
             if !ids.insert(&led.id)
                 || led.id.is_empty()
                 || led.id.len() > 80
+                || led.label.as_ref().is_some_and(|label| label.len() > 80)
                 || !["rgb", "mono", "none"].contains(&led.kind.as_str())
                 || !["pads", "faderButtons", "buttons"].contains(&led.group.as_str())
             {
@@ -349,6 +432,8 @@ pub struct Settings {
     pub manual_lock: bool,
     pub language: String,
     pub audio_device: String,
+    pub check_for_updates: bool,
+    pub include_prereleases: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -396,6 +481,8 @@ impl Default for Settings {
             manual_lock: false,
             language: "ja".into(),
             audio_device: String::new(),
+            check_for_updates: true,
+            include_prereleases: true,
         }
     }
 }

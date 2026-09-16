@@ -79,9 +79,9 @@ impl Engine {
                 {
                     continue;
                 }
-                let x = led.pos.x / layout.canvas.w;
-                let y = led.pos.y / layout.canvas.h;
-                let c = self.effect(layer, x, y, i, &led.id);
+                let x = (led.pos.x + led.size.w / 2.) / layout.canvas.w;
+                let y = (led.pos.y + led.size.h / 2.) / layout.canvas.h;
+                let c = self.effect(layer, x, y, i, &led.id, layout);
                 colors[i] = blend(colors[i], c, layer.opacity, &layer.blend);
             }
         }
@@ -104,7 +104,15 @@ impl Engine {
             .collect();
         (colors, quantized)
     }
-    fn effect(&self, l: &Layer, x: f32, y: f32, index: usize, id: &str) -> Color {
+    fn effect(
+        &self,
+        l: &Layer,
+        x: f32,
+        y: f32,
+        index: usize,
+        id: &str,
+        layout: &DeviceLayout,
+    ) -> Color {
         let speed = l.number("speed", 0.6).clamp(0., 10.);
         let t = self.time * speed;
         let color = hex(l.text("color", "#43ffc2"));
@@ -207,7 +215,7 @@ impl Engine {
             "note_map" => {
                 let mut out = [0.; 3];
                 for note in &self.held {
-                    let nx = 0.22 + ((*note as f32 - 36.) / 60.).clamp(0., 1.) * 0.74;
+                    let nx = layout.key_position(*note);
                     if (x - nx).abs() < 0.065 {
                         out = blend(out, hsv((*note % 12) as f32 / 12., 0.8, 1.), 1., "add");
                     }

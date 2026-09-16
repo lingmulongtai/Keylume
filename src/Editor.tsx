@@ -4,17 +4,15 @@ import {
   Eye,
   EyeOff,
   Trash2,
-  GripVertical,
   ArrowUp,
   ArrowDown,
   MousePointer2,
   Paintbrush,
   Undo2,
-  Sparkles,
+  Layers3,
   Save,
   Minus,
   Maximize2,
-  Music2,
 } from 'lucide-react';
 import type { ViewProps } from './ui-state';
 import type { Layer, Zone, Blend } from './types';
@@ -87,8 +85,7 @@ export default function Editor({
       <section className="editor-main">
         <div className="workspace-top">
           <div>
-            <span className="eyebrow">ライティング / マイデバイス</span>
-            <h1>光に、あなたのリズムを。</h1>
+            <h1>ライティング</h1>
           </div>
           <select
             className="preset-picker"
@@ -106,7 +103,7 @@ export default function Editor({
         <div className="device-stage">
           <div className="stage-label">
             <span>Launchkey MK4 61</span>
-            <small>16 pads · 9 fader buttons</small>
+            <small>61鍵モデル · 上面</small>
           </div>
           <div className="stage-tools">
             <button
@@ -148,7 +145,7 @@ export default function Editor({
               <span className="tiny-dot" />{' '}
               {state.settings.mock ? 'プレビュー中' : '実機からのフレーム'}
               <i />
-              鍵盤・ノブに LED はありません
+              {selected.length} LED 選択
             </span>
             <div>
               <button
@@ -162,7 +159,7 @@ export default function Editor({
               <button
                 className="icon-button"
                 aria-label="拡大"
-                onClick={() => setZoom(Math.min(1.15, zoom + 0.1))}
+                onClick={() => setZoom(Math.min(2, zoom + 0.1))}
               >
                 <Plus size={14} />
               </button>
@@ -225,15 +222,13 @@ export default function Editor({
               </button>
             </div>
           </div>
-          <p className="micro">
-            上のレイヤーから重なります。エフェクトを組み合わせて、自分だけの光に。
-          </p>
+          <p className="micro">上のレイヤーが優先されます。</p>
           {state.preset.layers.map((l, i) => (
             <div key={l.id} className={'layer-row ' + (l.id === layer?.id ? 'selected' : '')}>
-              <GripVertical size={15} className="muted" />
+              <span className="layer-number numeric">{i + 1}</span>
               <button className="layer-select" onClick={() => setSelectedLayer(l.id)}>
                 <span className={'effect-icon effect-' + l.effect}>
-                  <Sparkles size={17} />
+                  <Layers3 size={17} />
                 </span>
                 <span>
                   <strong>{effects[l.effect]}</strong>
@@ -282,19 +277,19 @@ export default function Editor({
           ))}
           {!state.preset.layers.length && (
             <div className="empty-state">
-              <Sparkles />
+              <Layers3 />
               <p>レイヤーを追加してライティングを作成します。</p>
             </div>
           )}
         </div>
         <div className="editor-tip">
-          <Music2 size={17} />
           <div>
-            音を奏でる。光が応える。
+            クリックで選択 · Shift + クリックで追加 · 背景をドラッグして範囲選択
             <small>
+              鍵盤・ノブは発光しません。
               {state.settings.mock
-                ? 'プレビューのパッドや鍵盤をクリックして、リアクティブエフェクトを試せます。'
-                : 'Shift + クリックで複数選択。背景をドラッグすると範囲選択できます。'}
+                ? '画面の鍵盤とパッドで入力を試せます。'
+                : '操作中も実機へ反映します。'}
             </small>
           </div>
         </div>
@@ -308,7 +303,7 @@ export default function Editor({
           <>
             <div className="inspector-effect">
               <span className="effect-icon large">
-                <Sparkles size={24} />
+                <Layers3 size={24} />
               </span>
               <div>
                 <h2>{effects[layer.effect]}</h2>
@@ -565,7 +560,6 @@ export default function Editor({
                 <Save size={16} />
                 プリセットを保存
               </button>
-              <p className="micro">保存すると、いつでも呼び出せます。</p>
             </div>
           </>
         ) : (
@@ -593,7 +587,7 @@ export default function Editor({
                   setAdding(false);
                 }}
               >
-                <Sparkles size={20} />
+                <Layers3 size={20} />
                 <strong>{name}</strong>
                 <small>{id}</small>
               </button>
