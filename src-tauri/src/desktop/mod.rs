@@ -1,5 +1,6 @@
 mod audio;
 mod discovery;
+mod piano;
 mod runtime;
 mod smoke;
 mod system;
@@ -38,6 +39,14 @@ fn show(app: &tauri::AppHandle) {
 #[tauri::command]
 fn get_state(core: tauri::State<'_, Arc<Core>>) -> Result<StateView, String> {
     core.view()
+}
+#[tauri::command]
+fn get_input_state(core: tauri::State<'_, Arc<Core>>) -> crate::device::input::InputState {
+    core.input.lock().unwrap().clone()
+}
+#[tauri::command]
+fn get_piano_state(core: tauri::State<'_, Arc<Core>>) -> piano::PianoStatus {
+    core.piano.view()
 }
 #[tauri::command]
 fn get_update_state(updater: tauri::State<'_, Arc<Updater>>) -> crate::updates::UpdateState {
@@ -310,6 +319,42 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
         }
         "reconnect" => action(Action::Reconnect)?,
         "tap_tempo" => action(Action::Tap)?,
+        "piano_input" => {
+            let bytes: Vec<u8> =
+                serde_json::from_value(args["bytes"].clone()).map_err(|e| e.to_string())?;
+            if bytes.len() != 3
+                || ![0x90, 0x80].contains(&bytes[0])
+                || bytes[1] > 127
+                || bytes[2] > 127
+            {
+                return Err("鍵盤入力が不正です".into());
+            }
+            core.piano.bus.midi(true, &bytes);
+            action(Action::Input(MidiPacket {
+                source: "screen".into(),
+                bytes,
+                received_at: std::time::Instant::now(),
+            }))
+            .inspect_err(|_| {
+                core.piano.bus.panic();
+            })?;
+        }
+        "piano_panic" => {
+            core.piano.bus.panic();
+            action(Action::Panic)?;
+        }
+        "piano_screen_release" => {
+            // Screen note-on/off and release share the same audio queue; UI snapshots are independent.
+            core.piano.bus.midi(true, &[0, 0, 0]);
+            action(Action::Input(MidiPacket {
+                source: "screen".into(),
+                bytes: vec![0xb0, 123, 0],
+                received_at: std::time::Instant::now(),
+            }))
+            .inspect_err(|_| {
+                core.piano.bus.panic();
+            })?;
+        }
         "simulate_input" => {
             if !c.settings.mock {
                 return Err("シミュレーションはプレビュー専用です".into());
@@ -341,6 +386,9 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
     if !matches!(
         name,
         "simulate_input"
+            | "piano_input"
+            | "piano_panic"
+            | "piano_screen_release"
             | "tap_tempo"
             | "run_led_probe"
             | "stop_led_probe"
@@ -376,6 +424,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_state,
+            get_input_state,
+            get_piano_state,
             command,
             save_export,
             get_update_state,
@@ -520,6 +570,16 @@ pub fn run() {
                 updater::spawn(app.handle().clone(), core, updater, update_rx);
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if matches!(
+                event,
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+            ) {
+                if let Some(core) = window.try_state::<Arc<Core>>() {
+                    let _ = dispatch(&core, "piano_screen_release", Value::Null);
+                }
+            }
         })
         .build(tauri::generate_context!())
         .expect("Unable to start Keylume")

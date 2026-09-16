@@ -20,7 +20,7 @@
 | ローカル保存                       | 原子的置換、バックアップ、破損隔離、操作ログ 7 日保持                                        |
 | フォント                           | IBM Plex Sans JP を npm パッケージからオフライン同梱、数値はシステム等幅フォント             |
 | 61鍵本体図                         | 公式の上面写真・ハードウェア図に基づく配置、旧既定配置の安全な移行                           |
-| 更新確認                           | GitHub Releasesを起動時・12時間ごとに確認、手動確認、アプリ内/常駐時の通知                    |
+| 更新確認                           | GitHub Releasesを起動時・12時間ごとに確認、手動確認、アプリ内/常駐時の通知                   |
 
 ## 制約・未実装の細部
 
@@ -53,3 +53,9 @@
 - [Microsoft MIDI: WinMM compatibility](https://microsoft.github.io/MIDI/kb/api-back-compat/)
 - [Microsoft MIDI: Loopback endpoints](https://microsoft.github.io/MIDI/kb/virtual-loopback/)
 - [Tauri system tray](https://v2.tauri.app/learn/system-tray/)
+
+## v0.3.0: 演奏機能
+
+無料音源の内蔵ピアノ、ベロシティ、CC64サステイン、Pitch、±3オクターブ、出力先とバッファ指定、全音停止、常駐時の演奏継続を追加しました。つまみ・フェーダー・ホイール・ペダル・DAWボタンのライブ表示と、Play緑／Record赤の固定色も実装しています。対応するメッセージと未取得状態の扱いは [ピアノ・ライブ操作表示](piano.md) を参照してください。
+
+Windows音声コールバックと合成MIDIでの検証を実施しました。実機鍵盤／物理ペダルでの遅延・感触、任意Custom割り当て、半踏み、ASIO、VSTホスト、長時間演奏は対応・検証済みとして扱いません。

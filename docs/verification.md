@@ -1,5 +1,24 @@
 # 検証記録
 
+## v0.3.0 — 2026-09-17
+
+ライブ操作表示、固定色の再生／録音ランプ、CC0音源の常駐ピアノを追加しました。ローカルで Rust **39 passed / 1 ignored**（外部通信テスト）、Vitest **15 passed**、Playwright / Edge **11 passed**、TypeScript + Vite、Clippy（全target、警告なし）、書式検査が通過しました。依存ライセンス309件と音源のCC0原文を同梱しています。
+
+分離したテスト用TauriプロセスをMock MIDIで動かし、Windowsの実際のWASAPI音声出力を確認しました。発音／減衰、CC64サステイン、全音停止、照明停止中の演奏、画面鍵盤の解放順序、出力先不在の表示と復帰、DAW検出時の消音、入力表示、照明停止・再開時のポート別状態維持を対象とします。ウィンドウを閉じて再表示する間も、演奏・押鍵状態を保持することを確認しました。
+
+音声出力は48 kHzで動作しました。この環境では256フレーム指定からドライバーの既定値へフォールバックし、定常時のコールバックは480フレームでした。これはバッファ量の観測であり、鍵盤からスピーカーまでの実測遅延ではありません。実機Launchkey／物理ペダル、DAWごとの共有、スリープ復帰、長時間演奏、インストーラー実行、コード署名は未検証です。ASIO、半踏み、VSTホストには対応しません。
+
+| SHA       | 件名                                                                | 目的                                               |
+| --------- | ------------------------------------------------------------------- | -------------------------------------------------- |
+| `5724d5e` | feat(device): mirror live controls and fixed transport lamp colors  | つまみ・フェーダー等のライブ表示と単色ランプの再現 |
+| `beaf99e` | feat(piano): bundle a CC0 acoustic piano with sustain and transpose | 音源、サステイン、移調、音声合成の基礎             |
+| `6788205` | feat(piano): add resident audio playback and performance controls   | Windows音声出力、独立MIDI入力、演奏UI、常駐        |
+| `4cba453` | feat(device): show touch and Arp/Scale feedback                     | Touch・圧力・機能状態の表示                        |
+| `a6df623` | fix(piano): retain paused input state and clean up the audio worker | 停止中の画面入力と音声スレッド終了の修正           |
+| `a0fddc9` | fix(device): preserve keyboard state when releasing the DAW port    | 照明停止・再接続時の鍵盤／ペダル状態の保持         |
+
+公開パイプラインは上記の自動チェックを再実行し、配布用バイナリで既存のMock自己テスト7項目を検証します。[v0.3.0 Release](https://github.com/lingmulongtai/Keylume/releases/tag/v0.3.0) の `verification.json`、`build-provenance.json`、`SHA256SUMS` で結果・ビルド元・ファイルハッシュを確認できます。[ピアノの使い方](piano.md)
+
 ## v0.2.0 — 2026-09-17
 
 61鍵の本体図、編集UI、更新確認を変更しました。ローカルで Rust 33テスト、Vitest 11テスト、Playwright / Edge 8テスト、TypeScript + Vite、Clippy（全target、警告なし）、書式検査が通過しました。明示実行した WinHTTP → GitHub Releases の実通信テストも1件通過しています。通常のテストでは外部通信を実行しません。

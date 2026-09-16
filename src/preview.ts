@@ -54,7 +54,7 @@ export function previewInput(bytes: number[], source: string, layout: Layout) {
             l.group === 'pads' && ((s & 15) === 9 ? l.address.drumNote : l.address.dawNote) === n,
         )
       : undefined;
-  if (source === 'keyboard') {
+  if (source === 'keyboard' || source === 'screen') {
     if (on) held.add(n);
     if (off) held.delete(n);
   }

@@ -17,6 +17,8 @@ import {
 import type { ViewProps } from './ui-state';
 import type { Layer, Zone, Blend } from './types';
 import { effects, zones, blends, uid, includesLed } from './types';
+import Piano from './Piano';
+import { command } from './api';
 import DeviceCanvas from './DeviceCanvas';
 import { Slider, Note, Modal } from './components';
 export default function Editor({
@@ -25,6 +27,7 @@ export default function Editor({
   edit,
   toast,
   onSave,
+  saveSettings,
 }: ViewProps & { onSave: () => void }) {
   const [selected, setSelected] = useState<string[]>([]),
     [selectedLayer, setSelectedLayer] = useState(state.preset.layers[0]?.id ?? ''),
@@ -137,7 +140,10 @@ export default function Editor({
             onPaint={paintLeds}
             zoom={zoom}
             onInput={(bytes, source) => {
-              void act('simulate_input', { bytes, source });
+              void command(source === 'screen' ? 'piano_input' : 'simulate_input', {
+                bytes,
+                source,
+              }).catch((e) => toast(String(e)));
             }}
           />
           <div className="stage-bottom">
@@ -173,6 +179,7 @@ export default function Editor({
             </div>
           </div>
         </div>
+        <Piano state={state} saveSettings={saveSettings} toast={toast} />
         <div className="zones">
           <span>ゾーン</span>
           {Object.entries(zones)

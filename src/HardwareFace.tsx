@@ -1,5 +1,6 @@
 import { memo, useId } from 'react';
 import type { Color, Layout, Led } from './types';
+import { hardwareColor, type InputState } from './input';
 import { buttonLabel, keybed } from './layout';
 
 export const labelSize = (led: Led) =>
@@ -12,12 +13,14 @@ export const ledColor = (color: Color, gamma: number) =>
 function HardwareFace({
   layout,
   held,
+  input,
   screen = 'Keylume',
   colors,
   gamma = 2.2,
 }: {
   layout: Layout;
   held?: Set<string>;
+  input?: InputState;
   screen?: string;
   colors?: Color[];
   gamma?: number;
@@ -108,7 +111,14 @@ function HardwareFace({
         LAUNCHKEY
       </text>
       {layout.decor.wheels.map((wheel, i) => (
-        <g key={i} data-control={i ? 'mod-wheel' : 'pitch-wheel'}>
+        <g
+          key={i}
+          data-control={i ? 'mod-wheel' : 'pitch-wheel'}
+          data-value={(i ? input?.modulation : input?.pitch) ?? 'unknown'}
+        >
+          <title>
+            {i ? 'Modulation' : 'Pitch'}: {(i ? input?.modulation : input?.pitch) ?? '未取得'}
+          </title>
           <rect
             x={wheel.x - 1.7}
             y={wheel.y - 1.7}
@@ -134,13 +144,28 @@ function HardwareFace({
               stroke={n === 5 ? '#55555a' : '#303034'}
             />
           ))}
+          {(i ? input?.modulation : input?.pitch) != null && (
+            <path
+              d={`M${wheel.x + 1} ${wheel.y + 4 + (1 - (i ? input!.modulation! / 127 : input!.pitch! / 16383)) * (wheel.h - 8)}h${wheel.w - 2}`}
+              stroke="#e8c48e"
+              strokeWidth="2"
+            />
+          )}
           <text {...text} x={wheel.x + wheel.w / 2} y={wheel.y + wheel.h + 8} textAnchor="middle">
             {i ? 'Modulation' : 'Pitch'}
           </text>
         </g>
       ))}
       {layout.decor.faders.map((fader, i) => (
-        <g key={i} data-control={`fader-${i + 1}`}>
+        <g
+          key={i}
+          data-control={`fader-${i + 1}`}
+          data-value={input?.faders[i] ?? 'unknown'}
+          opacity={input && input.faders[i] == null ? 0.55 : 1}
+        >
+          <title>
+            Fader {i + 1}: {input?.faders[i] ?? '未取得'}
+          </title>
           <rect
             x={fader.x - 1.7}
             y={fader.y}
@@ -161,16 +186,16 @@ function HardwareFace({
           ))}
           <rect
             x={fader.x - 7.7}
-            y={fader.y + fader.h * 0.48}
+            y={fader.y + (fader.h - 6.5) * (1 - (input?.faders[i] ?? 64) / 127)}
             width="15.4"
             height="6.5"
             rx="1.2"
             fill="#101013"
-            stroke="#505056"
+            stroke={held?.has(`fader-${i + 1}`) ? '#e8c48e' : '#505056'}
             strokeWidth=".7"
           />
           <path
-            d={`M${fader.x - 5.4} ${fader.y + fader.h * 0.48 + 1.8}h10.8`}
+            d={`M${fader.x - 5.4} ${fader.y + (fader.h - 6.5) * (1 - (input?.faders[i] ?? 64) / 127) + 1.8}h10.8`}
             stroke="#8d8d93"
             strokeWidth="1"
           />
@@ -205,32 +230,63 @@ function HardwareFace({
         {screen.slice(0, 16)}
       </text>
       {layout.decor.encoders.map((encoder, i) => (
-        <g key={i} data-control={`encoder-${i + 1}`}>
+        <g
+          key={i}
+          data-control={`encoder-${i + 1}`}
+          data-value={input?.encoders[i] ?? 'unknown'}
+          data-relative={input?.relative[i]}
+          opacity={input && input.encoders[i] == null ? 0.55 : 1}
+        >
+          <title>
+            Encoder {i + 1}:{' '}
+            {input?.encoders[i] == null
+              ? '未取得'
+              : input.relative[i]
+                ? '相対回転'
+                : input.encoders[i]}
+          </title>
           <circle cx={encoder.x} cy={encoder.y + 1.6} r={encoder.r + 0.6} fill="#0e0e11" />
           <circle
             cx={encoder.x}
             cy={encoder.y}
             r={encoder.r}
             fill="#333337"
-            stroke="#525257"
+            stroke={held?.has(`encoder-${i + 1}`) ? '#e8c48e' : '#525257'}
             strokeWidth=".7"
           />
           <path
             d={`M${encoder.x} ${encoder.y - encoder.r + 1.3}v2.4`}
+            transform={`rotate(${input?.encoders[i] == null ? 0 : input.relative[i] ? (input.encoders[i]! / 128) * 360 : (input.encoders[i]! / 127) * 270 - 135} ${encoder.x} ${encoder.y})`}
             stroke="#99999d"
             strokeWidth=".8"
           />
         </g>
       ))}
       {layout.decor.controls?.map((control) => (
-        <g key={control.id} data-control={control.id}>
+        <g
+          key={control.id}
+          data-control={control.id}
+          data-active={
+            control.id === 'arp'
+              ? input?.features['73']
+              : control.id === 'scale'
+                ? input?.features['74']
+                : undefined
+          }
+        >
           <rect
             x={control.pos.x}
             y={control.pos.y}
             width={control.size.w}
             height={control.size.h}
             rx="1.4"
-            fill="#1b1b1e"
+            fill={
+              held?.has(control.id) ||
+              (control.id === 'arp' && input?.features['73']) ||
+              (control.id === 'scale' && input?.features['74'])
+                ? '#73634b'
+                : '#1b1b1e'
+            }
             stroke="#0d0d10"
             strokeWidth=".8"
           />
@@ -255,9 +311,11 @@ function HardwareFace({
             fill={
               led.group === 'pads'
                 ? colors
-                  ? ledColor(colors[i] ?? [0, 0, 0], gamma)
+                  ? ledColor(hardwareColor(led.id, colors[i] ?? [0, 0, 0]), gamma)
                   : '#505057'
-                : '#1a1a1d'
+                : held?.has(led.id)
+                  ? '#73634b'
+                  : '#1a1a1d'
             }
             stroke="#101013"
             strokeWidth="1"
@@ -275,7 +333,9 @@ function HardwareFace({
               width={led.size.w - 10}
               height="1.8"
               rx=".4"
-              fill={colors ? ledColor(colors[i] ?? [0, 0, 0], gamma) : '#898993'}
+              fill={
+                colors ? ledColor(hardwareColor(led.id, colors[i] ?? [0, 0, 0]), gamma) : '#898993'
+              }
             />
           ) : (
             <text
@@ -285,7 +345,15 @@ function HardwareFace({
               dominantBaseline="central"
               fontFamily="Arial, sans-serif"
               fontSize={labelSize(led)}
-              fill={colors ? ledColor(colors[i] ?? [0, 0, 0], gamma) : '#9a9aa1'}
+              fill={
+                colors
+                  ? ledColor(hardwareColor(led.id, colors[i] ?? [0, 0, 0]), gamma)
+                  : led.id === 'btn.play'
+                    ? '#00a050'
+                    : led.id === 'btn.record'
+                      ? '#c43c38'
+                      : '#9a9aa1'
+              }
             >
               {led.label ?? buttonLabel(led.id)}
             </text>

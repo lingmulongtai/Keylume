@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import type { AppState, Color, Led } from './types';
 import { native, frameNow, subscribe } from './api';
+import { hardwareColor } from './input';
+import { useInput } from './useInput';
 import HardwareFace, { labelSize } from './HardwareFace';
 import { buttonLabel, keybed } from './layout';
 interface Props {
@@ -27,22 +29,29 @@ export default function DeviceCanvas({
     data = useRef(state),
     frame = useRef<Color[]>([]),
     drag = useRef<{ x: number; y: number; ids: string[] } | null>(null);
-  const [held, setHeld] = useState<Set<string>>(new Set()),
-    [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const screenKeys = useRef(new Set<number>());
+  const inputHandler = useRef(onInput);
+  inputHandler.current = onInput;
+  useEffect(() => {
+    const release = () => {
+      for (const key of screenKeys.current) inputHandler.current([128, key, 0], 'screen');
+      screenKeys.current.clear();
+    };
+    window.addEventListener('blur', release);
+    return () => {
+      window.removeEventListener('blur', release);
+      release();
+    };
+  }, []);
+  const input = useInput();
+  const held = new Set(input.held);
+  const [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   data.current = state;
   useEffect(() => {
     let dead = false;
     const clean: (() => void)[] = [];
     subscribe<Color[]>('frame_preview', (f) => {
       frame.current = f;
-    }).then((fn) => (dead ? fn() : clean.push(fn)));
-    subscribe<{ note: number; ledId?: string; pressed: boolean }>('input_event', (e) => {
-      setHeld((previous) => {
-        const s = new Set(previous);
-        const key = e.ledId ?? 'key.' + e.note;
-        e.pressed ? s.add(key) : s.delete(key);
-        return s;
-      });
     }).then((fn) => (dead ? fn() : clean.push(fn)));
     return () => {
       dead = true;
@@ -63,7 +72,7 @@ export default function DeviceCanvas({
       const colors = native ? frame.current : frameNow();
       layout.leds.forEach((led, i) => {
         if (led.kind === 'none') return;
-        const raw = paused ? [0, 0, 0] : (colors[i] ?? [0, 0, 0]);
+        const raw = hardwareColor(led.id, paused ? [0, 0, 0] : (colors[i] ?? [0, 0, 0]));
         const c = raw.map((v) => Math.round(Math.pow(v / 127, 1 / preset.post.gamma) * 255));
         const color = `rgb(${c.join(',')})`;
         const { x, y } = led.pos,
@@ -110,10 +119,31 @@ export default function DeviceCanvas({
     if (paint) onPaint?.([led.id]);
   }
   function note(note: number, on: boolean) {
-    if (state.settings.mock) onInput([on ? 144 : 128, note, on ? 100 : 0], 'keyboard');
+    if (on === screenKeys.current.has(note)) return;
+    if (on) screenKeys.current.add(note);
+    else screenKeys.current.delete(note);
+    onInput([on ? 144 : 128, note, on ? 100 : 0], 'screen');
   }
   return (
     <div className="device-viewport">
+      <div className="input-readout" aria-label="受信中の操作">
+        <span>INPUT</span>
+        <span>
+          {input.lastNote
+            ? `Note ${input.lastNote[0]} · Velocity ${input.lastNote[1]}`
+            : '鍵盤待機'}
+        </span>
+        <span data-testid="sustain-state">
+          Sustain {input.sustain == null ? '—' : input.sustain >= 64 ? 'ON' : 'OFF'}
+        </span>
+        <span>
+          Pressure {input.pressure ?? '—'} · Poly{' '}
+          {Object.values(input.polyPressure).length
+            ? Math.max(...Object.values(input.polyPressure))
+            : '—'}
+        </span>
+        <code>{input.lastMessage || '操作すると現在値を表示します'}</code>
+      </div>
       <div
         className="device-wrap"
         style={{ width: `${zoom * 100}%`, aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}` }}
@@ -126,6 +156,7 @@ export default function DeviceCanvas({
           <HardwareFace
             layout={layout}
             held={held}
+            input={input}
             screen={state.paused ? 'Paused' : state.preset.id}
           />
         </svg>
@@ -195,8 +226,8 @@ export default function DeviceCanvas({
                 height={k.black ? bed.blackHeight : bed.h}
                 fill="transparent"
                 role="button"
-                tabIndex={state.settings.mock ? 0 : -1}
-                aria-label={`鍵盤 ${k.note}（画面上のみ）`}
+                tabIndex={0}
+                aria-label={`鍵盤 ${k.note}（ピアノ）`}
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   e.currentTarget.setPointerCapture(e.pointerId);
@@ -226,7 +257,7 @@ export default function DeviceCanvas({
                 stroke={
                   selected.includes(l.id) ? '#fff' : held.has(l.id) ? '#a8fff0' : 'transparent'
                 }
-                strokeWidth="1.1"
+                strokeWidth={1.1 + ((input.polyPressure[l.id] ?? 0) / 127) * 2}
                 strokeDasharray={l.kind === 'none' ? '3 2' : undefined}
                 tabIndex={0}
                 role="button"

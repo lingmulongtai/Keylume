@@ -77,6 +77,23 @@ export interface Profile {
   coexistMode: CoexistMode;
   priority: number;
 }
+export interface PianoSettings {
+  enabled: boolean;
+  volume: number;
+  octave: number;
+  outputDevice: string;
+  bufferFrames: number;
+  muteWithDaw: boolean;
+}
+export interface PianoStatus {
+  state: string;
+  device: string;
+  sampleRate: number;
+  bufferFrames: number;
+  error: string;
+  peak: number;
+  muted: boolean;
+}
 export interface Settings {
   schema: number;
   activePreset: string;
@@ -111,6 +128,7 @@ export interface Settings {
   audioDevice: string;
   checkForUpdates: boolean;
   includePrereleases: boolean;
+  piano: PianoSettings;
 }
 export interface Status {
   connection: string;
@@ -123,6 +141,7 @@ export interface Status {
   padsPort: boolean;
   controlsPort: boolean;
   audio: string;
+  keyboard: string;
   inquiry: string;
   padMode: number;
   messages: number;

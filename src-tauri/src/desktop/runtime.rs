@@ -1,8 +1,9 @@
-use super::{audio::AudioCapture, system};
+use super::{audio::AudioCapture, piano::Piano, system};
 use crate::{
     device::{
         constants::*,
         hardware::{self, HardwareTransport, MidiPacket, Ports},
+        input::InputState,
         protocol,
         transport::{differences, LedTransport, MockTransport},
     },
@@ -39,6 +40,7 @@ pub struct Status {
     pub pads_port: bool,
     pub controls_port: bool,
     pub audio: String,
+    pub keyboard: String,
     pub inquiry: String,
     pub pad_mode: u8,
     pub messages: u64,
@@ -64,6 +66,7 @@ impl Default for Status {
             pads_port: false,
             controls_port: false,
             audio: "stopped".into(),
+            keyboard: "未接続".into(),
             inquiry: String::new(),
             pad_mode: 2,
             messages: 0,
@@ -106,6 +109,8 @@ pub struct Core {
     pub control: Mutex<Control>,
     pub storage: Mutex<Storage>,
     pub action: Sender<Action>,
+    pub input: Mutex<InputState>,
+    pub piano: Piano,
     pub quitting: AtomicBool,
     pub terminated: AtomicBool,
 }
@@ -118,6 +123,7 @@ pub enum Action {
     MockDaw(bool),
     MockDisconnect(bool),
     Tap,
+    Panic,
 }
 impl Core {
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
@@ -151,6 +157,8 @@ impl Core {
                 }),
                 storage: Mutex::new(storage),
                 action: tx,
+                input: Mutex::new(InputState::default()),
+                piano: Piano::new(),
                 quitting: AtomicBool::new(false),
                 terminated: AtomicBool::new(false),
             }),
@@ -257,6 +265,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut engine = Engine::default();
     let mut transport: Option<Box<dyn LedTransport>> = None;
     let mut forward = ForwardPorts::new();
+    let mut keyboard: Option<hardware::KeyboardInput> = None;
+    let mut keyboard_retry = 0.;
+    core.piano.configure(&desired.settings.piano);
     let mut audio: Option<AudioCapture> = None;
     let mut audio_retry = 0f32;
     let mut last_colors: Vec<Color> = vec![];
@@ -297,6 +308,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut running = vec![];
     let mut foreground = String::new();
     let mut errors = 0u32;
+    let mut daw_input_since = start;
     loop {
         let tick = Instant::now();
         let now = start.elapsed().as_secs_f32();
@@ -314,10 +326,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             let b = &next.settings;
             let layout_changed = serde_json::to_string(&desired.layout).ok()
                 != serde_json::to_string(&next.layout).ok();
-            let reconnect = a.mock != b.mock
-                || a.keyboard_reactive != b.keyboard_reactive
-                || a.daw_drum != b.daw_drum
-                || layout_changed;
+            let reconnect = a.mock != b.mock || a.daw_drum != b.daw_drum || layout_changed;
             if a.pads_port != b.pads_port
                 || a.controls_port != b.controls_port
                 || a.pad_notes != b.pad_notes
@@ -335,6 +344,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 audio_retry = 0.;
             }
             if reconnect {
+                core.input.lock().unwrap().clear_port("daw");
                 release(
                     &mut transport,
                     &desired.layout,
@@ -344,9 +354,17 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     &mut monitor,
                     false,
                 );
+                daw_input_since = Instant::now();
                 forward.close();
                 next_connect = now;
                 attempts = 0;
+            }
+            core.piano.configure(&next.settings.piano);
+            if a.mock != b.mock {
+                keyboard = None;
+                *core.input.lock().unwrap() = InputState::default();
+                core.piano.bus.panic();
+                keyboard_retry = now;
             }
             desired = next;
             last_full = -5.;
@@ -358,9 +376,26 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         for action in actions.try_iter().take(128) {
             match action {
                 Action::Input(packet) => {
-                    let _ = tx.try_send(packet);
+                    if packet.source == "keyboard" {
+                        core.piano.bus.midi(false, &packet.bytes);
+                    }
+                    if tx.try_send(packet).is_err() {
+                        hardware::INPUT_OVERFLOW.store(true, Ordering::SeqCst);
+                    }
                 }
+                Action::Panic => {
+                    core.piano.bus.panic();
+                    engine.held.clear();
+                    *core.input.lock().unwrap() = InputState::default();
+                    for _ in rx.try_iter() {}
+                }
+
                 Action::Reconnect => {
+                    keyboard = None;
+                    core.input.lock().unwrap().clear_port("keyboard");
+                    keyboard_retry = now;
+                    core.piano.bus.panic();
+                    core.input.lock().unwrap().clear_port("daw");
                     release(
                         &mut transport,
                         &desired.layout,
@@ -370,6 +405,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         &mut monitor,
                         false,
                     );
+                    daw_input_since = Instant::now();
                     forward.close();
                     next_connect = now;
                     attempts = 0;
@@ -399,6 +435,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 Action::MockDisconnect(v) => {
                     mock_disconnected = v;
                     if v {
+                        *core.input.lock().unwrap() = InputState::default();
+                        core.piano.bus.panic();
                         transport = None;
                         forward.close();
                     } else {
@@ -456,6 +494,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 && transport.is_some()
                 && !status.ports.outputs.contains(&status.device_name)
             {
+                core.input.lock().unwrap().clear_port("daw");
                 release(
                     &mut transport,
                     &desired.layout,
@@ -465,6 +504,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     &mut monitor,
                     false,
                 );
+                daw_input_since = Instant::now();
                 forward.close();
                 next_connect = now + 2.;
                 core.notify(&app, "Launchkey が切断されました");
@@ -538,8 +578,55 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             || stopping
             || mock_disconnected
             || now < resume_at;
+        core.piano.bus.block(
+            suspended
+                || handoff
+                || stopping
+                || mock_disconnected
+                || now < resume_at
+                || (settings.piano.mute_with_daw && daw),
+        );
+        let keyboard_needed = !settings.mock
+            && !suspended
+            && !handoff
+            && !stopping
+            && now >= resume_at
+            && (!desired.paused || settings.piano.enabled);
+        if !keyboard_needed
+            || keyboard
+                .as_ref()
+                .is_some_and(|k| !status.ports.inputs.contains(&k.name))
+        {
+            if keyboard.take().is_some() {
+                core.piano.bus.panic();
+                core.input.lock().unwrap().clear_port("keyboard");
+            }
+            status.keyboard = if handoff {
+                "DAW に譲っています"
+            } else {
+                "未接続"
+            }
+            .into();
+        }
+        if keyboard_needed && keyboard.is_none() && now >= keyboard_retry && discovery_ready {
+            let bus = core.piano.bus.clone();
+            match hardware::open_keyboard(tx.clone(), move |b| bus.midi(false, b)) {
+                Ok(input) => {
+                    status.keyboard = input.name.clone();
+                    keyboard = Some(input);
+                }
+                Err(error) => {
+                    status.keyboard = error;
+                    keyboard_retry = now + 3.;
+                }
+            }
+        }
+        if settings.mock {
+            status.keyboard = "プレビュー入力".into();
+        }
         if inactive {
             if transport.is_some() {
+                core.input.lock().unwrap().clear_port("daw");
                 release(
                     &mut transport,
                     &desired.layout,
@@ -549,6 +636,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     &mut monitor,
                     settings.fade_on_release && !suspended,
                 );
+                daw_input_since = Instant::now();
                 forward.close();
                 engine.held.clear();
                 probe = None;
@@ -571,6 +659,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
             .into();
             if stopping {
+                core.piano.stop();
+                drop(keyboard.take());
                 core.terminated.store(true, Ordering::SeqCst);
                 app.exit(0);
                 break;
@@ -580,11 +670,13 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             && attempts < 12
             && (settings.mock || discovery_ready)
         {
+            daw_input_since = Instant::now();
+            core.input.lock().unwrap().clear_port("daw");
             let result: Result<Box<dyn LedTransport>, String> = if settings.mock {
                 status.device_name = "MockDevice · Launchkey MK4 61".into();
                 Ok(Box::new(MockTransport::connected()))
             } else {
-                HardwareTransport::connect(tx.clone(), settings.keyboard_reactive).map(|h| {
+                HardwareTransport::connect(tx.clone()).map(|h| {
                     status.device_name = h.name.clone();
                     Box::new(h) as Box<dyn LedTransport>
                 })
@@ -594,7 +686,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     let init = [
                         INQUIRY.to_vec(),
                         DAW_ON.to_vec(),
+                        vec![0x9f, 0x0b, 127],
                         vec![0xb6, PAD_MODE, 2],
+                        vec![0xb7, 0x1e, 0],
+                        vec![0xb7, 0x1f, 0],
+                        vec![0xb7, 0x49, 0],
+                        vec![0xb7, 0x4a, 0],
                         vec![0xb6, DAW_DRUM, if settings.daw_drum { 1 } else { 0 }],
                     ];
                     let mut success = true;
@@ -642,6 +739,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         core.notify(&app, "Launchkey のライティングを開始しました");
                     } else {
                         let _ = t.send_raw(&[0xb6, DAW_DRUM, 0]);
+                        let _ = t.send_raw(&[0x9f, 0x0b, 0]);
                         let _ = t.send_raw(&DAW_OFF);
                         next_connect = now + 5.;
                         attempts += 1;
@@ -674,10 +772,37 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             for _ in rx.try_iter() {}
             forward.release();
             engine.held.clear();
+            core.piano.bus.panic();
+            *core.input.lock().unwrap() = InputState::default();
             warn(&mut status, "入力が集中したため、転送ノートを解放しました");
         }
+        if settings.mock
+            && (handoff
+                || suspended
+                || mock_disconnected
+                || (desired.paused && !settings.piano.enabled))
+        {
+            core.input.lock().unwrap().clear_port("keyboard");
+        }
         for packet in rx.try_iter().take(512) {
+            if packet.source == "daw"
+                && (transport.is_none() || packet.received_at < daw_input_since)
+            {
+                continue;
+            }
             let b = &packet.bytes;
+            if !inactive
+                || ((packet.source == "keyboard" || packet.source == "screen")
+                    && !suspended
+                    && !handoff
+                    && !stopping
+                    && !mock_disconnected)
+            {
+                core.input
+                    .lock()
+                    .unwrap()
+                    .receive(&packet.source, b, &desired.layout);
+            }
             if settings.midi_log {
                 log_midi(&mut monitor, "←", b);
             }
@@ -721,14 +846,16 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     } else {
                         None
                     };
-                    if packet.source == "keyboard" {
+                    if (packet.source == "keyboard" || packet.source == "screen")
+                        && settings.keyboard_reactive
+                    {
                         if pressed {
                             engine.held.insert(b[1]);
                         } else {
                             engine.held.remove(&b[1]);
                         }
                     }
-                    if pressed {
+                    if pressed && (packet.source == "daw" || settings.keyboard_reactive) {
                         engine.hit(Hit {
                             x: led
                                 .map(|l| (l.pos.x + l.size.w / 2.) / desired.layout.canvas.w)
@@ -753,6 +880,18 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     }
                 }
             }
+        }
+        if settings.keyboard_reactive && !inactive {
+            engine.held = core
+                .input
+                .lock()
+                .unwrap()
+                .held
+                .iter()
+                .filter_map(|id| id.strip_prefix("key.").and_then(|n| n.parse().ok()))
+                .collect();
+        } else {
+            engine.held.clear();
         }
         let audio_needed = (active_preset
             .layers
@@ -1053,6 +1192,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
         }
         if errors >= 3 {
+            core.input.lock().unwrap().clear_port("daw");
             release(
                 &mut transport,
                 &desired.layout,
@@ -1062,6 +1202,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 &mut monitor,
                 false,
             );
+            daw_input_since = Instant::now();
             forward.close();
             next_connect = now + 2.;
             errors = 0;
@@ -1078,6 +1219,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             status.monitor = monitor.iter().cloned().collect();
             core.control.lock().unwrap().status = status.clone();
             let _ = app.emit("device_status", &status);
+            let _ = app.emit("piano_state", &core.piano.view());
         }
         if app
             .get_webview_window("main")
@@ -1086,6 +1228,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         {
             last_preview = now;
             let _ = app.emit("frame_preview", &frame);
+            let _ = app.emit("input_state", &*core.input.lock().unwrap());
         }
         let remaining = Duration::from_secs_f64(1. / 60.).saturating_sub(tick.elapsed());
         if !remaining.is_zero() {
@@ -1179,7 +1322,7 @@ fn release(
                 }
             }
         }
-        for b in [[0xb6, DAW_DRUM, 0], DAW_OFF] {
+        for b in [[0x9f, 0x0b, 0], [0xb6, DAW_DRUM, 0], DAW_OFF] {
             let _ = send(&mut **t, &b, status, monitor, settings.midi_log);
         }
     }

@@ -67,7 +67,7 @@ pub struct HardwareTransport {
     _inputs: Vec<MidiInputConnection<()>>,
 }
 impl HardwareTransport {
-    pub fn connect(tx: Sender<MidiPacket>, keyboard: bool) -> Result<Self, String> {
+    pub fn connect(tx: Sender<MidiPacket>) -> Result<Self, String> {
         let mut input = MidiInput::new("Keylume DAW input").map_err(|e| e.to_string())?;
         input.ignore(Ignore::None);
         let output = MidiOutput::new("Keylume lights").map_err(|e| e.to_string())?;
@@ -94,7 +94,6 @@ impl HardwareTransport {
         };
         let di = pick(&ins, true).ok_or_else(error)?;
         let do_ = pick(&outs, true).ok_or_else(error)?;
-        let key = pick(&ins, false).filter(|i| *i != di);
         let tx2 = tx.clone();
         let connection = input
             .connect(
@@ -115,34 +114,7 @@ impl HardwareTransport {
                 (),
             )
             .map_err(|e| format!("DAW ポートを開けません: {e}"))?;
-        let mut inputs = vec![connection];
-        if keyboard {
-            if let Some(k) = key {
-                let mut i = MidiInput::new("Keylume keyboard").map_err(|e| e.to_string())?;
-                i.ignore(Ignore::None);
-                let ps = i.ports();
-                let p = ps.get(k).ok_or("MIDI ポートが切断されました")?;
-                if let Ok(c) = i.connect(
-                    p,
-                    "Keylume keyboard",
-                    move |_, b, _| {
-                        if tx
-                            .try_send(MidiPacket {
-                                source: "keyboard".into(),
-                                bytes: b.to_vec(),
-                                received_at: std::time::Instant::now(),
-                            })
-                            .is_err()
-                        {
-                            INPUT_OVERFLOW.store(true, Ordering::SeqCst);
-                        }
-                    },
-                    (),
-                ) {
-                    inputs.push(c);
-                }
-            }
-        }
+        let inputs = vec![connection];
         let out = output
             .connect(&ops[do_], "Keylume lights")
             .map_err(|e| format!("DAW ポートを開けません: {e}"))?;
@@ -187,6 +159,50 @@ pub fn open_forward(name: &str) -> Result<MidiOutputConnection, String> {
     }
     midi.connect(&matches[0], "Keylume forwarding")
         .map_err(|e| e.to_string())
+}
+
+/// Keyboard input remains available while only the lighting is paused.
+pub struct KeyboardInput {
+    pub name: String,
+    _connection: MidiInputConnection<()>,
+}
+pub fn open_keyboard(
+    tx: Sender<MidiPacket>,
+    on_midi: impl Fn(&[u8]) + Send + 'static,
+) -> Result<KeyboardInput, String> {
+    let mut input = MidiInput::new("Keylume piano keyboard").map_err(|e| e.to_string())?;
+    input.ignore(Ignore::None);
+    let ports = input.ports();
+    let names: Vec<_> = ports
+        .iter()
+        .map(|p| input.port_name(p).unwrap_or_default())
+        .collect();
+    let index = pick(&names, false).ok_or("Launchkey MK4 61 の鍵盤入力が見つかりません")?;
+    let name = names[index].clone();
+    let connection = input
+        .connect(
+            &ports[index],
+            "Keylume keyboard",
+            move |_, b, _| {
+                on_midi(b);
+                if tx
+                    .try_send(MidiPacket {
+                        source: "keyboard".into(),
+                        bytes: b.to_vec(),
+                        received_at: std::time::Instant::now(),
+                    })
+                    .is_err()
+                {
+                    INPUT_OVERFLOW.store(true, Ordering::SeqCst);
+                }
+            },
+            (),
+        )
+        .map_err(|e| format!("鍵盤入力を開けません: {e}"))?;
+    Ok(KeyboardInput {
+        name,
+        _connection: connection,
+    })
 }
 
 #[cfg(test)]
