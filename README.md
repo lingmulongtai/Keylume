@@ -6,6 +6,13 @@ Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー�
 
 ## 起動
 
+[GitHub Releases — v0.1.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.1.0) からダウンロードできます。
+
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.1.0/Keylume_0.1.0_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.1.0/Keylume_0.1.0_windows-x64.zip)
+
+![Keylume のライティングエディター](docs/images/keylume.png)
+
 Windows 用インストーラーは `artifacts/Keylume_0.1.0_x64-setup.exe`、ポータブル実行ファイルは `artifacts/Keylume.exe` に出力します。ZIP 版 `artifacts/Keylume_0.1.0_windows-x64.zip` は展開して直下の `Keylume.exe` を実行してください。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
@@ -57,6 +64,8 @@ npm run package      # Windows NSIS インストーラー
 ## 検証
 
 実行済みのチェック、結果、コードのコミット一覧は [検証記録](docs/verification.md) にまとめています。
+
+GitHub Actions は PR と `main` で Windows のテスト・インストーラー生成・ネイティブ自己テストを実行します。`main` に含まれる `v*` タグから同じ検証を行い、成功した成果物だけを Preview Release に公開します。Release には SHA-256、ビルド元コミット、Mock 検証結果を添付します。
 
 ```powershell
 npm test

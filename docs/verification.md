@@ -53,7 +53,7 @@ Release 版についても `http://tauri.localhost/` から同梱画面が表示
 
 追加のポート識別修正: `565e089` — `fix(midi): identify Windows DAW ports regardless of enumeration order`。Windows の MIDIIN2 / MIDIOUT2 を名前で識別し、列挙順に依存しないことをテストしました。
 
-ブランチは `feat/keylume-desktop`。リモートへの push / 公開は行っていません。
+上記は初期ローカル実装時点の記録です。公開版の履歴は [GitHub](https://github.com/lingmulongtai/Keylume)、各ビルドの結果は [Actions](https://github.com/lingmulongtai/Keylume/actions)、配布ファイルは [v0.1.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.1.0) を参照してください。Release の `build-provenance.json` が配布バイナリのビルド元コミットを示します。
 
 ## 未検証・対応範囲
 
