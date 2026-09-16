@@ -101,6 +101,12 @@ for (const pkg of packages) {
     `Source: ${pkg.source}`,
     '',
   );
+  if (pkg.kind === 'cargo') {
+    output.push(
+      `Source archive: https://crates.io/api/v1/crates/${pkg.name}/${pkg.version}/download`,
+      '',
+    );
+  }
   for (const text of pkg.texts)
     output.push(`--- ${text.name} ---`, text.text.replaceAll('\r\n', '\n').trim(), '');
 }
