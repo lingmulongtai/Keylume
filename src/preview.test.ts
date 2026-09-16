@@ -5,6 +5,21 @@ import data from '../resources/presets.json';
 import layout from '../resources/layout.json';
 import type { Preset, Layout } from './types';
 describe('preview and interchange', () => {
+  it('breathes through the selected color stops using the native phase', () => {
+    const p = structuredClone(data[0]) as Preset;
+    p.layers = [
+      {
+        ...p.layers[0],
+        effect: 'breathing',
+        params: { colors: ['#ff0000', '#0000ff'], period: 6 },
+        opacity: 1,
+        zone: 'all',
+      },
+    ];
+    p.post = { brightness: 1, saturation: 1, temperatureK: 6500, gamma: 1 };
+    expect(renderPreview(p, layout as Layout, 1.5, 1)[0]).toEqual([116, 0, 11]);
+    expect(renderPreview(p, layout as Layout, 7.5, 1)[0]).toEqual([74, 0, 53]);
+  });
   it('rejects malformed layouts and LED kinds with missing addresses', () => {
     expect(validateLayout(layout).leds).toHaveLength(42);
     for (const invalid of [

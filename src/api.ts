@@ -85,6 +85,9 @@ try {
   if (saved?.settings && saved?.presets && saved?.layout) {
     saved.layout = validateLayout(saved.layout);
     mock = { ...mock, ...saved, status: { ...defaultStatus } };
+    mock.status.activePreset = mock.settings.activePreset;
+    mock.status.effectiveMode = mock.settings.coexistMode;
+    mock.status.connection = mock.paused ? 'paused' : 'preview';
   }
 } catch {
   /* Corrupt preview storage is replaced by defaults. */
@@ -301,7 +304,11 @@ export async function command<T = unknown>(
       if (mock.profiles.some((p) => p.presetId === args.id))
         throw Error('先に参照するプロファイルを変更してください');
       mock.presets = mock.presets.filter((p) => p.id !== args.id);
-      if (mock.preset.id === args.id) mock.preset = structuredClone(mock.presets[0]);
+      if (mock.preset.id === args.id) {
+        mock.preset = structuredClone(mock.presets[0]);
+        mock.settings.activePreset = mock.preset.id;
+        mock.status.activePreset = mock.preset.id;
+      }
       break;
     }
     case 'import_preset': {
@@ -329,6 +336,7 @@ export async function command<T = unknown>(
       const settings = args.settings as Settings;
       if (!settings.mock) throw Error('実機接続はデスクトップ版で利用できます');
       mock.settings = structuredClone(settings);
+      mock.status.effectiveMode = mock.settings.coexistMode;
       break;
     }
     case 'save_layout':

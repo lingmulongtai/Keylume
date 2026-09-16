@@ -106,7 +106,7 @@ function effect(l: Layer, x: number, y: number, i: number, id: string, time: num
     }
     case 'breathing':
       return scale(
-        color,
+        ramp(colors, fract(time / Math.max(0.2, number(l, 'period', 6)) / 3)),
         ((Math.sin((time / Math.max(0.2, number(l, 'period', 6))) * Math.PI * 2) + 1) / 2) ** 1.5,
       );
     case 'spectrum_cycle':
