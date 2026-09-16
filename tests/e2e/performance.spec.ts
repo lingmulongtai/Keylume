@@ -8,7 +8,10 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
   await expect(fader).toHaveAttribute('data-value', 'unknown');
   await page.evaluate(async () => {
     // Exercise the same browser command boundary as the diagnostic screen.
-    const api = await import('/src/api.ts');
+    const url = performance
+      .getEntriesByType('resource')
+      .find((entry) => /\/src\/api\.ts(?:\?|$)/.test(entry.name))!.name;
+    const api = await import(url);
     for (const [source, bytes] of [
       ['daw', [191, 5, 127]],
       ['daw', [191, 21, 96]],
@@ -29,4 +32,33 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
   await page.getByRole('button', { name: '一時停止', exact: true }).click();
   await expect(fader).toHaveAttribute('data-value', 'unknown');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain —');
+});
+
+test('piano preferences persist and screen keys release on focus loss', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'ピアノをオン', exact: true }).click();
+  await page.getByRole('button', { name: 'ピアノを1オクターブ上げる' }).click();
+  await expect(page.getByLabel('ピアノのオクターブ', { exact: true })).toHaveText('+1');
+  await page.getByLabel('ピアノ音量', { exact: true }).fill('0.3');
+  await page.getByText('音声と演奏の設定', { exact: true }).click();
+  await page.getByLabel('音声バッファ', { exact: true }).selectOption('512');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => JSON.parse(localStorage.getItem('keylume-preview-v1')!).settings.piano),
+    )
+    .toMatchObject({ enabled: true, octave: 1, volume: 0.3, bufferFrames: 512 });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'ピアノをオフ', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByLabel('ピアノのオクターブ', { exact: true })).toHaveText('+1');
+  const key = page.getByRole('button', { name: '鍵盤 60（ピアノ）', exact: true });
+  await key.focus();
+  await page.keyboard.down('Space');
+  await expect(page.locator('[data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(page.locator('[data-key="60"]')).not.toHaveAttribute('fill', '#e8c48e');
+  await page.keyboard.up('Space');
+  await page.getByRole('button', { name: '全音停止', exact: true }).click();
 });

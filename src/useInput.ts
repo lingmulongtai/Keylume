@@ -10,12 +10,17 @@ export function useInput() {
     void subscribe<InputState>('input_state', (s) => {
       received = true;
       if (!dead) setState(s);
-    }).then(async (off) => {
-      if (dead) return off();
-      cleanup = off;
-      const current = await getInputState();
-      if (!dead && !received) setState(current);
-    });
+    })
+      .then(async (off) => {
+        if (dead) return off();
+        cleanup = off;
+        const current = await getInputState();
+        if (!dead && !received) setState(current);
+      })
+      .catch(() => {
+        if (!dead)
+          setState((previous) => ({ ...previous, lastMessage: '入力状態を取得できません' }));
+      });
     return () => {
       dead = true;
       cleanup?.();

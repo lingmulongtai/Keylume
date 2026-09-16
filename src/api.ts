@@ -1,6 +1,15 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AppState, Preset, Settings, Layout, Profile, Status, Color } from './types';
+import type {
+  AppState,
+  Preset,
+  Settings,
+  Layout,
+  Profile,
+  Status,
+  Color,
+  PianoStatus,
+} from './types';
 import { effects, uid } from './types';
 import layout from '../resources/layout.json';
 import presets from '../resources/presets.json';
@@ -53,6 +62,14 @@ export const defaults: Settings = {
   audioDevice: '',
   checkForUpdates: true,
   includePrereleases: true,
+  piano: {
+    enabled: false,
+    volume: 0.5,
+    octave: 0,
+    outputDevice: '',
+    bufferFrames: 256,
+    muteWithDaw: true,
+  },
 };
 const defaultStatus: Status = {
   connection: 'preview',
@@ -65,6 +82,7 @@ const defaultStatus: Status = {
   padsPort: false,
   controlsPort: false,
   audio: 'stopped',
+  keyboard: 'ブラウザープレビュー',
   inquiry: 'ブラウザープレビュー · MIDI 未接続',
   padMode: 2,
   messages: 0,
@@ -95,7 +113,11 @@ try {
     mock = {
       ...mock,
       ...saved,
-      settings: { ...defaults, ...saved.settings },
+      settings: {
+        ...defaults,
+        ...saved.settings,
+        piano: { ...defaults.piano, ...saved.settings.piano },
+      },
       status: { ...defaultStatus },
     };
     mock.status.activePreset = mock.settings.activePreset;
@@ -409,7 +431,17 @@ export async function command<T = unknown>(
       mock.status.probe = null;
       break;
     }
+    case 'piano_panic':
+      liveInput.reset();
+      emit('input_state', structuredClone(liveInput.state));
+      break;
+    case 'piano_screen_release':
+      liveInput.receive('screen', [176, 123, 0], mock.layout);
+      emit('input_state', structuredClone(liveInput.state));
+      break;
+    case 'piano_input':
     case 'simulate_input': {
+      if (name === 'piano_input') args = { ...args, source: 'screen' };
       liveInput.receive(String(args.source ?? 'daw'), args.bytes as number[], mock.layout);
       emit('input_state', structuredClone(liveInput.state));
       const input = previewInput(args.bytes as number[], String(args.source ?? 'daw'), mock.layout);
@@ -472,4 +504,18 @@ export async function openLink(url: string) {
     const { openUrl } = await import('@tauri-apps/plugin-opener');
     await openUrl(url);
   } else window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+export async function getPianoState(): Promise<PianoStatus> {
+  return native
+    ? invoke('get_piano_state')
+    : {
+        state: 'preview',
+        device: '',
+        sampleRate: 0,
+        bufferFrames: 0,
+        error: '',
+        peak: 0,
+        muted: false,
+      };
 }

@@ -29,6 +29,20 @@ export default function DeviceCanvas({
     data = useRef(state),
     frame = useRef<Color[]>([]),
     drag = useRef<{ x: number; y: number; ids: string[] } | null>(null);
+  const screenKeys = useRef(new Set<number>());
+  const inputHandler = useRef(onInput);
+  inputHandler.current = onInput;
+  useEffect(() => {
+    const release = () => {
+      for (const key of screenKeys.current) inputHandler.current([128, key, 0], 'screen');
+      screenKeys.current.clear();
+    };
+    window.addEventListener('blur', release);
+    return () => {
+      window.removeEventListener('blur', release);
+      release();
+    };
+  }, []);
   const input = useInput();
   const held = new Set(input.held);
   const [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -105,7 +119,10 @@ export default function DeviceCanvas({
     if (paint) onPaint?.([led.id]);
   }
   function note(note: number, on: boolean) {
-    if (state.settings.mock) onInput([on ? 144 : 128, note, on ? 100 : 0], 'keyboard');
+    if (on === screenKeys.current.has(note)) return;
+    if (on) screenKeys.current.add(note);
+    else screenKeys.current.delete(note);
+    onInput([on ? 144 : 128, note, on ? 100 : 0], 'screen');
   }
   return (
     <div className="device-viewport">
@@ -119,7 +136,12 @@ export default function DeviceCanvas({
         <span data-testid="sustain-state">
           Sustain {input.sustain == null ? '—' : input.sustain >= 64 ? 'ON' : 'OFF'}
         </span>
-        <span>Pressure {input.pressure ?? '—'}</span>
+        <span>
+          Pressure {input.pressure ?? '—'} · Poly{' '}
+          {Object.values(input.polyPressure).length
+            ? Math.max(...Object.values(input.polyPressure))
+            : '—'}
+        </span>
         <code>{input.lastMessage || '操作すると現在値を表示します'}</code>
       </div>
       <div
@@ -204,8 +226,8 @@ export default function DeviceCanvas({
                 height={k.black ? bed.blackHeight : bed.h}
                 fill="transparent"
                 role="button"
-                tabIndex={state.settings.mock ? 0 : -1}
-                aria-label={`鍵盤 ${k.note}（画面上のみ）`}
+                tabIndex={0}
+                aria-label={`鍵盤 ${k.note}（ピアノ）`}
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   e.currentTarget.setPointerCapture(e.pointerId);
@@ -235,7 +257,7 @@ export default function DeviceCanvas({
                 stroke={
                   selected.includes(l.id) ? '#fff' : held.has(l.id) ? '#a8fff0' : 'transparent'
                 }
-                strokeWidth="1.1"
+                strokeWidth={1.1 + ((input.polyPressure[l.id] ?? 0) / 127) * 2}
                 strokeDasharray={l.kind === 'none' ? '3 2' : undefined}
                 tabIndex={0}
                 role="button"
