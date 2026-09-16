@@ -5,7 +5,6 @@ import {
   EyeOff,
   Trash2,
   GripVertical,
-  ChevronDown,
   ArrowUp,
   ArrowDown,
   MousePointer2,
@@ -91,11 +90,18 @@ export default function Editor({
             <span className="eyebrow">ライティング / マイデバイス</span>
             <h1>光に、あなたのリズムを。</h1>
           </div>
-          <button className="preset-picker" onClick={onSave}>
-            <span className="dot" />
-            {state.preset.name}
-            <ChevronDown size={15} />
-          </button>
+          <select
+            className="preset-picker"
+            aria-label="適用するプリセット"
+            value={state.preset.id}
+            onChange={(event) => act('apply_preset', { id: event.target.value })}
+          >
+            {state.presets.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="device-stage">
           <div className="stage-label">

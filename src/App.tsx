@@ -38,6 +38,7 @@ const pages = [
   { id: 'settings', name: '設定', icon: Settings2 },
 ] as const;
 const statusLabels: Record<string, string> = {
+  starting: '接続を準備中',
   preview: 'プレビュー',
   connected: '接続中',
   disconnected: '未接続',

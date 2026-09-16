@@ -12,7 +12,9 @@ test('edits, saves, reloads, exports and deletes a preset', async ({ page }) => 
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page.locator('.toast')).toContainText('保存しました');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'E2E Sunset', exact: true })).toBeVisible();
+  await expect(page.getByLabel('適用するプリセット').locator('option:checked')).toHaveText(
+    'E2E Sunset',
+  );
   await page.getByRole('button', { name: 'プリセット', exact: true }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'E2E Sunsetを書き出す' }).click();
