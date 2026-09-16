@@ -266,7 +266,7 @@ impl Engine {
                 scale(
                     color,
                     if l.effect == "metronome"
-                        && beat as u32 % l.number("beats", 4.).max(1.) as u32 != 0
+                        && !(beat as u32).is_multiple_of(l.number("beats", 4.).max(1.) as u32)
                     {
                         v * 0.25
                     } else {
