@@ -42,8 +42,8 @@ fn daw_hint(name: &str) -> bool {
         || n.contains("midi 2")
         || n.contains("midi2")
         || n.ends_with(" da")
-        || n.contains("midin2")
-        || n.contains("midout2")
+        || n.contains("midiin2")
+        || n.contains("midiout2")
 }
 fn pick(names: &[String], daw: bool) -> Option<usize> {
     let matches: Vec<_> = names
@@ -187,4 +187,21 @@ pub fn open_forward(name: &str) -> Result<MidiOutputConnection, String> {
     }
     midi.connect(&matches[0], "Keylume forwarding")
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn windows_second_interface_is_identified_without_relying_on_order() {
+        for prefix in ["MIDIIN2", "MIDIOUT2"] {
+            let names = vec![
+                format!("{prefix} (Launchkey MK4 61 MIDI)"),
+                "Launchkey MK4 61 MIDI".into(),
+            ];
+            assert_eq!(pick(&names, true), Some(0));
+            assert_eq!(pick(&names, false), Some(1));
+        }
+        assert_eq!(pick(&["Launchkey MK4 49 DAW".into()], true), None);
+    }
 }
