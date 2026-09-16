@@ -308,7 +308,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut running = vec![];
     let mut foreground = String::new();
     let mut errors = 0u32;
-    let mut had_input = false;
+    let mut daw_input_since = start;
     loop {
         let tick = Instant::now();
         let now = start.elapsed().as_secs_f32();
@@ -326,10 +326,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             let b = &next.settings;
             let layout_changed = serde_json::to_string(&desired.layout).ok()
                 != serde_json::to_string(&next.layout).ok();
-            let reconnect = a.mock != b.mock
-                || a.keyboard_reactive != b.keyboard_reactive
-                || a.daw_drum != b.daw_drum
-                || layout_changed;
+            let reconnect = a.mock != b.mock || a.daw_drum != b.daw_drum || layout_changed;
             if a.pads_port != b.pads_port
                 || a.controls_port != b.controls_port
                 || a.pad_notes != b.pad_notes
@@ -347,6 +344,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 audio_retry = 0.;
             }
             if reconnect {
+                core.input.lock().unwrap().clear_port("daw");
                 release(
                     &mut transport,
                     &desired.layout,
@@ -356,6 +354,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     &mut monitor,
                     false,
                 );
+                daw_input_since = Instant::now();
                 forward.close();
                 next_connect = now;
                 attempts = 0;
@@ -363,6 +362,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             core.piano.configure(&next.settings.piano);
             if a.mock != b.mock {
                 keyboard = None;
+                *core.input.lock().unwrap() = InputState::default();
                 core.piano.bus.panic();
                 keyboard_retry = now;
             }
@@ -392,8 +392,10 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
 
                 Action::Reconnect => {
                     keyboard = None;
+                    core.input.lock().unwrap().clear_port("keyboard");
                     keyboard_retry = now;
                     core.piano.bus.panic();
+                    core.input.lock().unwrap().clear_port("daw");
                     release(
                         &mut transport,
                         &desired.layout,
@@ -403,6 +405,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         &mut monitor,
                         false,
                     );
+                    daw_input_since = Instant::now();
                     forward.close();
                     next_connect = now;
                     attempts = 0;
@@ -432,6 +435,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 Action::MockDisconnect(v) => {
                     mock_disconnected = v;
                     if v {
+                        *core.input.lock().unwrap() = InputState::default();
+                        core.piano.bus.panic();
                         transport = None;
                         forward.close();
                     } else {
@@ -489,6 +494,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 && transport.is_some()
                 && !status.ports.outputs.contains(&status.device_name)
             {
+                core.input.lock().unwrap().clear_port("daw");
                 release(
                     &mut transport,
                     &desired.layout,
@@ -498,6 +504,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     &mut monitor,
                     false,
                 );
+                daw_input_since = Instant::now();
                 forward.close();
                 next_connect = now + 2.;
                 core.notify(&app, "Launchkey が切断されました");
@@ -592,7 +599,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         {
             if keyboard.take().is_some() {
                 core.piano.bus.panic();
-                *core.input.lock().unwrap() = InputState::default();
+                core.input.lock().unwrap().clear_port("keyboard");
             }
             status.keyboard = if handoff {
                 "DAW に譲っています"
@@ -619,6 +626,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         }
         if inactive {
             if transport.is_some() {
+                core.input.lock().unwrap().clear_port("daw");
                 release(
                     &mut transport,
                     &desired.layout,
@@ -628,6 +636,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     &mut monitor,
                     settings.fade_on_release && !suspended,
                 );
+                daw_input_since = Instant::now();
                 forward.close();
                 engine.held.clear();
                 probe = None;
@@ -661,9 +670,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             && attempts < 12
             && (settings.mock || discovery_ready)
         {
-            for _ in rx.try_iter() {}
-            *core.input.lock().unwrap() = InputState::default();
-            engine.held.clear();
+            daw_input_since = Instant::now();
+            core.input.lock().unwrap().clear_port("daw");
             let result: Result<Box<dyn LedTransport>, String> = if settings.mock {
                 status.device_name = "MockDevice · Launchkey MK4 61".into();
                 Ok(Box::new(MockTransport::connected()))
@@ -702,8 +710,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         }
                     }
                     if success {
-                        *core.input.lock().unwrap() = InputState::default();
-                        engine.held.clear();
                         transport = Some(t);
                         last_full = -5.;
                         last_frame.clear();
@@ -770,13 +776,20 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             *core.input.lock().unwrap() = InputState::default();
             warn(&mut status, "入力が集中したため、転送ノートを解放しました");
         }
-        let has_input = (!inactive && (settings.mock || transport.is_some())) || keyboard.is_some();
-        if had_input && !has_input {
-            *core.input.lock().unwrap() = InputState::default();
-            engine.held.clear();
+        if settings.mock
+            && (handoff
+                || suspended
+                || mock_disconnected
+                || (desired.paused && !settings.piano.enabled))
+        {
+            core.input.lock().unwrap().clear_port("keyboard");
         }
-        had_input = has_input;
         for packet in rx.try_iter().take(512) {
+            if packet.source == "daw"
+                && (transport.is_none() || packet.received_at < daw_input_since)
+            {
+                continue;
+            }
             let b = &packet.bytes;
             if !inactive
                 || ((packet.source == "keyboard" || packet.source == "screen")
@@ -1179,6 +1192,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
         }
         if errors >= 3 {
+            core.input.lock().unwrap().clear_port("daw");
             release(
                 &mut transport,
                 &desired.layout,
@@ -1188,6 +1202,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 &mut monitor,
                 false,
             );
+            daw_input_since = Instant::now();
             forward.close();
             next_connect = now + 2.;
             errors = 0;

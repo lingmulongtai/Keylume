@@ -54,3 +54,24 @@ test('touch and feature replies do not move controls or collide with DAW buttons
   input.receive('daw', [0xdf, 85], l);
   expect(input.state.pressure).toBe(85);
 });
+
+test('releasing the DAW port preserves keyboard sustain and screen notes', () => {
+  const input = new PreviewInput(),
+    l = layout as Layout;
+  input.receive('keyboard', [0x90, 60, 100], l);
+  input.receive('keyboard', [0xb0, 64, 127], l);
+  input.receive('keyboard', [0xd0, 80], l);
+  input.receive('screen', [0x90, 64, 100], l);
+  input.receive('daw', [0xbf, 115, 127], l);
+  input.receive('daw', [0xbe, 5, 127], l);
+  input.receive('daw', [0xbf, 5, 100], l);
+  input.clearPort('daw');
+  expect(input.state.held).toEqual(['key.60', 'key.64']);
+  expect(input.state.sustain).toBe(127);
+  expect(input.state.pressure).toBe(80);
+  expect(input.state.faders[0]).toBeNull();
+  input.clearPort('keyboard');
+  expect(input.state.held).toEqual(['key.64']);
+  expect(input.state.sustain).toBeNull();
+  expect(input.state.pressure).toBeNull();
+});

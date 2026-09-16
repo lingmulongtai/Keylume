@@ -65,3 +65,31 @@ test('piano preferences persist and screen keys release on focus loss', async ({
   await page.keyboard.up('Space');
   await page.getByRole('button', { name: '全音停止', exact: true }).click();
 });
+
+test('lighting pause and resume retain playing keys and pedal with piano enabled', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'ピアノをオン', exact: true }).click();
+  await page.evaluate(async () => {
+    const url = performance
+      .getEntriesByType('resource')
+      .find((entry) => /\/src\/api\.ts(?:\?|$)/.test(entry.name))!.name;
+    const api = await import(url);
+    for (const [source, bytes] of [
+      ['keyboard', [144, 60, 100]],
+      ['keyboard', [176, 64, 127]],
+      ['daw', [191, 5, 100]],
+      ['daw', [191, 115, 127]],
+    ])
+      await api.command('simulate_input', { source, bytes });
+  });
+  await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
+  await page.getByRole('button', { name: '一時停止', exact: true }).click();
+  await expect(page.locator('[data-control="fader-1"]')).toHaveAttribute('data-value', 'unknown');
+  await expect(page.locator('[data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
+  await page.getByRole('button', { name: '再開', exact: true }).click();
+  await expect(page.locator('[data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
+});

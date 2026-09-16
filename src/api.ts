@@ -381,7 +381,10 @@ export async function command<T = unknown>(
     case 'export_preset':
       return structuredClone(mock.presets.find((p) => p.id === args.id) ?? mock.preset) as T;
     case 'set_paused':
-      liveInput.reset();
+      if (args.paused) {
+        liveInput.clearPort('daw');
+        if (!mock.settings.piano.enabled) liveInput.clearPort('keyboard');
+      }
       emit('input_state', structuredClone(liveInput.state));
       mock.paused = Boolean(args.paused);
       mock.status.connection = mock.paused ? 'paused' : 'preview';

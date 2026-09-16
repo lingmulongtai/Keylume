@@ -22,8 +22,34 @@ pub struct InputState {
     pub last_message: String,
     #[serde(skip)]
     presses: BTreeMap<(String, u8, u8), String>,
+    #[serde(skip)]
+    pressure_source: String,
 }
 impl InputState {
+    pub fn clear_port(&mut self, source: &str) {
+        self.presses.retain(|(s, _, _), _| s != source);
+        self.held = self.presses.values().cloned().collect();
+        self.held.sort();
+        self.held.dedup();
+        if source == "daw" {
+            self.encoders = [None; 8];
+            self.relative = [false; 8];
+            self.faders = [None; 9];
+            self.encoder_mode = None;
+            self.fader_mode = None;
+            self.features.clear();
+            self.poly_pressure.retain(|id, _| id.starts_with("key."));
+        } else if source == "keyboard" {
+            self.pitch = None;
+            self.modulation = None;
+            self.sustain = None;
+            self.poly_pressure.retain(|id, _| !id.starts_with("key."));
+        }
+        if self.pressure_source == source {
+            self.pressure = None;
+            self.pressure_source.clear();
+        }
+    }
     pub fn receive(&mut self, source: &str, b: &[u8], layout: &DeviceLayout) {
         if b.len() < 2 || b[0] < 0x80 || b[0] >= 0xf0 || b[1..].iter().any(|v| *v > 127) {
             return;
@@ -79,6 +105,7 @@ impl InputState {
             }
         } else if source == "daw" && kind == 0xd0 {
             self.pressure = Some(b[1]);
+            self.pressure_source = source.into();
         } else if source == "daw" && b[0] == 0xbe {
             let id = match b[1] {
                 5..=13 => Some(format!("fader-{}", b[1] - 4)),
@@ -97,7 +124,10 @@ impl InputState {
         } else if keyboard {
             match kind {
                 0xe0 => self.pitch = Some(b[1] as u16 + ((v as u16) << 7)),
-                0xd0 => self.pressure = Some(b[1]),
+                0xd0 => {
+                    self.pressure = Some(b[1]);
+                    self.pressure_source = source.into();
+                }
                 0xb0 => match b[1] {
                     1 => self.modulation = Some(v),
                     64 => self.sustain = Some(v),
@@ -185,6 +215,31 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn releasing_daw_preserves_ongoing_keyboard_and_screen_input() {
+        let mut s = InputState::default();
+        let l = DeviceLayout::default();
+        for (source, b) in [
+            ("keyboard", vec![0x90, 60, 100]),
+            ("keyboard", vec![0xb0, 64, 127]),
+            ("keyboard", vec![0xd0, 80]),
+            ("screen", vec![0x90, 64, 100]),
+            ("daw", vec![0xbf, 115, 127]),
+            ("daw", vec![0xbe, 5, 127]),
+            ("daw", vec![0xbf, 5, 100]),
+        ] {
+            s.receive(source, &b, &l);
+        }
+        s.clear_port("daw");
+        assert_eq!(s.held, ["key.60", "key.64"]);
+        assert_eq!(s.sustain, Some(127));
+        assert_eq!(s.pressure, Some(80));
+        assert_eq!(s.faders[0], None);
+        s.clear_port("keyboard");
+        assert_eq!(s.held, ["key.64"]);
+        assert_eq!(s.sustain, None);
+        assert_eq!(s.pressure, None);
+    }
     #[test]
     fn controls_are_port_and_channel_aware() {
         let mut s = InputState::default();

@@ -39,9 +39,38 @@ export function hardwareColor(id: string, color: Color): Color {
 export class PreviewInput {
   state = emptyInput();
   private presses = new Map<string, string>();
+  private pressureSource = '';
   reset() {
     this.state = emptyInput();
     this.presses.clear();
+    this.pressureSource = '';
+  }
+  clearPort(source: string) {
+    for (const key of this.presses.keys())
+      if (key.startsWith(source + ':')) this.presses.delete(key);
+    const s = this.state;
+    s.held = [...new Set(this.presses.values())].sort();
+    if (source === 'daw') {
+      s.encoders.fill(null);
+      s.relative.fill(false);
+      s.faders.fill(null);
+      s.encoderMode = null;
+      s.faderMode = null;
+      s.features = {};
+      for (const id of Object.keys(s.polyPressure))
+        if (!id.startsWith('key.')) delete s.polyPressure[id];
+    }
+    if (source === 'keyboard') {
+      s.pitch = null;
+      s.modulation = null;
+      s.sustain = null;
+      for (const id of Object.keys(s.polyPressure))
+        if (id.startsWith('key.')) delete s.polyPressure[id];
+    }
+    if (this.pressureSource === source) {
+      s.pressure = null;
+      this.pressureSource = '';
+    }
   }
   receive(source: string, b: number[], layout: Layout) {
     const s = this.state,
@@ -77,6 +106,7 @@ export class PreviewInput {
       }
     } else if (source === 'daw' && kind === 0xd0) {
       s.pressure = b[1];
+      this.pressureSource = source;
     } else if (source === 'daw' && b[0] === 0xbe) {
       const id =
         b[1] >= 5 && b[1] <= 13
@@ -92,7 +122,10 @@ export class PreviewInput {
       }
     } else if (keyboard) {
       if (kind === 0xe0) s.pitch = b[1] + (v << 7);
-      if (kind === 0xd0) s.pressure = b[1];
+      if (kind === 0xd0) {
+        s.pressure = b[1];
+        this.pressureSource = source;
+      }
       if (kind === 0xb0) {
         if (b[1] === 1) s.modulation = v;
         if (b[1] === 64) s.sustain = v;
