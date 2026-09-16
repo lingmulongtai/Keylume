@@ -117,8 +117,9 @@ impl Analyzer {
             for (i, band) in bands.iter_mut().enumerate() {
                 let lo = 40. * (16000f32 / 40.).powf(i as f32 / 8.);
                 let hi = 40. * (16000f32 / 40.).powf((i + 1) as f32 / 8.);
-                let a = (lo * 2048. / self.rate) as usize;
-                let b = ((hi * 2048. / self.rate) as usize).min(1023).max(a + 1);
+                let end = self.buffer.len() / 2;
+                let a = ((lo * 2048. / self.rate) as usize).min(end);
+                let b = ((hi * 2048. / self.rate) as usize).max(a + 1).min(end);
                 *band = self.buffer[a..b]
                     .iter()
                     .map(|c| c.norm_sqr())
@@ -133,6 +134,28 @@ impl Analyzer {
             }
             let _ = self.tx.try_send(self.smooth);
             self.samples.clear();
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn low_sample_rates_keep_bands_above_nyquist_silent() {
+        for rate in [4000, 8000, 16000, 44100, 48000] {
+            let (tx, rx) = bounded(2);
+            let mut analyzer = Analyzer::new(1, rate, tx);
+            analyzer.push((0..2048).map(|i| (i as f32 * 0.17).sin()));
+            let bands = rx.try_recv().unwrap();
+            assert!(bands
+                .iter()
+                .all(|v| v.is_finite() && (0.0..=1.0).contains(v)));
+            for (i, band) in bands.iter().enumerate() {
+                let lo = 40. * (16000f32 / 40.).powf(i as f32 / 8.);
+                if lo >= rate as f32 / 2. {
+                    assert_eq!(*band, 0.);
+                }
+            }
         }
     }
 }
