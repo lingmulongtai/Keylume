@@ -3,7 +3,7 @@ name = "keylume"
 version = "0.1.0"
 description = "Independent lighting controller for Launchkey MK4 61"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [lib]
 name = "keylume_lib"

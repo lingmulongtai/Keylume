@@ -106,6 +106,9 @@ for (const pkg of packages) {
 }
 writeFileSync(
   'licenses/THIRD-PARTY-LICENSES.txt',
-  output.join('\n').replace(/[ \t]+$/gm, '').trimEnd() + '\n',
+  output
+    .join('\n')
+    .replace(/[ \t]+$/gm, '')
+    .trimEnd() + '\n',
 );
 console.log(`Collected license texts for ${packages.length} packages.`);
