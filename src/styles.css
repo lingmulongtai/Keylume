@@ -1665,3 +1665,20 @@ code,
 .numeric {
   font-family: ui-monospace, Consolas, monospace;
 }
+.input-readout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 2px 12px;
+  color: var(--text-muted, #a6a6ac);
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.input-readout > :first-child {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+.input-readout code {
+  margin-left: auto;
+  font-size: 10px;
+}

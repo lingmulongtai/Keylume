@@ -6,7 +6,12 @@ import layout from '../resources/layout.json';
 import presets from '../resources/presets.json';
 import { previewInput, renderPreview } from './preview';
 import { upgradeLayout } from './layout';
+import { PreviewInput, type InputState } from './input';
+const liveInput = new PreviewInput();
 export const native = isTauri();
+export async function getInputState(): Promise<InputState> {
+  return native ? invoke('get_input_state') : structuredClone(liveInput.state);
+}
 export const defaults: Settings = {
   schema: 1,
   activePreset: 'aurora',
@@ -354,6 +359,8 @@ export async function command<T = unknown>(
     case 'export_preset':
       return structuredClone(mock.presets.find((p) => p.id === args.id) ?? mock.preset) as T;
     case 'set_paused':
+      liveInput.reset();
+      emit('input_state', structuredClone(liveInput.state));
       mock.paused = Boolean(args.paused);
       mock.status.connection = mock.paused ? 'paused' : 'preview';
       break;
@@ -403,6 +410,8 @@ export async function command<T = unknown>(
       break;
     }
     case 'simulate_input': {
+      liveInput.receive(String(args.source ?? 'daw'), args.bytes as number[], mock.layout);
+      emit('input_state', structuredClone(liveInput.state));
       const input = previewInput(args.bytes as number[], String(args.source ?? 'daw'), mock.layout);
       emit('input_event', input);
       const b = args.bytes as number[];
@@ -419,6 +428,8 @@ export async function command<T = unknown>(
         args.value && mock.settings.coexistMode === 'handoff' ? 'handoff' : 'preview';
       break;
     case 'mock_disconnect':
+      liveInput.reset();
+      emit('input_state', structuredClone(liveInput.state));
       mock.status.connection = args.value ? 'disconnected' : 'preview';
       break;
     case 'set_device_feature':

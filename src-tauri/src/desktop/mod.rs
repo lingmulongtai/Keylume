@@ -40,6 +40,10 @@ fn get_state(core: tauri::State<'_, Arc<Core>>) -> Result<StateView, String> {
     core.view()
 }
 #[tauri::command]
+fn get_input_state(core: tauri::State<'_, Arc<Core>>) -> crate::device::input::InputState {
+    core.input.lock().unwrap().clone()
+}
+#[tauri::command]
 fn get_update_state(updater: tauri::State<'_, Arc<Updater>>) -> crate::updates::UpdateState {
     updater.view()
 }
@@ -376,6 +380,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_state,
+            get_input_state,
             command,
             save_export,
             get_update_state,

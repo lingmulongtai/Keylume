@@ -3,6 +3,7 @@ use crate::{
     device::{
         constants::*,
         hardware::{self, HardwareTransport, MidiPacket, Ports},
+        input::InputState,
         protocol,
         transport::{differences, LedTransport, MockTransport},
     },
@@ -106,6 +107,7 @@ pub struct Core {
     pub control: Mutex<Control>,
     pub storage: Mutex<Storage>,
     pub action: Sender<Action>,
+    pub input: Mutex<InputState>,
     pub quitting: AtomicBool,
     pub terminated: AtomicBool,
 }
@@ -151,6 +153,7 @@ impl Core {
                 }),
                 storage: Mutex::new(storage),
                 action: tx,
+                input: Mutex::new(InputState::default()),
                 quitting: AtomicBool::new(false),
                 terminated: AtomicBool::new(false),
             }),
@@ -580,11 +583,14 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             && attempts < 12
             && (settings.mock || discovery_ready)
         {
+            for _ in rx.try_iter() {}
+            *core.input.lock().unwrap() = InputState::default();
+            engine.held.clear();
             let result: Result<Box<dyn LedTransport>, String> = if settings.mock {
                 status.device_name = "MockDevice · Launchkey MK4 61".into();
                 Ok(Box::new(MockTransport::connected()))
             } else {
-                HardwareTransport::connect(tx.clone(), settings.keyboard_reactive).map(|h| {
+                HardwareTransport::connect(tx.clone(), true).map(|h| {
                     status.device_name = h.name.clone();
                     Box::new(h) as Box<dyn LedTransport>
                 })
@@ -595,6 +601,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         INQUIRY.to_vec(),
                         DAW_ON.to_vec(),
                         vec![0xb6, PAD_MODE, 2],
+                        vec![0xb7, 0x1e, 0],
+                        vec![0xb7, 0x1f, 0],
                         vec![0xb6, DAW_DRUM, if settings.daw_drum { 1 } else { 0 }],
                     ];
                     let mut success = true;
@@ -613,6 +621,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         }
                     }
                     if success {
+                        *core.input.lock().unwrap() = InputState::default();
+                        engine.held.clear();
                         transport = Some(t);
                         last_full = -5.;
                         last_frame.clear();
@@ -674,10 +684,21 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             for _ in rx.try_iter() {}
             forward.release();
             engine.held.clear();
+            *core.input.lock().unwrap() = InputState::default();
             warn(&mut status, "入力が集中したため、転送ノートを解放しました");
+        }
+        if transport.is_none() {
+            *core.input.lock().unwrap() = InputState::default();
+            engine.held.clear();
         }
         for packet in rx.try_iter().take(512) {
             let b = &packet.bytes;
+            if !inactive {
+                core.input
+                    .lock()
+                    .unwrap()
+                    .receive(&packet.source, b, &desired.layout);
+            }
             if settings.midi_log {
                 log_midi(&mut monitor, "←", b);
             }
@@ -721,14 +742,14 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     } else {
                         None
                     };
-                    if packet.source == "keyboard" {
+                    if packet.source == "keyboard" && settings.keyboard_reactive {
                         if pressed {
                             engine.held.insert(b[1]);
                         } else {
                             engine.held.remove(&b[1]);
                         }
                     }
-                    if pressed {
+                    if pressed && (packet.source != "keyboard" || settings.keyboard_reactive) {
                         engine.hit(Hit {
                             x: led
                                 .map(|l| (l.pos.x + l.size.w / 2.) / desired.layout.canvas.w)
@@ -1086,6 +1107,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         {
             last_preview = now;
             let _ = app.emit("frame_preview", &frame);
+            let _ = app.emit("input_state", &*core.input.lock().unwrap());
         }
         let remaining = Duration::from_secs_f64(1. / 60.).saturating_sub(tick.elapsed());
         if !remaining.is_zero() {
