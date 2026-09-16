@@ -432,6 +432,8 @@ pub struct Settings {
     pub manual_lock: bool,
     pub language: String,
     pub audio_device: String,
+    pub check_for_updates: bool,
+    pub include_prereleases: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -479,6 +481,8 @@ impl Default for Settings {
             manual_lock: false,
             language: "ja".into(),
             audio_device: String::new(),
+            check_for_updates: true,
+            include_prereleases: true,
         }
     }
 }

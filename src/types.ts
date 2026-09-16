@@ -109,6 +109,8 @@ export interface Settings {
   manualLock: boolean;
   language: string;
   audioDevice: string;
+  checkForUpdates: boolean;
+  includePrereleases: boolean;
 }
 export interface Status {
   connection: string;

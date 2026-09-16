@@ -29,6 +29,7 @@ import {
 } from './Screens';
 import { Modal } from './components';
 import { appVersion } from './version';
+import { useUpdates, UpdateBanner } from './Updates';
 type Page = 'lighting' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
   { id: 'lighting', name: 'ライティング', icon: SlidersHorizontal },
@@ -61,6 +62,7 @@ export default function App() {
   const toast = useCallback((message: string) => {
     setNotice(message);
   }, []);
+  const updates = useUpdates(toast);
   const act = useCallback(
     (name: string, args: Record<string, unknown> = {}) => {
       if (timer.current) clearTimeout(timer.current);
@@ -202,6 +204,7 @@ export default function App() {
         </div>
       </header>
       <div className="app-content">
+        <UpdateBanner updates={updates} />
         <header className="app-header">
           <div className="connection">
             <span className={'connection-dot ' + (state.paused ? 'paused' : '')} />
@@ -272,7 +275,7 @@ export default function App() {
           ) : page === 'device' ? (
             <DeviceScreen {...props} />
           ) : (
-            <SettingsScreen {...props} onSetup={() => setSetup(true)} />
+            <SettingsScreen {...props} updates={updates} onSetup={() => setSetup(true)} />
           )}
         </main>
         <footer className="app-footer">

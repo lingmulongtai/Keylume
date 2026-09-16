@@ -1,4 +1,28 @@
 @import url('./theme.css');
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--accent);
+  background: #24221c;
+  flex-shrink: 0;
+}
+.update-banner > div {
+  flex: 1;
+}
+.update-banner strong,
+.update-banner span {
+  display: block;
+}
+.update-banner span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.update-error {
+  color: #f1a398;
+}
 * {
   box-sizing: border-box;
 }

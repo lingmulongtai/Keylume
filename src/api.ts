@@ -46,6 +46,8 @@ export const defaults: Settings = {
   manualLock: false,
   language: 'ja',
   audioDevice: '',
+  checkForUpdates: true,
+  includePrereleases: true,
 };
 const defaultStatus: Status = {
   connection: 'preview',
@@ -85,7 +87,12 @@ try {
   const saved = JSON.parse(localStorage.getItem('keylume-preview-v1') ?? 'null');
   if (saved?.settings && saved?.presets && saved?.layout) {
     saved.layout = upgradeLayout(validateLayout(saved.layout));
-    mock = { ...mock, ...saved, status: { ...defaultStatus } };
+    mock = {
+      ...mock,
+      ...saved,
+      settings: { ...defaults, ...saved.settings },
+      status: { ...defaultStatus },
+    };
     mock.status.activePreset = mock.settings.activePreset;
     mock.status.effectiveMode = mock.settings.coexistMode;
     mock.status.connection = mock.paused ? 'paused' : 'preview';

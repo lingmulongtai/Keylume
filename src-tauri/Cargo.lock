@@ -2148,6 +2148,7 @@ dependencies = [
  "crossbeam-channel",
  "midir",
  "rustfft",
+ "semver",
  "serde",
  "serde_json",
  "sysinfo",

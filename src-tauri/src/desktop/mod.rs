@@ -3,6 +3,8 @@ mod discovery;
 mod runtime;
 mod smoke;
 mod system;
+mod update_http;
+mod updater;
 use crate::{
     device::hardware::MidiPacket,
     model::*,
@@ -19,6 +21,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
+use updater::Updater;
 
 fn show(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -37,8 +40,41 @@ fn get_state(core: tauri::State<'_, Arc<Core>>) -> Result<StateView, String> {
     core.view()
 }
 #[tauri::command]
-fn command(name: String, args: Value, core: tauri::State<'_, Arc<Core>>) -> Result<Value, String> {
-    dispatch(&core, &name, args)
+fn get_update_state(updater: tauri::State<'_, Arc<Updater>>) -> crate::updates::UpdateState {
+    updater.view()
+}
+#[tauri::command]
+fn check_updates(updater: tauri::State<'_, Arc<Updater>>) -> Result<(), String> {
+    updater.request(true)
+}
+#[tauri::command]
+fn dismiss_update(
+    updater: tauri::State<'_, Arc<Updater>>,
+    core: tauri::State<'_, Arc<Core>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    updater.dismiss(&core, &app)
+}
+#[tauri::command]
+fn open_update(
+    updater: tauri::State<'_, Arc<Updater>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    updater.open(&app)
+}
+#[tauri::command]
+fn command(
+    name: String,
+    args: Value,
+    core: tauri::State<'_, Arc<Core>>,
+    updater: tauri::State<'_, Arc<Updater>>,
+    app: tauri::AppHandle,
+) -> Result<Value, String> {
+    let value = dispatch(&core, &name, args)?;
+    if name == "save_settings" {
+        updater.settings_changed(&core, &app);
+    }
+    Ok(value)
 }
 fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
     let mut c = core.control.lock().map_err(|e| e.to_string())?;
@@ -338,7 +374,15 @@ pub fn run() {
         )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_state, command, save_export])
+        .invoke_handler(tauri::generate_handler![
+            get_state,
+            command,
+            save_export,
+            get_update_state,
+            check_updates,
+            dismiss_update,
+            open_update
+        ])
         .setup(|app| {
             let smoke_report = std::env::args()
                 .skip_while(|a| a != "--self-test")
@@ -366,6 +410,8 @@ pub fn run() {
                 control.draft = builtin_presets().remove(0);
             }
             app.manage(core.clone());
+            let (updater, update_rx) = Updater::create(&core);
+            app.manage(updater.clone());
             let open = MenuItem::with_id(app, "open", "開く", true, None::<&str>)?;
             let pause = MenuItem::with_id(app, "pause", "一時停止 / 再開", true, None::<&str>)?;
             let recent = Submenu::new(app, "プリセット", true)?;
@@ -402,7 +448,12 @@ pub fn run() {
                 )?)?;
             }
             let quit = MenuItem::with_id(app, "quit", "終了", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &recent, &pause, &bright, &modes, &quit])?;
+            let updates =
+                MenuItem::with_id(app, "updates", "アップデートを確認", true, None::<&str>)?;
+            let menu = Menu::with_items(
+                app,
+                &[&open, &recent, &pause, &bright, &modes, &updates, &quit],
+            )?;
             let icon = app
                 .default_window_icon()
                 .cloned()
@@ -428,6 +479,10 @@ pub fn run() {
                     let result = if id == "open" {
                         show(app);
                         Ok(Value::Null)
+                    } else if id == "updates" {
+                        app.state::<Arc<Updater>>()
+                            .request(true)
+                            .map(|_| Value::Null)
                     } else if id == "quit" {
                         core.quitting.store(true, Ordering::SeqCst);
                         Ok(Value::Null)
@@ -461,6 +516,8 @@ pub fn run() {
             runtime::spawn(app.handle().clone(), core.clone(), rx);
             if let Some(report) = smoke_report {
                 smoke::start(core, report);
+            } else {
+                updater::spawn(app.handle().clone(), core, updater, update_rx);
             }
             Ok(())
         })

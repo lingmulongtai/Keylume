@@ -30,6 +30,7 @@ import { renderPreview, ditherImage } from './preview';
 import { Card, PageTitle, Note, Toggle, Slider, Modal } from './components';
 import { appVersion } from './version';
 import HardwareFace from './HardwareFace';
+import { UpdatesCard, type UpdateController } from './Updates';
 const serviceUrl = 'https://microsoft.github.io/MIDI/get-latest/';
 const loopbackUrl = 'https://microsoft.github.io/MIDI/kb/virtual-loopback/';
 function Miniature({ preset, layout }: { preset: Preset; layout: Layout }) {
@@ -1117,7 +1118,8 @@ export function SettingsScreen({
   edit,
   toast,
   onSetup,
-}: ViewProps & { onSetup: () => void }) {
+  updates,
+}: ViewProps & { onSetup: () => void; updates: UpdateController }) {
   const [autostart, setAutostart] = useState(false);
   useEffect(() => {
     if (native)
@@ -1135,6 +1137,7 @@ export function SettingsScreen({
         description="起動、描画、音声入力、更新通知。"
       />
       <div className="two-columns">
+        <UpdatesCard updates={updates} settings={s} saveSettings={saveSettings} />
         <Card title="起動と常駐">
           <Toggle
             label="Windows 起動時に自動起動"
