@@ -1,19 +1,19 @@
 # Keylume
 
-Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー。Tauri 2 + Rust + React で、ウィンドウを閉じてもライティングを続けます。
+Launchkey MK4 61 向けの非公式ライティングコントローラー＆常駐ピアノ。Tauri 2 + Rust + React で、ウィンドウを閉じても演奏とライティングを続けます。
 
-**v0.2 は実機検証前のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
+**v0.3 は実機検証前のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
 
 ## 起動
 
-[GitHub Releases — v0.2.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.2.0) からダウンロードできます。
+[GitHub Releases — v0.3.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.3.0) からダウンロードできます。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.2.0/Keylume_0.2.0_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.2.0/Keylume_0.2.0_windows-x64.zip)
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.3.0/Keylume_0.3.0_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.3.0/Keylume_0.3.0_windows-x64.zip)
 
 ![Keylume のライティングエディター](docs/images/keylume.png)
 
-インストーラーはダウンロードした `Keylume_0.2.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.2.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.3.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.3.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
@@ -23,9 +23,15 @@ Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー�
 
 鍵盤とノブには LED がありません。キャンバスの鍵盤ハイライトは画面上だけの表示です。
 
+## ピアノを弾く
+
+ライティング画面の **Upright Piano の電源**をオンにしてください。無料のアコースティック音源を同梱しているため、DAWや追加インストールは不要です。ベロシティ、サステインペダル（CC64）、本体のOctave変更、アプリの追加オクターブ、音量、出力デバイス選択に対応。設定を保存し、ウィンドウを閉じても使えます。[詳しい使い方と対応範囲](docs/piano.md)
+
 ## 実装した機能
 
 - 公式の61鍵モデルに合わせた本体図。16 パッド、9 フェーダーボタン、17 単色候補、61 鍵、8エンコーダーを描画。選択、範囲選択、ペイント、200%までの拡大。
+- つまみ・フェーダー・ホイール・鍵盤・パッド・DAWボタン・ペダルのライブ表示。Playは緑、Recordは赤。受信したArp/Scale、Touch、圧力にも対応。
+- 内蔵CC0ピアノ、128ボイス、サステイン、±3オクターブ、音量・出力・バッファ設定、全音停止、DAW使用中の自動消音。
 - 装飾を抑えた編集UI、上部ナビゲーション、エディターとプリセット一覧の共通本体図。
 - 起動時と12時間ごとの更新確認、手動確認、新バージョンの案内。Preview版の通知と自動確認を設定可能。
 - 18 エフェクト、5 ブレンド、ゾーン、不透明度、輝度・彩度・色温度・ガンマ、0.5 秒の切替。
@@ -41,7 +47,7 @@ Launchkey MK4 61 向けの非公式 RGB ライティングコントローラー�
 
 ## 更新
 
-**v0.1.0からはv0.2.0を一度手動でインストールしてください。** 以後は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
+**v0.1.0からはv0.3.0を一度手動でインストールしてください。** 以後は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
 
 プリセットと設定はそのまま保持します。旧既定レイアウトは61鍵モデルの配置へ移行し、LEDアドレス・種類・検証状態を保持します。座標を編集したカスタムレイアウトは維持します。[本体図と移行仕様](docs/device-layout.md)
 
@@ -67,7 +73,7 @@ npm run dev          # ブラウザーで UI プレビューのみ
 npm run package      # Windows NSIS インストーラー
 ```
 
-ブラウザー版は実機 MIDI、OS プロセス監視、音声ループバック、自動起動を行いません。保存先も native 版とは独立した localStorage です。実機と同じフレームを表示するのはデスクトップ版です。
+ブラウザー版は実機 MIDI、ピアノの発音、OS プロセス監視、音声ループバック、自動起動を行いません。保存先も native 版とは独立した localStorage です。実機と同じフレームを表示するのはデスクトップ版です。
 
 ## 検証
 
