@@ -204,6 +204,16 @@ impl Piano {
         *config = settings.clone();
         let _ = self.wake.try_send(());
     }
+    pub fn set_volume(&self, volume: f32) {
+        self.config.lock().unwrap().volume = volume;
+        self.bus
+            .shared
+            .volume
+            .store(volume.to_bits(), Ordering::Release);
+    }
+    pub fn volume(&self) -> f32 {
+        f32::from_bits(self.bus.shared.volume.load(Ordering::Acquire))
+    }
     pub fn view(&self) -> PianoStatus {
         let mut status = self.status.lock().unwrap().clone();
         status.peak = f32::from_bits(self.bus.shared.peak.load(Ordering::Relaxed));

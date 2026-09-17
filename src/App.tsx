@@ -133,6 +133,11 @@ export default function App() {
     subscribe<Status>('device_status', (status) =>
       setState((s) => (s ? { ...s, status } : s)),
     ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
+    subscribe<number>('piano_volume', (volume) =>
+      setState((s) =>
+        s ? { ...s, settings: { ...s.settings, piano: { ...s.settings.piano, volume } } } : s,
+      ),
+    ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     subscribe<string>('notice', toast).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     return () => {
       disposed = true;

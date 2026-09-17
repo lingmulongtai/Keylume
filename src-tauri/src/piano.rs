@@ -7,6 +7,7 @@ use std::{io::Cursor, sync::Arc};
 pub struct PianoSettings {
     pub enabled: bool,
     pub volume: f32,
+    pub volume_fader: u8,
     pub octave: i8,
     pub output_device: String,
     pub buffer_frames: u32,
@@ -17,6 +18,7 @@ impl Default for PianoSettings {
         Self {
             enabled: false,
             volume: 0.5,
+            volume_fader: 9,
             octave: 0,
             output_device: String::new(),
             buffer_frames: 256,
@@ -27,6 +29,7 @@ impl Default for PianoSettings {
 impl PianoSettings {
     pub fn validate(&self) -> Result<(), String> {
         if !(0.0..=1.0).contains(&self.volume)
+            || self.volume_fader > 9
             || !(-3..=3).contains(&self.octave)
             || ![128, 256, 512, 1024].contains(&self.buffer_frames)
             || self.output_device.len() > 512
@@ -36,6 +39,16 @@ impl PianoSettings {
             Ok(())
         }
     }
+}
+/// The factory DAW Volume faders send CC5..13 on channel 16. Zero disables the binding.
+pub fn fader_volume(selected: u8, source: &str, bytes: &[u8]) -> Option<f32> {
+    (source == "daw"
+        && (1..=9).contains(&selected)
+        && bytes.len() == 3
+        && bytes[0] == 0xbf
+        && bytes[1] == selected + 4
+        && bytes[2] <= 127)
+        .then(|| bytes[2] as f32 / 127.)
 }
 pub fn sound_font() -> Result<Arc<SoundFont>, String> {
     SoundFont::new(&mut Cursor::new(
@@ -134,6 +147,23 @@ impl PianoSynth {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_the_selected_daw_fader_changes_volume() {
+        assert_eq!(fader_volume(9, "daw", &[0xbf, 13, 127]), Some(1.));
+        assert_eq!(fader_volume(3, "daw", &[0xbf, 7, 0]), Some(0.));
+        for (selected, source, b) in [
+            (0, "daw", vec![0xbf, 4, 127]),
+            (3, "keyboard", vec![0xbf, 7, 100]),
+            (3, "daw", vec![0xb0, 7, 100]),
+            (3, "daw", vec![0xbf, 13, 100]),
+            (3, "daw", vec![0xbf, 7]),
+            (3, "daw", vec![0xbf, 7, 255]),
+        ] {
+            assert_eq!(fader_volume(selected, source, &b), None);
+        }
+        let old: PianoSettings = serde_json::from_str(r#"{"volume":0.3}"#).unwrap();
+        assert_eq!(old.volume_fader, 9);
+    }
     fn energy(s: &mut PianoSynth, frames: usize) -> f32 {
         let mut left = vec![0.; frames];
         let mut right = left.clone();

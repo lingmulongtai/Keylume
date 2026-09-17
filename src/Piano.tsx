@@ -113,6 +113,23 @@ export default function Piano({
         <summary>音声と演奏の設定</summary>
         <div className="piano-options">
           <label className="field">
+            <span>音量を操作するフェーダー</span>
+            <select
+              aria-label="音量を操作するフェーダー"
+              value={p.volumeFader}
+              onChange={(e) => update({ volumeFader: Number(e.target.value) })}
+            >
+              <option value={0}>割り当てなし</option>
+              {Array.from({ length: 9 }, (_, i) => (
+                <option value={i + 1} key={i}>
+                  フェーダー {i + 1}
+                  {i === 8 ? '（右端）' : ''}
+                </option>
+              ))}
+            </select>
+            <small>DAW Volumeモードの位置をピアノ音量へ反映します。</small>
+          </label>
+          <label className="field">
             <span>ピアノの出力先</span>
             <select
               aria-label="ピアノの出力先"

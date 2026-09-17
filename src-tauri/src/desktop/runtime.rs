@@ -309,10 +309,13 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut foreground = String::new();
     let mut errors = 0u32;
     let mut daw_input_since = start;
+    let mut volume_dirty = false;
+    let mut last_volume_save = -1f32;
     loop {
         let tick = Instant::now();
         let now = start.elapsed().as_secs_f32();
         engine.time = now;
+        desired.settings.piano.volume = core.piano.volume();
         let changed = {
             let c = core.control.lock().unwrap();
             if c.revision != desired.revision {
@@ -659,6 +662,14 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
             .into();
             if stopping {
+                if volume_dirty {
+                    let settings = core.control.lock().unwrap().settings.clone();
+                    let _ = core
+                        .storage
+                        .lock()
+                        .unwrap()
+                        .save("settings.json", &settings);
+                }
                 core.piano.stop();
                 drop(keyboard.take());
                 core.terminated.store(true, Ordering::SeqCst);
@@ -791,6 +802,14 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 continue;
             }
             let b = &packet.bytes;
+            if let Some(volume) =
+                crate::piano::fader_volume(settings.piano.volume_fader, &packet.source, b)
+            {
+                core.piano.set_volume(volume);
+                core.control.lock().unwrap().settings.piano.volume = volume;
+                volume_dirty = true;
+                let _ = app.emit("piano_volume", volume);
+            }
             if !inactive
                 || ((packet.source == "keyboard" || packet.source == "screen")
                     && !suspended
@@ -1229,6 +1248,19 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             last_preview = now;
             let _ = app.emit("frame_preview", &frame);
             let _ = app.emit("input_state", &*core.input.lock().unwrap());
+        }
+        if volume_dirty && now - last_volume_save >= 1. {
+            let settings = core.control.lock().unwrap().settings.clone();
+            if let Err(error) = core
+                .storage
+                .lock()
+                .unwrap()
+                .save("settings.json", &settings)
+            {
+                warn(&mut status, &error);
+            }
+            volume_dirty = false;
+            last_volume_save = now;
         }
         let remaining = Duration::from_secs_f64(1. / 60.).saturating_sub(tick.elapsed());
         if !remaining.is_zero() {
