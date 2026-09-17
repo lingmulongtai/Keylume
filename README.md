@@ -1,19 +1,19 @@
 # Keylume
 
-Launchkey MK4 61 向けの非公式ライティングコントローラー＆常駐ピアノ。Tauri 2 + Rust + React で、ウィンドウを閉じても演奏とライティングを続けます。
+Launchkey MK4 61 向けの非公式ライティングコントローラー＆常駐演奏アプリ。Tauri 2 + Rust + React で、ウィンドウを閉じても演奏とライティングを続けます。
 
-**v0.3 は実機検証前のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
+**v0.4 は実機検証前のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
 
 ## 起動
 
-[GitHub Releases — v0.3.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.3.0) からダウンロードできます。
+[GitHub Releases — v0.4.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.4.0) からダウンロードできます。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.3.0/Keylume_0.3.0_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.3.0/Keylume_0.3.0_windows-x64.zip)
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.4.0/Keylume_0.4.0_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.4.0/Keylume_0.4.0_windows-x64.zip)
 
 ![Keylume のライティングエディター](docs/images/keylume.png)
 
-インストーラーはダウンロードした `Keylume_0.3.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.3.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.4.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.4.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
@@ -25,13 +25,25 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## ピアノを弾く
 
-ライティング画面の **Upright Piano の電源**をオンにしてください。無料のアコースティック音源を同梱しているため、DAWや追加インストールは不要です。ベロシティ、サステインペダル（CC64）、本体のOctave変更、アプリの追加オクターブ、音量、出力デバイス選択に対応。設定を保存し、ウィンドウを閉じても使えます。[詳しい使い方と対応範囲](docs/piano.md)
+ライティング画面の **Upright Piano の電源**をオンにしてください。4種類の無料ピアノ音源を同梱しているため、DAWや追加インストールは不要です。ベロシティ、サステインペダル（CC64）、本体のOctave変更、アプリの追加オクターブ、音量、出力デバイス選択に対応。設定を保存し、ウィンドウを閉じても使えます。[詳しい使い方と対応範囲](docs/piano.md)
+
+## 演奏画面・MIDI練習・ルーパー
+
+**演奏**タブで、弾いた音の軌跡を表示したり、MIDIファイルから降ってくる音符に合わせて練習できます。標準は曲のテンポで進むタイミング採点。正しい音まで待つモードにも切り替えられます。
+
+表示するモニターを選び、鍵盤の左右端と高さをドラッグで調整すると、2画面をまたぐ演奏画面になります。**パッドドラムとルーパー**を開くと、16音のドラム、録音、重ね録り、ループ再生が使えます。[使い方と制約](docs/performance.md)
+
+![MIDI練習と演奏画面](docs/images/performance.png)
 
 ## 実装した機能
 
 - 公式の61鍵モデルに合わせた本体図。16 パッド、9 フェーダーボタン、17 単色候補、61 鍵、8エンコーダーを描画。選択、範囲選択、ペイント、200%までの拡大。
 - つまみ・フェーダー・ホイール・鍵盤・パッド・DAWボタン・ペダルのライブ表示。Playは緑、Recordは赤。受信したArp/Scale、Touch、圧力にも対応。
-- 内蔵CC0ピアノ、128ボイス、サステイン、±3オクターブ、音量・出力・バッファ設定、全音停止、DAW使用中の自動消音。
+- 4種類の内蔵CC0ピアノ、128ボイス、サステイン、±3オクターブ、音量・出力・バッファ設定、全音停止、DAW使用中の自動消音。
+- 選択したハードウェアフェーダーでピアノ音量を操作。出力先を「設定」から選択し、Windowsの既定出力変更に自動追従。
+- 演奏ノートの軌跡、光・粒・音ごとのカラー、音域と鍵盤位置調整、複数モニターへの連続表示。
+- MIDI形式0/1読込、テンポ変更、トラック選択、タイミング採点／待機、速度・遅延補正・区間リピート。
+- 16音の合成ドラム、1/2/4/8小節の録音・重ね録り・再生・停止・消去、4拍カウントインとクリック。
 - 装飾を抑えた編集UI、上部ナビゲーション、エディターとプリセット一覧の共通本体図。
 - 起動時と12時間ごとの更新確認、手動確認、新バージョンの案内。Preview版の通知と自動確認を設定可能。
 - 18 エフェクト、5 ブレンド、ゾーン、不透明度、輝度・彩度・色温度・ガンマ、0.5 秒の切替。
@@ -40,14 +52,14 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 - DAW プロセス監視、ハンドオフ、入力転送、ノート / CC / チャンネルの変換、ポート再接続、転送停止時のノート解放。
 - 前面アプリ / プロセス / 時間帯 / アイドルのプロファイル、手動固定、夜間・ロック時の減光。
 - WASAPI ループバック、FFT 2048、8 バンド、平滑化・自動ゲイン。音声機能を使う間だけ取得。
-- OLED の ASCII テキスト、時計、1bit 画像、スペクトラム。画像は ACK 待ち・最大 10 fps・タイムアウト停止。
+- OLED の ASCII テキスト、時計、1bit 画像、スペクトラム。画像は ACK 待ち・最大 10 fps・タイムアウト時は画像だけを停止。連続切替は最新の表示にまとめ、出力待ちで描画を止めません。
 - LED 検証、レイアウト編集・書き出し、MIDI モニタ、設定バックアップ、初回セットアップ案内。
 
 現在の対応範囲と未実装項目は [実装状況](docs/implementation-status.md) を参照してください。「本体デモ」は非揮発設定の未検証値を含むため、自動プリセット切替から実行せずデバイス画面の明示操作に限定しています。
 
 ## 更新
 
-**v0.1.0からはv0.3.0を一度手動でインストールしてください。** 以後は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
+**v0.1.0からはv0.4.0を一度手動でインストールしてください。** 以後は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
 
 プリセットと設定はそのまま保持します。旧既定レイアウトは61鍵モデルの配置へ移行し、LEDアドレス・種類・検証状態を保持します。座標を編集したカスタムレイアウトは維持します。[本体図と移行仕様](docs/device-layout.md)
 
@@ -100,7 +112,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
 ## 保存場所と構成
 
-通常の設定: `%APPDATA%\Keylume\`。`settings.json`、`presets/`、`profiles/`、`layouts/layout.json`、`logs/` を使用します。正常な前回値は `.json.bak` に保持します。破損ファイルは `.corrupt-*` に隔離します。
+通常の設定: `%APPDATA%\Keylume\`。`settings.json`、`performance.json`、`presets/`、`profiles/`、`layouts/layout.json`、`logs/` を使用します。正常な前回値は `.json.bak` に保持します。破損ファイルは `.corrupt-*` に隔離します。
 
 - `src-tauri/src/engine.rs`: レンダリングとエフェクト
 - `src-tauri/src/device/`: プロトコル、Mock / hardware、非同期送信

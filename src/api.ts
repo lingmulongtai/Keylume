@@ -1,3 +1,4 @@
+import { previewStageInput } from './stage/api';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
@@ -64,7 +65,11 @@ export const defaults: Settings = {
   includePrereleases: true,
   piano: {
     enabled: false,
+    sound: 'upright',
+    drums: true,
+    drumVolume: 0.7,
     volume: 0.5,
+    volumeFader: 9,
     octave: 0,
     outputDevice: '',
     bufferFrames: 256,
@@ -444,12 +449,29 @@ export async function command<T = unknown>(
       break;
     case 'piano_input':
     case 'simulate_input': {
+      previewStageInput(
+        name === 'piano_input' ? 'screen' : String(args.source),
+        args.bytes as number[],
+        mock.settings.piano.octave,
+      );
+      const b = args.bytes as number[];
+      if (
+        args.source === 'daw' &&
+        mock.settings.piano.volumeFader > 0 &&
+        b.length === 3 &&
+        b[0] === 0xbf &&
+        b[1] === mock.settings.piano.volumeFader + 4 &&
+        b[2] >= 0 &&
+        b[2] <= 127
+      ) {
+        mock.settings.piano.volume = b[2] / 127;
+        emit('piano_volume', mock.settings.piano.volume);
+      }
       if (name === 'piano_input') args = { ...args, source: 'screen' };
       liveInput.receive(String(args.source ?? 'daw'), args.bytes as number[], mock.layout);
       emit('input_state', structuredClone(liveInput.state));
       const input = previewInput(args.bytes as number[], String(args.source ?? 'daw'), mock.layout);
       emit('input_event', input);
-      const b = args.bytes as number[];
       if (b[0] === 182 && b[1] === 29) mock.status.padMode = b[2];
       mock.status.monitor.unshift(
         `← ${b.map((v) => v.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`,

@@ -99,3 +99,38 @@ Release 版についても `http://tauri.localhost/` から同梱画面が表示
 ## 未検証・対応範囲
 
 実機 LED アドレス・OLED・DAW の組み合わせ・スリープ・長時間安定性・性能目標は未検証です。ソフトウェアで未実装の仕様細部も [実装状況](implementation-status.md) に記載しています。[実機受け入れチェックリスト](hardware-acceptance.md) が完了するまでは、仕様全体の受け入れ完了とは扱いません。
+
+
+## v0.4.0 演奏画面・ドラム・出力追従（2026-09-17）
+
+- Rust 60 passed / 1 ignored、Vitest 19 passed、Edge操作14 passed。MIDIのテンポ変更・破損入力、和音採点・待機・遅延補正・末尾音・区間移動、ドラムの発音と減衰、録音・境界・画面鍵盤解放を含みます。
+- TypeScript/Viteの製品ビルド、rustfmt、Clippy all-targets `-D warnings`、312依存パッケージのライセンス収集を確認。
+- 独立した設定フォルダと識別子でWindows版を起動。利用中のインストール済みKeylumeと設定を共有せず、合成MIDIと実際のWASAPI出力で8項目を確認しました。
+- 4音色の発音、ライブノート／ペダル、テンポ採点、待機モード（遅延補正500msでも解除）、2560×1440の2画面（合計5120×1440、左モニターx=-2560）の作成・終了を2回、画面間の位置設定共有、ドラム＋ピアノの録音・重ね録り、明示出力→既定出力の切替で録音保持、mainを閉じても演奏画面とループを継続。
+- 別レビューで確認した、画面ラベルの再作成競合、設定の逆順保存、MIDIコールバックのロック待ち、待機モードの遅延補正、曲末尾のMISS、周回直前の打撃、画面鍵盤の解放記録、重ね録り切替の音切れを修正。
+- ブラウザー補助ツールはWindows接続でタイムアウトしたため、既存のEdge/Playwright操作テストとWebView2の検証を使用。nativeの画面終了は実際のWindows Close操作で確認しました。
+
+### 未検証・制約
+
+Launchkey実機、物理ペダル、OLED ACKの実応答時間、省電力Pulse/Flashの実機のちらつき、Windowsの既定出力をOS側で変更／抜き差しする実操作、異なるDPIの実機2画面、各DAWとの共存、72時間稼働、端から端の演奏遅延は未検証です。既定出力追従はCPAL WASAPIのendpoint ID比較を使います。ブラウザー版には発音・採点・独立表示・ルーパーを実装せず、Windows版を動作確認の対象にしています。
+
+配布物はタグのWindowsワークフローで再ビルド・検証し、SHA256SUMS、build-provenance.json、7項目の配布バイナリ自己テストを添付します。署名はありません。MIDI曲とループはディスク保存しません。
+
+### 変更コミット
+
+| SHA | 件名 / 目的 |
+|---|---|
+| `8c92711` | feat(piano): bind volume to a configurable Launchkey fader |
+| `56377b6` | fix(lighting): keep power-saving animations continuous |
+| `8c28304` | fix(oled): serialize rapid updates without blocking the render loop |
+| `e89ba1e` | feat(piano): add three bundled offline piano voices |
+| `381f571` | feat(practice): import tempo-aware MIDI files in a worker |
+| `d040fb9` | feat(practice): score timed notes and support wait-mode training |
+| `dcfe71d` | feat(groove): synthesize sixteen drums and sequence overdub loops |
+| `29c9ee6` | fix(looper): preserve note releases and hits at loop boundaries |
+| `a05d339` | feat(desktop): keep performance views and instrument loops resident |
+| `b00d9bf` | feat(stage): add calibrated multi-display piano practice and groove controls |
+| `d6f80b1` | feat(settings): expose instrument output and Windows default following |
+| `2421b37` | fix(stage): show practice hit effects and focus display controls |
+
+バージョン・配布説明・スクリーンショットの最終準備は、この一覧の後の `chore(release)` コミットです。完全なSHA列はリリースの比較履歴、配布元SHAはbuild-provenance.jsonで確認できます。

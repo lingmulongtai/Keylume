@@ -4,6 +4,7 @@ import { command, getPianoState, native, subscribe } from './api';
 import type { PianoStatus, PianoSettings } from './types';
 import type { ViewProps } from './ui-state';
 import { Slider, Toggle } from './components';
+import { pianoSounds } from './piano-sounds';
 
 export default function Piano({
   state,
@@ -67,7 +68,17 @@ export default function Piano({
           <Power size={18} />
         </button>
         <div className="piano-name">
-          <strong>Upright Piano</strong>
+          <select
+            aria-label="ピアノ音色"
+            value={p.sound}
+            onChange={(e) => update({ sound: e.target.value })}
+          >
+            {pianoSounds.map((sound) => (
+              <option key={sound.id} value={sound.id}>
+                {sound.name}
+              </option>
+            ))}
+          </select>
           <small>{label}</small>
         </div>
         <div className="piano-volume">
@@ -113,13 +124,30 @@ export default function Piano({
         <summary>音声と演奏の設定</summary>
         <div className="piano-options">
           <label className="field">
+            <span>音量を操作するフェーダー</span>
+            <select
+              aria-label="音量を操作するフェーダー"
+              value={p.volumeFader}
+              onChange={(e) => update({ volumeFader: Number(e.target.value) })}
+            >
+              <option value={0}>割り当てなし</option>
+              {Array.from({ length: 9 }, (_, i) => (
+                <option value={i + 1} key={i}>
+                  フェーダー {i + 1}
+                  {i === 8 ? '（右端）' : ''}
+                </option>
+              ))}
+            </select>
+            <small>DAW Volumeモードの位置をピアノ音量へ反映します。</small>
+          </label>
+          <label className="field">
             <span>ピアノの出力先</span>
             <select
               aria-label="ピアノの出力先"
               value={p.outputDevice}
               onChange={(e) => update({ outputDevice: e.target.value })}
             >
-              <option value="">Windows の既定の出力</option>
+              <option value="">Windows の既定に自動追従</option>
               {[
                 ...new Set([
                   ...state.status.audioDevices,
@@ -165,7 +193,7 @@ export default function Piano({
             に譲るモードでは鍵盤入力も解放します。
           </p>
           <p className="piano-credit">
-            FreePats Upright Piano KW small · CC0 1.0 · 128音ポリフォニー
+            {pianoSounds.find((s) => s.id === p.sound)?.credit} · CC0 1.0 · 128音ポリフォニー
           </p>
         </div>
       </details>

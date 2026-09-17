@@ -19,6 +19,7 @@ import type { AppState, Preset, Settings, Status } from './types';
 import { uid } from './types';
 import { getState, command, subscribe, native } from './api';
 import Editor from './Editor';
+import Stage from './stage/Stage';
 import {
   PresetsScreen,
   ProfilesScreen,
@@ -30,9 +31,10 @@ import {
 import { Modal } from './components';
 import { appVersion } from './version';
 import { useUpdates, UpdateBanner } from './Updates';
-type Page = 'lighting' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
+type Page = 'stage' | 'lighting' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
   { id: 'lighting', name: 'ライティング', icon: SlidersHorizontal },
+  { id: 'stage', name: '演奏', icon: Play },
   { id: 'presets', name: 'プリセット', icon: LayoutGrid },
   { id: 'profiles', name: 'プロファイル', icon: Workflow },
   { id: 'coexist', name: '共存設定', icon: Radio },
@@ -132,6 +134,11 @@ export default function App() {
       .catch((e) => setError(String(e)));
     subscribe<Status>('device_status', (status) =>
       setState((s) => (s ? { ...s, status } : s)),
+    ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
+    subscribe<number>('piano_volume', (volume) =>
+      setState((s) =>
+        s ? { ...s, settings: { ...s.settings, piano: { ...s.settings.piano, volume } } } : s,
+      ),
     ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     subscribe<string>('notice', toast).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     return () => {
@@ -266,6 +273,8 @@ export default function App() {
         <main className={'main-view ' + (page === 'lighting' ? 'editing' : '')}>
           {page === 'lighting' ? (
             <Editor {...props} onSave={onSave} />
+          ) : page === 'stage' ? (
+            <Stage {...props} />
           ) : page === 'presets' ? (
             <PresetsScreen {...props} />
           ) : page === 'profiles' ? (

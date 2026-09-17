@@ -1,5 +1,6 @@
 mod audio;
 mod discovery;
+mod performance;
 mod piano;
 mod runtime;
 mod smoke;
@@ -47,6 +48,36 @@ fn get_input_state(core: tauri::State<'_, Arc<Core>>) -> crate::device::input::I
 #[tauri::command]
 fn get_piano_state(core: tauri::State<'_, Arc<Core>>) -> piano::PianoStatus {
     core.piano.view()
+}
+#[tauri::command]
+fn groove_command(
+    name: String,
+    args: Value,
+    core: tauri::State<'_, Arc<Core>>,
+) -> Result<Value, String> {
+    use crate::groove::{LoopCommand, LoopConfig};
+    let bus = &core.piano.bus;
+    match name.as_str() {
+        "state" => {}
+        "drum" => {
+            let pad = args["pad"]
+                .as_u64()
+                .filter(|p| *p < 16)
+                .ok_or("パッドが範囲外です")?;
+            bus.drum(pad as u8, 100);
+        }
+        "record" => {
+            let config: LoopConfig = serde_json::from_value(args).map_err(|e| e.to_string())?;
+            config.validate()?;
+            bus.loop_command(LoopCommand::Record(config))?;
+        }
+        "play" => bus.loop_command(LoopCommand::Play)?,
+        "overdub" => bus.loop_command(LoopCommand::Overdub)?,
+        "stop" => bus.loop_command(LoopCommand::Stop)?,
+        "clear" => bus.loop_command(LoopCommand::Clear)?,
+        _ => return Err("未対応のルーパー操作です".into()),
+    }
+    Ok(json!(bus.loop_status()))
 }
 #[tauri::command]
 fn get_update_state(updater: tauri::State<'_, Arc<Updater>>) -> crate::updates::UpdateState {
@@ -330,6 +361,8 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
                 return Err("鍵盤入力が不正です".into());
             }
             core.piano.bus.midi(true, &bytes);
+            core.performance
+                .input("screen", &bytes, core.piano.bus.octave());
             action(Action::Input(MidiPacket {
                 source: "screen".into(),
                 bytes,
@@ -346,6 +379,7 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
         "piano_screen_release" => {
             // Screen note-on/off and release share the same audio queue; UI snapshots are independent.
             core.piano.bus.midi(true, &[0, 0, 0]);
+            core.performance.release("screen");
             action(Action::Input(MidiPacket {
                 source: "screen".into(),
                 bytes: vec![0xb0, 123, 0],
@@ -423,6 +457,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            performance::stage_command,
+            groove_command,
             get_state,
             get_input_state,
             get_piano_state,
@@ -564,6 +600,7 @@ pub fn run() {
             }
             system::listen();
             runtime::spawn(app.handle().clone(), core.clone(), rx);
+            performance::spawn(app.handle().clone(), core.clone());
             if let Some(report) = smoke_report {
                 smoke::start(core, report);
             } else {
@@ -572,10 +609,12 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(
-                event,
-                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
-            ) {
+            if window.label() == "main"
+                && matches!(
+                    event,
+                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+                )
+            {
                 if let Some(core) = window.try_state::<Arc<Core>>() {
                     let _ = dispatch(&core, "piano_screen_release", Value::Null);
                 }

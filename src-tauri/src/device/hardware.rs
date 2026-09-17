@@ -126,6 +126,12 @@ impl HardwareTransport {
     }
 }
 impl LedTransport for HardwareTransport {
+    fn submit(
+        &mut self,
+        messages: Vec<Vec<u8>>,
+    ) -> crossbeam_channel::Receiver<Result<(), String>> {
+        self.output.submit(messages)
+    }
     fn send_raw(&mut self, b: &[u8]) -> Result<(), String> {
         self.output.send_raw(b)
     }

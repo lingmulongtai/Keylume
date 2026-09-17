@@ -111,6 +111,7 @@ pub struct Core {
     pub action: Sender<Action>,
     pub input: Mutex<InputState>,
     pub piano: Piano,
+    pub performance: Arc<super::performance::Performance>,
     pub quitting: AtomicBool,
     pub terminated: AtomicBool,
 }
@@ -128,6 +129,12 @@ pub enum Action {
 impl Core {
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
         let settings = storage.settings();
+        let performance_settings = storage
+            .load(
+                "performance.json",
+                crate::performance::StageSettings::validate,
+            )
+            .unwrap_or_default();
         let presets = storage.presets();
         let profiles = storage.profiles();
         let layout = storage.layout();
@@ -159,6 +166,7 @@ impl Core {
                 action: tx,
                 input: Mutex::new(InputState::default()),
                 piano: Piano::new(),
+                performance: super::performance::Performance::new(performance_settings),
                 quitting: AtomicBool::new(false),
                 terminated: AtomicBool::new(false),
             }),
@@ -296,12 +304,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut monitor = VecDeque::new();
     let mut probe: Option<Probe> = None;
     let mut feature: std::collections::HashMap<u8, (u8, f32)> = Default::default();
-    let mut bitmap_pending: Option<f32> = None;
-    let mut display_disabled = false;
+    let mut display_queue = crate::device::oled::DisplayQueue::default();
+    let mut temporary_until = 0f32;
     let mut last_display = -10f32;
-    let mut previous_widget = String::new();
-    let mut oled_active = false;
-    let mut temporary_pending = true;
     let mut tap: Option<f32> = None;
     let discovery = super::discovery::Discovery::start(&core);
     let mut discovery_ready = false;
@@ -309,10 +314,15 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut foreground = String::new();
     let mut errors = 0u32;
     let mut daw_input_since = start;
+    let mut volume_dirty = false;
+    let mut last_volume_save = -1f32;
+    let mut native_fx: std::collections::HashMap<String, Vec<u8>> = Default::default();
+    let mut was_native_fx = false;
     loop {
         let tick = Instant::now();
         let now = start.elapsed().as_secs_f32();
-        engine.time = now;
+        engine.advance_time(start.elapsed().as_secs_f64());
+        desired.settings.piano.volume = core.piano.volume();
         let changed = {
             let c = core.control.lock().unwrap();
             if c.revision != desired.revision {
@@ -364,20 +374,19 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 keyboard = None;
                 *core.input.lock().unwrap() = InputState::default();
                 core.piano.bus.panic();
+                core.performance.pause();
                 keyboard_retry = now;
             }
             desired = next;
             last_full = -5.;
-            display_disabled = false;
-            last_display = -10.;
-            previous_widget.clear();
-            temporary_pending = true;
         }
         for action in actions.try_iter().take(128) {
             match action {
                 Action::Input(packet) => {
                     if packet.source == "keyboard" {
                         core.piano.bus.midi(false, &packet.bytes);
+                        core.performance
+                            .input("keyboard", &packet.bytes, core.piano.bus.octave());
                     }
                     if tx.try_send(packet).is_err() {
                         hardware::INPUT_OVERFLOW.store(true, Ordering::SeqCst);
@@ -385,6 +394,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
                 Action::Panic => {
                     core.piano.bus.panic();
+                    core.performance.pause();
                     engine.held.clear();
                     *core.input.lock().unwrap() = InputState::default();
                     for _ in rx.try_iter() {}
@@ -395,6 +405,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     core.input.lock().unwrap().clear_port("keyboard");
                     keyboard_retry = now;
                     core.piano.bus.panic();
+                    core.performance.pause();
                     core.input.lock().unwrap().clear_port("daw");
                     release(
                         &mut transport,
@@ -437,6 +448,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     if v {
                         *core.input.lock().unwrap() = InputState::default();
                         core.piano.bus.panic();
+                        core.performance.pause();
                         transport = None;
                         forward.close();
                     } else {
@@ -541,14 +553,25 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         if active_preset.id != next_preset.id || applied_revision != desired.revision {
             if serde_json::to_string(&active_preset).ok() != serde_json::to_string(next_preset).ok()
             {
+                let identity_changed = active_preset.id != next_preset.id;
+                let display_changed = serde_json::to_string(&active_preset.display).ok()
+                    != serde_json::to_string(&next_preset.display).ok();
+                if identity_changed || display_changed {
+                    last_display = -10.;
+                    temporary_until = if identity_changed
+                        && next_preset
+                            .display
+                            .as_ref()
+                            .is_some_and(|d| d.enabled && d.show_on_preset_change)
+                    {
+                        now + 0.3
+                    } else {
+                        0.
+                    };
+                }
                 engine.transition(last_colors.clone());
                 active_preset = next_preset.clone();
                 last_full = -5.;
-                last_display = -10.;
-                bitmap_pending = None;
-                display_disabled = false;
-                previous_widget.clear();
-                temporary_pending = true;
             }
             applied_revision = desired.revision;
         }
@@ -599,6 +622,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         {
             if keyboard.take().is_some() {
                 core.piano.bus.panic();
+                core.performance.pause();
                 core.input.lock().unwrap().clear_port("keyboard");
             }
             status.keyboard = if handoff {
@@ -610,7 +634,11 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         }
         if keyboard_needed && keyboard.is_none() && now >= keyboard_retry && discovery_ready {
             let bus = core.piano.bus.clone();
-            match hardware::open_keyboard(tx.clone(), move |b| bus.midi(false, b)) {
+            let performance = core.performance.clone();
+            match hardware::open_keyboard(tx.clone(), move |b| {
+                bus.midi(false, b);
+                performance.input("keyboard", b, bus.octave());
+            }) {
                 Ok(input) => {
                     status.keyboard = input.name.clone();
                     keyboard = Some(input);
@@ -659,6 +687,25 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
             .into();
             if stopping {
+                if volume_dirty {
+                    let settings = core.control.lock().unwrap().settings.clone();
+                    let _ = core
+                        .storage
+                        .lock()
+                        .unwrap()
+                        .save("settings.json", &settings);
+                }
+                {
+                    let settings = core.performance.engine.lock().unwrap().settings.clone();
+                    if let Err(error) = core
+                        .storage
+                        .lock()
+                        .unwrap()
+                        .save("performance.json", &settings)
+                    {
+                        warn(&mut status, &format!("演奏設定の保存に失敗: {error}"));
+                    }
+                }
                 core.piano.stop();
                 drop(keyboard.take());
                 core.terminated.store(true, Ordering::SeqCst);
@@ -710,6 +757,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         }
                     }
                     if success {
+                        native_fx.clear();
+                        display_queue.reset();
                         transport = Some(t);
                         last_full = -5.;
                         last_frame.clear();
@@ -731,10 +780,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         last_query = now;
                         last_response = now;
                         pending_query = false;
-                        display_disabled = false;
-                        bitmap_pending = None;
-                        previous_widget.clear();
-                        temporary_pending = true;
                         last_display = -10.;
                         core.notify(&app, "Launchkey のライティングを開始しました");
                     } else {
@@ -773,6 +818,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             forward.release();
             engine.held.clear();
             core.piano.bus.panic();
+            core.performance.pause();
             *core.input.lock().unwrap() = InputState::default();
             warn(&mut status, "入力が集中したため、転送ノートを解放しました");
         }
@@ -791,6 +837,21 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 continue;
             }
             let b = &packet.bytes;
+            if !inactive {
+                if let Some((pad, velocity)) =
+                    crate::drums::pad_hit(&packet.source, b, &desired.layout)
+                {
+                    core.piano.bus.drum(pad, velocity);
+                }
+            }
+            if let Some(volume) =
+                crate::piano::fader_volume(settings.piano.volume_fader, &packet.source, b)
+            {
+                core.piano.set_volume(volume);
+                core.control.lock().unwrap().settings.piano.volume = volume;
+                volume_dirty = true;
+                let _ = app.emit("piano_volume", volume);
+            }
             if !inactive
                 || ((packet.source == "keyboard" || packet.source == "screen")
                     && !suspended
@@ -807,12 +868,15 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 log_midi(&mut monitor, "←", b);
             }
             if protocol::is_bitmap_ack(b) {
-                bitmap_pending = None;
+                display_queue.acknowledge();
             }
             if protocol::is_novation_inquiry(b) {
                 status.inquiry = hex_bytes(b);
             }
             if b.len() >= 3 && b[0] == 0xb6 && b[1] == PAD_MODE {
+                if status.pad_mode != b[2] {
+                    native_fx.clear();
+                }
                 status.pad_mode = b[2];
                 last_response = now;
                 pending_query = false;
@@ -991,7 +1055,16 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         "本体デモの値は未検証です。デバイス画面で明示的に操作してください",
                     );
                 }
-                for (i, color) in differences(&last_frame, &frame, full) {
+                let changed: Vec<_> = if power_save {
+                    frame.iter().copied().enumerate().collect()
+                } else {
+                    differences(&last_frame, &frame, full || was_native_fx).collect()
+                };
+                if !power_save {
+                    native_fx.clear();
+                }
+                was_native_fx = power_save;
+                for (i, color) in changed {
                     let led = &desired.layout.leds[i];
                     if led.kind == "none" && probe.is_none() {
                         continue;
@@ -1010,9 +1083,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                             protocol::rgb(&candidate, color, status.pad_mode == 15)
                         }
                     } else if power_save && led.kind == "rgb" {
-                        if !full {
-                            continue;
-                        }
                         let layer = hardware_layer[0];
                         protocol::palette(
                             led,
@@ -1034,11 +1104,38 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         protocol::rgb(led, color, status.pad_mode == 15)
                     };
                     if let Ok(msg) = msg {
+                        if power_save && led.kind == "rgb" {
+                            if native_fx.get(&led.id) == Some(&msg) {
+                                continue;
+                            }
+                            // A native flash alternates against a defined static black base.
+                            if hardware_layer[0].text("mode", "pulse") == "flash" {
+                                if let Ok(base) =
+                                    protocol::palette(led, 0, 0, status.pad_mode == 15)
+                                {
+                                    if send(
+                                        &mut **t,
+                                        &base,
+                                        &mut status,
+                                        &mut monitor,
+                                        settings.midi_log,
+                                    )
+                                    .is_err()
+                                    {
+                                        errors += 1;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
                         if send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log)
                             .is_err()
                         {
                             errors += 1;
                         } else {
+                            if power_save && led.kind == "rgb" {
+                                native_fx.insert(led.id.clone(), msg);
+                            }
                             errors = 0;
                         }
                     }
@@ -1081,6 +1178,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                             &mut monitor,
                             settings.midi_log,
                         );
+                        native_fx.clear();
                         last_full = -5.;
                         repair_after = now + 30.;
                     }
@@ -1104,91 +1202,50 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 );
                 feature.remove(&cc);
             }
-            let display_enabled = active_preset
-                .display
-                .as_ref()
-                .is_some_and(|d| d.enabled && d.widget != "off");
-            if oled_active && !display_enabled {
-                if let Ok(msg) = protocol::sysex(&[4, 0x20, 0]) {
-                    let _ = send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log);
-                }
-                bitmap_pending = None;
-            }
-            oled_active = display_enabled;
-            if display_enabled && temporary_pending {
-                if active_preset
+            if probe.is_none() && now - last_display >= 0.1 {
+                last_display = now;
+                use crate::device::oled::Content;
+                let content = match active_preset
                     .display
                     .as_ref()
-                    .is_some_and(|d| d.show_on_preset_change)
+                    .filter(|d| d.enabled && d.widget != "off")
                 {
-                    for msg in
-                        protocol::display_text(&format!("Keylume {}", active_preset.id), 0x21)
-                            .unwrap_or_default()
-                    {
-                        let _ = send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log);
+                    None => Content::Off,
+                    Some(_) if now < temporary_until => {
+                        Content::Text(format!("Keylume {}", active_preset.id))
                     }
-                }
-                temporary_pending = false;
+                    Some(display) if display.widget == "image" => {
+                        Content::Bitmap(display.image_bits.clone().unwrap_or(vec![0; 8192]))
+                    }
+                    Some(display) if display.widget == "miniSpectrum" => {
+                        let mut bits = vec![0; 8192];
+                        for y in 0..64 {
+                            for x in 0..128 {
+                                if y >= 64 - (engine.bands[x / 16] * 64.).clamp(0., 64.) as usize {
+                                    bits[y * 128 + x] = 1;
+                                }
+                            }
+                        }
+                        Content::Bitmap(bits)
+                    }
+                    Some(display) if display.widget == "clock" => {
+                        Content::Text(local.format("%H:%M:%S").to_string())
+                    }
+                    Some(_) => Content::Text(active_preset.id.clone()),
+                };
+                display_queue.request(content);
             }
-            if let Some(display) = active_preset
-                .display
-                .as_ref()
-                .filter(|d| d.enabled && d.widget != "off")
-            {
-                if !display_disabled && probe.is_none() {
-                    if bitmap_pending.is_some_and(|at| now - at > 2.) {
-                        display_disabled = true;
-                        warn(
-                            &mut status,
-                            "OLED の受理応答がありません。再接続まで画像送信を停止します",
-                        );
-                    }
-                    let interval = if display.widget == "miniSpectrum" {
-                        0.1
-                    } else {
-                        1.
-                    };
-                    if now - last_display >= interval && bitmap_pending.is_none() {
-                        last_display = now;
-                        let mut messages = vec![];
-                        if display.widget == "image" || display.widget == "miniSpectrum" {
-                            let bits = if display.widget == "image" {
-                                display.image_bits.clone().unwrap_or(vec![0; 8192])
-                            } else {
-                                let mut bits = vec![0; 8192];
-                                for y in 0..64 {
-                                    for x in 0..128 {
-                                        if y >= 64 - (engine.bands[x / 16] * 64.) as usize {
-                                            bits[y * 128 + x] = 1;
-                                        }
-                                    }
-                                }
-                                bits
-                            };
-                            if let Ok(msg) = protocol::bitmap(&bits, 0x20) {
-                                messages.push(msg);
-                                bitmap_pending = Some(now);
-                                if settings.mock {
-                                    bitmap_pending = None;
-                                }
-                            }
-                        } else {
-                            let text = if display.widget == "clock" {
-                                local.format("%H:%M:%S").to_string()
-                            } else {
-                                active_preset.id.clone()
-                            };
-                            if previous_widget != text {
-                                messages = protocol::display_text(&text, 0x20).unwrap_or_default();
-                                previous_widget = text;
-                            }
-                        }
-                        for msg in messages {
-                            let _ =
-                                send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log);
-                        }
-                    }
+            let progress =
+                display_queue.pump(start.elapsed().as_secs_f64(), &mut **t, settings.mock);
+            for message in progress.sent {
+                status.messages += 1;
+                status.bytes += message.len() as u64;
+                if settings.midi_log {
+                    log_midi(&mut monitor, "→", &message);
                 }
+            }
+            if let Some(warning) = progress.warning {
+                warn(&mut status, &warning);
             }
         }
         if errors >= 3 {
@@ -1229,6 +1286,19 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             last_preview = now;
             let _ = app.emit("frame_preview", &frame);
             let _ = app.emit("input_state", &*core.input.lock().unwrap());
+        }
+        if volume_dirty && now - last_volume_save >= 1. {
+            let settings = core.control.lock().unwrap().settings.clone();
+            if let Err(error) = core
+                .storage
+                .lock()
+                .unwrap()
+                .save("settings.json", &settings)
+            {
+                warn(&mut status, &error);
+            }
+            volume_dirty = false;
+            last_volume_save = now;
         }
         let remaining = Duration::from_secs_f64(1. / 60.).saturating_sub(tick.elapsed());
         if !remaining.is_zero() {

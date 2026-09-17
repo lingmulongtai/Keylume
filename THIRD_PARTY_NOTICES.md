@@ -16,3 +16,5 @@ The unmodified `selectors` 0.36.1 build dependency is covered by MPL 2.0. Its so
 Protocol messages were implemented independently from the Novation public programmer documentation. No source code from launchkey-sdk or Ardour was copied.
 
 The embedded FreePats Upright Piano KW small (2019-07-03) SoundFont is published under CC0 1.0. See [source and checksum](resources/piano/SOURCE.md), [original credits](licenses/piano/README.txt), and [CC0 license](licenses/piano/CC0-1.0.txt). The RustySynth renderer is MIT licensed; its complete notice is included in the dependency notices.
+
+The additional FreePats FM Synthesized Piano #2, Old Piano FB small and Upright Piano KW bright small banks are CC0 1.0. Their original README and license texts are in `licenses/piano/`; archive URLs and SHA-256 hashes are in `resources/piano/SOURCE.md`.

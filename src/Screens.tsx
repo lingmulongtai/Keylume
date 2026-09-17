@@ -1134,7 +1134,7 @@ export function SettingsScreen({
       <PageTitle
         eyebrow="アプリケーション"
         title="設定"
-        description="起動、描画、音声入力、更新通知。"
+        description="起動、描画、音声入出力、更新通知。"
       />
       <div className="two-columns">
         <UpdatesCard updates={updates} settings={s} saveSettings={saveSettings} />
@@ -1223,6 +1223,35 @@ export function SettingsScreen({
             }
           />
           <p className="micro">色補正は編集中のプリセットに適用されます。</p>
+        </Card>
+        <Card title="楽器の音声出力">
+          <label className="field">
+            <span>ピアノ・ドラムの出力先</span>
+            <select
+              aria-label="楽器の音声出力先"
+              value={s.piano.outputDevice}
+              onChange={(e) =>
+                saveSettings({ ...s, piano: { ...s.piano, outputDevice: e.target.value } })
+              }
+            >
+              <option value="">Windows の既定に自動追従</option>
+              {[
+                ...new Set([
+                  ...state.status.audioDevices,
+                  ...(s.piano.outputDevice ? [s.piano.outputDevice] : []),
+                ]),
+              ].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </label>
+          <p className="muted">
+            「Windows
+            の既定」は、ヘッドホンやスピーカーへの出力変更に約1秒で追従します。デバイスを指定すると、その出力先を使い続けます。
+          </p>
+          <Note>
+            出力切り替え中は一時的に音が途切れます。ループの録音内容は保持します。ピアノOFFまたはアプリ終了で消去されます。
+          </Note>
         </Card>
         <Card title="音声入力">
           <label className="field">
