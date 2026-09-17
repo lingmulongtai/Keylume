@@ -85,8 +85,8 @@ impl QueuedTransport {
         }
         if bytes.len() == 3 {
             return match bytes[0] {
-                0x90..=0x92 | 0x99..=0x9b => Some((0x43, bytes[1])),
-                0xb0..=0xb2 => Some((0x53, bytes[1])),
+                0x90 | 0x92 | 0x99 | 0x9b => Some((0x43, bytes[1])),
+                0xb0 | 0xb2 => Some((0x53, bytes[1])),
                 0xb3 | 0x93 => Some((0xb3, bytes[1])),
                 _ => None,
             };
@@ -209,6 +209,24 @@ pub fn differences<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn flash_preserves_its_static_base_and_order() {
+        struct Sink(std::sync::Arc<std::sync::Mutex<Vec<Vec<u8>>>>);
+        impl LedTransport for Sink {
+            fn send_raw(&mut self, bytes: &[u8]) -> Result<(), String> {
+                self.0.lock().unwrap().push(bytes.to_vec());
+                Ok(())
+            }
+        }
+        let log = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+        let mut queue = QueuedTransport::new(Sink(log.clone()));
+        queue.send_raw(&[0x90, 96, 0]).unwrap();
+        queue.send_raw(&[0x91, 96, 76]).unwrap();
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec![vec![0x90, 96, 0], vec![0x91, 96, 76]]
+        );
+    }
     #[test]
     fn expired_or_stopped_commands_are_not_sent_after_driver_recovery() {
         struct Sink {

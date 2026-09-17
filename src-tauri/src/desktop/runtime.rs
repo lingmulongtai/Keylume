@@ -311,10 +311,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut daw_input_since = start;
     let mut volume_dirty = false;
     let mut last_volume_save = -1f32;
+    let mut native_fx: std::collections::HashMap<String, Vec<u8>> = Default::default();
+    let mut was_native_fx = false;
     loop {
         let tick = Instant::now();
         let now = start.elapsed().as_secs_f32();
-        engine.time = now;
+        engine.advance_time(start.elapsed().as_secs_f64());
         desired.settings.piano.volume = core.piano.volume();
         let changed = {
             let c = core.control.lock().unwrap();
@@ -721,6 +723,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         }
                     }
                     if success {
+                        native_fx.clear();
                         transport = Some(t);
                         last_full = -5.;
                         last_frame.clear();
@@ -832,6 +835,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 status.inquiry = hex_bytes(b);
             }
             if b.len() >= 3 && b[0] == 0xb6 && b[1] == PAD_MODE {
+                if status.pad_mode != b[2] {
+                    native_fx.clear();
+                }
                 status.pad_mode = b[2];
                 last_response = now;
                 pending_query = false;
@@ -1010,7 +1016,16 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         "本体デモの値は未検証です。デバイス画面で明示的に操作してください",
                     );
                 }
-                for (i, color) in differences(&last_frame, &frame, full) {
+                let changed: Vec<_> = if power_save {
+                    frame.iter().copied().enumerate().collect()
+                } else {
+                    differences(&last_frame, &frame, full || was_native_fx).collect()
+                };
+                if !power_save {
+                    native_fx.clear();
+                }
+                was_native_fx = power_save;
+                for (i, color) in changed {
                     let led = &desired.layout.leds[i];
                     if led.kind == "none" && probe.is_none() {
                         continue;
@@ -1029,9 +1044,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                             protocol::rgb(&candidate, color, status.pad_mode == 15)
                         }
                     } else if power_save && led.kind == "rgb" {
-                        if !full {
-                            continue;
-                        }
                         let layer = hardware_layer[0];
                         protocol::palette(
                             led,
@@ -1053,11 +1065,38 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         protocol::rgb(led, color, status.pad_mode == 15)
                     };
                     if let Ok(msg) = msg {
+                        if power_save && led.kind == "rgb" {
+                            if native_fx.get(&led.id) == Some(&msg) {
+                                continue;
+                            }
+                            // A native flash alternates against a defined static black base.
+                            if hardware_layer[0].text("mode", "pulse") == "flash" {
+                                if let Ok(base) =
+                                    protocol::palette(led, 0, 0, status.pad_mode == 15)
+                                {
+                                    if send(
+                                        &mut **t,
+                                        &base,
+                                        &mut status,
+                                        &mut monitor,
+                                        settings.midi_log,
+                                    )
+                                    .is_err()
+                                    {
+                                        errors += 1;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
                         if send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log)
                             .is_err()
                         {
                             errors += 1;
                         } else {
+                            if power_save && led.kind == "rgb" {
+                                native_fx.insert(led.id.clone(), msg);
+                            }
                             errors = 0;
                         }
                     }

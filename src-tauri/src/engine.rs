@@ -21,6 +21,8 @@ pub struct Engine {
     previous: Vec<Color>,
     transition_at: f32,
     clock_last: Option<f64>,
+    beat_phase: f64,
+    phase_time: f64,
 }
 impl Default for Engine {
     fn default() -> Self {
@@ -34,6 +36,8 @@ impl Default for Engine {
             previous: vec![],
             transition_at: -1.,
             clock_last: None,
+            beat_phase: 0.,
+            phase_time: 0.,
         }
     }
 }
@@ -44,7 +48,19 @@ impl Engine {
         }
         self.hits.push(hit);
     }
+    pub fn advance_time(&mut self, at: f64) {
+        self.advance_phase(at);
+        self.time = at as f32;
+    }
+    fn advance_phase(&mut self, at: f64) {
+        if at > self.phase_time {
+            self.beat_phase = (self.beat_phase + (at - self.phase_time) * self.bpm as f64 / 60.)
+                .rem_euclid(1024.);
+            self.phase_time = at;
+        }
+    }
     pub fn clock(&mut self, received_at: f64) {
+        self.advance_phase(received_at);
         if let Some(last) = self.clock_last {
             let delta = received_at - last;
             if (0.005..0.2).contains(&delta) {
@@ -63,6 +79,9 @@ impl Engine {
         layout: &DeviceLayout,
         brightness: f32,
     ) -> (Vec<Color>, Vec<[u8; 3]>) {
+        if self.time != self.phase_time as f32 {
+            self.advance_phase(self.time as f64);
+        }
         self.hits.retain(|h| self.time - h.at < 10.);
         let mut colors = vec![[0.; 3]; layout.leds.len()];
         for layer in p.layers.iter().rev().filter(|l| l.enabled) {
@@ -269,7 +288,11 @@ impl Engine {
                 } else {
                     l.number("bpm", 120.)
                 };
-                let beat = self.time * bpm / 60.;
+                let beat = if l.text("source", "fixed") == "midi" {
+                    self.beat_phase as f32
+                } else {
+                    self.time * bpm / 60.
+                };
                 let v = (1. - beat.fract() * 4.).max(0.);
                 scale(
                     color,
@@ -293,7 +316,7 @@ impl Engine {
                     .copied()
                     .unwrap_or([64, 255, 128])
                     .map(|v| v as f32 / 255.);
-                let beat = self.time * self.bpm / 60.;
+                let beat = self.beat_phase as f32;
                 scale(
                     c,
                     match l.text("mode", "pulse") {
@@ -368,6 +391,20 @@ pub fn quantize(c: Color, p: &Post, master: f32, mono: bool) -> [u8; 3] {
 mod tests {
     use super::*;
     use crate::model::builtin_presets;
+    #[test]
+    fn hardware_phase_is_continuous_after_long_running_clock_changes() {
+        let mut e = Engine::default();
+        e.advance_time(600.25);
+        let before = e.beat_phase;
+        e.bpm = 120.05;
+        e.advance_time(600.251);
+        assert!((e.beat_phase - before - 0.001 * 120.05 / 60.).abs() < 0.000001);
+        e.advance_time(259200.25);
+        let before = e.beat_phase;
+        e.bpm = 119.95;
+        e.advance_time(259200.251);
+        assert!((e.beat_phase - before - 0.001 * 119.95 / 60.).abs() < 0.000001);
+    }
     #[test]
     fn clock_uses_arrival_times_even_when_ticks_are_processed_in_one_frame() {
         let mut engine = Engine::default();
