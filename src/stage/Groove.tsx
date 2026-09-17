@@ -55,7 +55,14 @@ export default function Groove({
     const poll = async () => {
       try {
         const next = await invoke<LoopStatus>('groove_command', { name: 'state', args: {} });
-        if (!dead){setLoop(next);if(next.mode!=='stopped'||next.count>0){setBpm(next.bpm);setBars(next.beats/4);setMetronome(next.metronome);}}
+        if (!dead) {
+          setLoop(next);
+          if (next.mode !== 'stopped' || next.count > 0) {
+            setBpm(next.bpm);
+            setBars(next.beats / 4);
+            setMetronome(next.metronome);
+          }
+        }
       } catch (e) {
         if (!dead) toast(String(e));
       }

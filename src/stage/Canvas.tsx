@@ -155,6 +155,29 @@ export default function StageCanvas({
           bar(n.pitch, n.start, n.end, n.velocity, n.id, false);
         }
       } else for (const n of s.live) bar(n.pitch, n.start, n.end ?? clock, n.velocity, n.id, true);
+      if (a.mode === 'practice' && (a.style === 'particles' || a.style === 'rainbow')) {
+        for (let index = Math.max(0, s.live.length - 128); index < s.live.length; index++) {
+          const note = s.live[index],
+            key = map.get(note.pitch);
+          if (!key || (note.end !== null && clock - note.end > 0.7)) continue;
+          const age = clock - note.start;
+          ctx.fillStyle =
+            a.style === 'rainbow' ? `hsl(${(note.pitch * 29) % 360} 80% 68%)` : a.color;
+          for (let i = 0; i < Math.round(a.particles * 12); i++) {
+            const t = (((age + i * 0.071 + note.id * 0.013) % 1) + 1) % 1;
+            const x =
+              left +
+              (key.x + key.width / 2) * width +
+              Math.sin(note.id * 19 + i * 17) * key.width * width * 2 * t;
+            ctx.globalAlpha =
+              (1 - t) * (note.end === null ? 1 : Math.max(0, 1 - (clock - note.end) / 0.7));
+            ctx.beginPath();
+            ctx.arc(x, line - t * 150, Math.max(1, 3 * (1 - t)), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
       ctx.shadowBlur = 12;
       ctx.shadowColor = a.color;
       ctx.fillStyle = a.color;

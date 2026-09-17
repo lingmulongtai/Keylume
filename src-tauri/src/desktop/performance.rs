@@ -284,6 +284,7 @@ pub async fn stage_command(
                     .map_err(|e| e.to_string())?;
                 w.set_always_on_top(true).map_err(|e| e.to_string())?;
                 w.show().map_err(|e| e.to_string())?;
+                let _ = w.set_focus();
             }
             return Ok(Value::Null);
         }
