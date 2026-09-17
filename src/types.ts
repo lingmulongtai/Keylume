@@ -80,6 +80,8 @@ export interface Profile {
 export interface PianoSettings {
   enabled: boolean;
   sound: string;
+  drums: boolean;
+  drumVolume: number;
   volume: number;
   volumeFader: number;
   octave: number;

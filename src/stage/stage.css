@@ -1,0 +1,298 @@
+.performance-page {
+  padding: 24px 32px 48px;
+  max-width: 1720px;
+  margin: auto;
+}
+.performance-page .screen-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.performance-page h1 {
+  font-size: 25px;
+  margin: 0;
+}
+.performance-page p {
+  color: #a5afbd;
+}
+.stage-mode {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #3b424b;
+}
+.stage-mode button.active {
+  border-color: #d0b58d;
+  background: #393328;
+}
+.stage-preview {
+  width: 100%;
+  min-height: 230px;
+  max-height: 520px;
+  background: #080b10;
+  border: 1px solid #39404c;
+  margin-top: 20px;
+  overflow: hidden;
+}
+.stage-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.stage-toolbar,
+.stage-transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  flex-wrap: wrap;
+}
+.stage-toolbar > span {
+  flex: 1;
+  font-size: 12px;
+  color: #a1acbc;
+}
+.stage-toolbar button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.stage-transport input[type='range'] {
+  flex: 1;
+  min-width: 160px;
+}
+.stage-transport output {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.stage-practice {
+  border-top: 1px solid #39404c;
+  border-bottom: 1px solid #39404c;
+  margin: 12px 0;
+}
+.stage-scores {
+  display: flex;
+  gap: 32px;
+  padding: 16px 0 24px;
+  align-items: center;
+}
+.stage-scores strong {
+  font-size: 30px;
+  color: #b1d9ed;
+}
+.stage-scores span {
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+}
+.stage-scores small {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  color: #9aa6b8;
+}
+.stage-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 26px;
+  margin: 20px 0;
+}
+.stage-options fieldset {
+  border: 0;
+  border-top: 1px solid #3c424a;
+  padding: 20px 0;
+  min-width: 0;
+}
+.stage-options legend {
+  font-size: 13px;
+  padding-right: 12px;
+}
+.stage-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.stage-field span {
+  display: flex;
+  justify-content: space-between;
+}
+.stage-field small {
+  font-size: 11px;
+  color: #a7afbd;
+}
+.stage-field input[type='range'] {
+  width: 100%;
+}
+.stage-pair {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.stage-pair > label {
+  flex: 1;
+  font-size: 11px;
+  min-width: 0;
+}
+.stage-pair input {
+  width: 100%;
+  display: block;
+  margin-top: 6px;
+}
+.stage-pair button {
+  flex: 1;
+  font-size: 11px;
+}
+.stage-monitor {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.stage-monitor small {
+  display: block;
+  color: #8e9bad;
+  margin-top: 3px;
+}
+.stage-tracks {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.stage-hint {
+  font-size: 11px;
+  line-height: 1.9;
+  max-width: 950px;
+}
+.stage-options fieldset > label:not(.stage-field) {
+  margin-right: 15px;
+  font-size: 12px;
+}
+.stage-fullscreen {
+  position: fixed;
+  inset: 0;
+  background: #080b10;
+}
+.stage-exit {
+  position: fixed;
+  right: 20px;
+  bottom: 16px;
+  display: flex;
+  gap: 10px;
+  opacity: 0.18;
+  transition: opacity 0.2s;
+}
+.stage-exit:hover,
+.stage-exit:focus-within {
+  opacity: 1;
+}
+.stage-exit button {
+  background: #141b27;
+}
+.stage-exit span {
+  font-size: 12px;
+}
+.app-navigation nav button {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+@media (max-width: 1100px) {
+  .performance-page {
+    padding: 20px;
+  }
+  .stage-options {
+    gap: 16px;
+  }
+  .stage-scores {
+    gap: 18px;
+  }
+  .navigation-utilities .help {
+    font-size: 0;
+  }
+  .navigation-utilities .help svg {
+    width: 17px;
+  }
+}
+
+.groove-details {
+  margin-top: 14px;
+  border-top: 1px solid #38404a;
+  border-bottom: 1px solid #38404a;
+}
+.groove-details > summary {
+  padding: 13px 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+.groove-panel {
+  padding: 12px 0;
+}
+.groove-heading {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.groove-heading strong {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: #d5be9c;
+  min-width: 100px;
+}
+.groove-heading label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+}
+.groove-heading input[type='number'] {
+  width: 75px;
+}
+.groove-heading small {
+  color: #a1adbd;
+  font-size: 11px;
+}
+.groove-heading output {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.groove-heading .recording {
+  color: #f29494;
+}
+.drum-pads {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.drum-pads button {
+  height: 66px;
+  position: relative;
+  background: #292d33;
+  border-color: #505762;
+  color: #e0d5c4;
+  font-size: 12px;
+}
+.drum-pads small {
+  position: absolute;
+  top: 5px;
+  left: 8px;
+  font-size: 9px;
+  color: #a5adba;
+}
+.drum-pads button.hit {
+  background: #725338;
+}
+.groove-panel progress {
+  width: 100%;
+  height: 5px;
+  accent-color: #d5b58d;
+}
+.record-button {
+  color: #f1a0a0 !important;
+}

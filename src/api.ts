@@ -1,3 +1,4 @@
+import { previewStageInput } from './stage/api';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
@@ -65,6 +66,8 @@ export const defaults: Settings = {
   piano: {
     enabled: false,
     sound: 'upright',
+    drums: true,
+    drumVolume: 0.7,
     volume: 0.5,
     volumeFader: 9,
     octave: 0,
@@ -446,6 +449,11 @@ export async function command<T = unknown>(
       break;
     case 'piano_input':
     case 'simulate_input': {
+      previewStageInput(
+        name === 'piano_input' ? 'screen' : String(args.source),
+        args.bytes as number[],
+        mock.settings.piano.octave,
+      );
       const b = args.bytes as number[];
       if (
         args.source === 'daw' &&

@@ -5,8 +5,9 @@ import '@fontsource/ibm-plex-sans-jp/500.css';
 import '@fontsource/ibm-plex-sans-jp/600.css';
 import './styles.css';
 import App from './App';
+import { StageWindow } from './stage/Stage';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {new URLSearchParams(location.search).get('view') === 'stage' ? <StageWindow /> : <App />}
   </StrictMode>,
 );
