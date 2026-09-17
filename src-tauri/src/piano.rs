@@ -6,6 +6,7 @@ use std::{io::Cursor, sync::Arc};
 #[serde(default, rename_all = "camelCase")]
 pub struct PianoSettings {
     pub enabled: bool,
+    pub sound: String,
     pub volume: f32,
     pub volume_fader: u8,
     pub octave: i8,
@@ -17,6 +18,7 @@ impl Default for PianoSettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            sound: "upright".into(),
             volume: 0.5,
             volume_fader: 9,
             octave: 0,
@@ -28,7 +30,8 @@ impl Default for PianoSettings {
 }
 impl PianoSettings {
     pub fn validate(&self) -> Result<(), String> {
-        if !(0.0..=1.0).contains(&self.volume)
+        if !["upright", "bright", "fm-piano", "honky-tonk"].contains(&self.sound.as_str())
+            || !(0.0..=1.0).contains(&self.volume)
             || self.volume_fader > 9
             || !(-3..=3).contains(&self.octave)
             || ![128, 256, 512, 1024].contains(&self.buffer_frames)
@@ -51,11 +54,19 @@ pub fn fader_volume(selected: u8, source: &str, bytes: &[u8]) -> Option<f32> {
         .then(|| bytes[2] as f32 / 127.)
 }
 pub fn sound_font() -> Result<Arc<SoundFont>, String> {
-    SoundFont::new(&mut Cursor::new(
-        include_bytes!("../../resources/piano/upright.sf2").as_slice(),
-    ))
-    .map(Arc::new)
-    .map_err(|e| e.to_string())
+    sound_font_for("upright")
+}
+pub fn sound_font_for(id: &str) -> Result<Arc<SoundFont>, String> {
+    let bytes: &[u8] = match id {
+        "upright" => include_bytes!("../../resources/piano/upright.sf2"),
+        "bright" => include_bytes!("../../resources/piano/bright.sf2"),
+        "fm-piano" => include_bytes!("../../resources/piano/fm-piano.sf2"),
+        "honky-tonk" => include_bytes!("../../resources/piano/honky-tonk.sf2"),
+        _ => return Err("音源が見つかりません".into()),
+    };
+    SoundFont::new(&mut Cursor::new(bytes))
+        .map(Arc::new)
+        .map_err(|e| e.to_string())
 }
 
 pub struct PianoSynth {
@@ -147,6 +158,24 @@ impl PianoSynth {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn all_bundled_sounds_render_and_old_settings_keep_the_upright() {
+        for id in ["upright", "bright", "fm-piano", "honky-tonk"] {
+            let font = sound_font_for(id).unwrap();
+            assert!(font
+                .get_presets()
+                .iter()
+                .any(|p| p.get_patch_number() == 0 && p.get_bank_number() == 0));
+            let mut synth = PianoSynth::new(&font, 48000).unwrap();
+            for note in [48, 60, 72] {
+                synth.midi(false, [0x90, note, 100]);
+            }
+            assert!(energy(&mut synth, 12000) > 0.000001, "{id}");
+        }
+        assert!(sound_font_for("unknown").is_err());
+        let old: PianoSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.sound, "upright");
+    }
     #[test]
     fn only_the_selected_daw_fader_changes_volume() {
         assert_eq!(fader_volume(9, "daw", &[0xbf, 13, 127]), Some(1.));

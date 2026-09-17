@@ -4,6 +4,7 @@ import { command, getPianoState, native, subscribe } from './api';
 import type { PianoStatus, PianoSettings } from './types';
 import type { ViewProps } from './ui-state';
 import { Slider, Toggle } from './components';
+import { pianoSounds } from './piano-sounds';
 
 export default function Piano({
   state,
@@ -67,7 +68,17 @@ export default function Piano({
           <Power size={18} />
         </button>
         <div className="piano-name">
-          <strong>Upright Piano</strong>
+          <select
+            aria-label="ピアノ音色"
+            value={p.sound}
+            onChange={(e) => update({ sound: e.target.value })}
+          >
+            {pianoSounds.map((sound) => (
+              <option key={sound.id} value={sound.id}>
+                {sound.name}
+              </option>
+            ))}
+          </select>
           <small>{label}</small>
         </div>
         <div className="piano-volume">
@@ -182,7 +193,7 @@ export default function Piano({
             に譲るモードでは鍵盤入力も解放します。
           </p>
           <p className="piano-credit">
-            FreePats Upright Piano KW small · CC0 1.0 · 128音ポリフォニー
+            {pianoSounds.find((s) => s.id === p.sound)?.credit} · CC0 1.0 · 128音ポリフォニー
           </p>
         </div>
       </details>

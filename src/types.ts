@@ -79,6 +79,7 @@ export interface Profile {
 }
 export interface PianoSettings {
   enabled: boolean;
+  sound: string;
   volume: number;
   volumeFader: number;
   octave: number;

@@ -64,6 +64,7 @@ export const defaults: Settings = {
   includePrereleases: true,
   piano: {
     enabled: false,
+    sound: 'upright',
     volume: 0.5,
     volumeFader: 9,
     octave: 0,

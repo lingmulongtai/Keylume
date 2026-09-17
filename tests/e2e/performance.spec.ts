@@ -45,17 +45,19 @@ test('piano preferences persist and screen keys release on focus loss', async ({
   await page.getByLabel('ピアノ音量', { exact: true }).fill('0.3');
   await page.getByText('音声と演奏の設定', { exact: true }).click();
   await page.getByLabel('音声バッファ', { exact: true }).selectOption('512');
+  await page.getByLabel('ピアノ音色', { exact: true }).selectOption('fm-piano');
   await expect
     .poll(async () =>
       page.evaluate(() => JSON.parse(localStorage.getItem('keylume-preview-v1')!)?.settings.piano),
     )
-    .toMatchObject({ enabled: true, octave: 1, volume: 0.3, bufferFrames: 512 });
+    .toMatchObject({ enabled: true, octave: 1, volume: 0.3, bufferFrames: 512, sound: 'fm-piano' });
   await page.reload();
   await expect(page.getByRole('button', { name: 'ピアノをオフ', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   await expect(page.getByLabel('ピアノのオクターブ', { exact: true })).toHaveText('+1');
+  await expect(page.getByLabel('ピアノ音色', { exact: true })).toHaveValue('fm-piano');
   const key = page.getByRole('button', { name: '鍵盤 60（ピアノ）', exact: true });
   await key.focus();
   await page.keyboard.down('Space');

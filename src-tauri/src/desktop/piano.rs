@@ -105,7 +105,8 @@ impl Piano {
             let (error_tx, error_rx) = bounded::<String>(1);
             while !thread_stop.load(Ordering::Acquire) {
                 let next = thread_config.lock().unwrap().clone();
-                let restart = next.enabled != current.enabled
+                let restart = next.sound != current.sound
+                    || next.enabled != current.enabled
                     || next.output_device != current.output_device
                     || next.buffer_frames != current.buffer_frames;
                 if restart {
@@ -135,11 +136,14 @@ impl Piano {
                 } else if stream.is_none() && Instant::now() >= retry {
                     thread_status.lock().unwrap().state = "loading".into();
                     let result = (|| {
-                        if font.is_none() {
-                            font = Some(piano::sound_font()?);
+                        if font.as_ref().is_none_or(|(id, _)| id != &current.sound) {
+                            font = Some((
+                                current.sound.clone(),
+                                piano::sound_font_for(&current.sound)?,
+                            ));
                         }
                         start(
-                            font.as_ref().unwrap(),
+                            &font.as_ref().unwrap().1,
                             &current,
                             rx.clone(),
                             thread_bus.shared.clone(),
@@ -191,7 +195,8 @@ impl Piano {
             .shared
             .octave
             .store(settings.octave, Ordering::Release);
-        if settings.octave != config.octave
+        if settings.sound != config.sound
+            || settings.octave != config.octave
             || settings.enabled != config.enabled
             || settings.output_device != config.output_device
             || settings.buffer_frames != config.buffer_frames
