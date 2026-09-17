@@ -5,12 +5,26 @@ pub trait LedTransport: Send {
     fn flush(&mut self) -> Result<(), String> {
         Ok(())
     }
+    fn submit(
+        &mut self,
+        messages: Vec<Vec<u8>>,
+    ) -> crossbeam_channel::Receiver<Result<(), String>> {
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        let result = messages.iter().try_for_each(|bytes| self.send_raw(bytes));
+        let _ = tx.send(result);
+        rx
+    }
 }
 
 enum OutputCommand {
     Frame,
     Immediate(
         Vec<u8>,
+        std::time::Instant,
+        crossbeam_channel::Sender<Result<(), String>>,
+    ),
+    Batch(
+        Vec<Vec<u8>>,
         std::time::Instant,
         crossbeam_channel::Sender<Result<(), String>>,
     ),
@@ -63,6 +77,17 @@ impl QueuedTransport {
                         };
                         let _ = reply.send(result);
                     }
+                    OutputCommand::Batch(messages, deadline, reply) => {
+                        let result = messages.iter().try_for_each(|bytes| {
+                            if stop.load(Ordering::Acquire) || std::time::Instant::now() >= deadline
+                            {
+                                Err("MIDI command expired before transmission".into())
+                            } else {
+                                sink.send_raw(bytes)
+                            }
+                        });
+                        let _ = reply.send(result);
+                    }
                     OutputCommand::Stop => break,
                 }
             }
@@ -95,6 +120,25 @@ impl QueuedTransport {
     }
 }
 impl LedTransport for QueuedTransport {
+    fn submit(
+        &mut self,
+        messages: Vec<Vec<u8>>,
+    ) -> crossbeam_channel::Receiver<Result<(), String>> {
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        if let Some(error) = self.failure.lock().unwrap().clone() {
+            let _ = tx.send(Err(error));
+            return rx;
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        if self
+            .commands
+            .try_send(OutputCommand::Batch(messages, deadline, tx.clone()))
+            .is_err()
+        {
+            let _ = tx.send(Err("MIDI出力待ちです".into()));
+        }
+        rx
+    }
     fn send_raw(&mut self, bytes: &[u8]) -> Result<(), String> {
         if let Some(key) = Self::led_key(bytes) {
             if let Some(e) = self.failure.lock().unwrap().clone() {
@@ -209,6 +253,26 @@ pub fn differences<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn asynchronous_batches_do_not_wait_for_a_stalled_driver() {
+        struct Sink(crossbeam_channel::Receiver<()>);
+        impl LedTransport for Sink {
+            fn send_raw(&mut self, _: &[u8]) -> Result<(), String> {
+                self.0.recv().map_err(|e| e.to_string())
+            }
+        }
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        let mut queue = QueuedTransport::new(Sink(rx));
+        let started = std::time::Instant::now();
+        let done = queue.submit(vec![vec![0xf0, 1, 0xf7]]);
+        assert!(started.elapsed() < std::time::Duration::from_millis(100));
+        assert!(done.try_recv().is_err());
+        tx.send(()).unwrap();
+        assert!(done
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap()
+            .is_ok());
+    }
     #[test]
     fn flash_preserves_its_static_base_and_order() {
         struct Sink(std::sync::Arc<std::sync::Mutex<Vec<Vec<u8>>>>);

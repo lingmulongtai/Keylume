@@ -296,12 +296,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut monitor = VecDeque::new();
     let mut probe: Option<Probe> = None;
     let mut feature: std::collections::HashMap<u8, (u8, f32)> = Default::default();
-    let mut bitmap_pending: Option<f32> = None;
-    let mut display_disabled = false;
+    let mut display_queue = crate::device::oled::DisplayQueue::default();
+    let mut temporary_until = 0f32;
     let mut last_display = -10f32;
-    let mut previous_widget = String::new();
-    let mut oled_active = false;
-    let mut temporary_pending = true;
     let mut tap: Option<f32> = None;
     let discovery = super::discovery::Discovery::start(&core);
     let mut discovery_ready = false;
@@ -373,10 +370,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
             desired = next;
             last_full = -5.;
-            display_disabled = false;
-            last_display = -10.;
-            previous_widget.clear();
-            temporary_pending = true;
         }
         for action in actions.try_iter().take(128) {
             match action {
@@ -546,14 +539,25 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         if active_preset.id != next_preset.id || applied_revision != desired.revision {
             if serde_json::to_string(&active_preset).ok() != serde_json::to_string(next_preset).ok()
             {
+                let identity_changed = active_preset.id != next_preset.id;
+                let display_changed = serde_json::to_string(&active_preset.display).ok()
+                    != serde_json::to_string(&next_preset.display).ok();
+                if identity_changed || display_changed {
+                    last_display = -10.;
+                    temporary_until = if identity_changed
+                        && next_preset
+                            .display
+                            .as_ref()
+                            .is_some_and(|d| d.enabled && d.show_on_preset_change)
+                    {
+                        now + 0.3
+                    } else {
+                        0.
+                    };
+                }
                 engine.transition(last_colors.clone());
                 active_preset = next_preset.clone();
                 last_full = -5.;
-                last_display = -10.;
-                bitmap_pending = None;
-                display_disabled = false;
-                previous_widget.clear();
-                temporary_pending = true;
             }
             applied_revision = desired.revision;
         }
@@ -724,6 +728,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     }
                     if success {
                         native_fx.clear();
+                        display_queue.reset();
+                        last_display = -10.;
                         transport = Some(t);
                         last_full = -5.;
                         last_frame.clear();
@@ -745,10 +751,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         last_query = now;
                         last_response = now;
                         pending_query = false;
-                        display_disabled = false;
-                        bitmap_pending = None;
-                        previous_widget.clear();
-                        temporary_pending = true;
                         last_display = -10.;
                         core.notify(&app, "Launchkey のライティングを開始しました");
                     } else {
@@ -829,7 +831,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 log_midi(&mut monitor, "←", b);
             }
             if protocol::is_bitmap_ack(b) {
-                bitmap_pending = None;
+                display_queue.acknowledge();
             }
             if protocol::is_novation_inquiry(b) {
                 status.inquiry = hex_bytes(b);
@@ -1162,91 +1164,50 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 );
                 feature.remove(&cc);
             }
-            let display_enabled = active_preset
-                .display
-                .as_ref()
-                .is_some_and(|d| d.enabled && d.widget != "off");
-            if oled_active && !display_enabled {
-                if let Ok(msg) = protocol::sysex(&[4, 0x20, 0]) {
-                    let _ = send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log);
-                }
-                bitmap_pending = None;
-            }
-            oled_active = display_enabled;
-            if display_enabled && temporary_pending {
-                if active_preset
+            if probe.is_none() && now - last_display >= 0.1 {
+                last_display = now;
+                use crate::device::oled::Content;
+                let content = match active_preset
                     .display
                     .as_ref()
-                    .is_some_and(|d| d.show_on_preset_change)
+                    .filter(|d| d.enabled && d.widget != "off")
                 {
-                    for msg in
-                        protocol::display_text(&format!("Keylume {}", active_preset.id), 0x21)
-                            .unwrap_or_default()
-                    {
-                        let _ = send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log);
+                    None => Content::Off,
+                    Some(_) if now < temporary_until => {
+                        Content::Text(format!("Keylume {}", active_preset.id))
                     }
-                }
-                temporary_pending = false;
+                    Some(display) if display.widget == "image" => {
+                        Content::Bitmap(display.image_bits.clone().unwrap_or(vec![0; 8192]))
+                    }
+                    Some(display) if display.widget == "miniSpectrum" => {
+                        let mut bits = vec![0; 8192];
+                        for y in 0..64 {
+                            for x in 0..128 {
+                                if y >= 64 - (engine.bands[x / 16] * 64.).clamp(0., 64.) as usize {
+                                    bits[y * 128 + x] = 1;
+                                }
+                            }
+                        }
+                        Content::Bitmap(bits)
+                    }
+                    Some(display) if display.widget == "clock" => {
+                        Content::Text(local.format("%H:%M:%S").to_string())
+                    }
+                    Some(_) => Content::Text(active_preset.id.clone()),
+                };
+                display_queue.request(content);
             }
-            if let Some(display) = active_preset
-                .display
-                .as_ref()
-                .filter(|d| d.enabled && d.widget != "off")
-            {
-                if !display_disabled && probe.is_none() {
-                    if bitmap_pending.is_some_and(|at| now - at > 2.) {
-                        display_disabled = true;
-                        warn(
-                            &mut status,
-                            "OLED の受理応答がありません。再接続まで画像送信を停止します",
-                        );
-                    }
-                    let interval = if display.widget == "miniSpectrum" {
-                        0.1
-                    } else {
-                        1.
-                    };
-                    if now - last_display >= interval && bitmap_pending.is_none() {
-                        last_display = now;
-                        let mut messages = vec![];
-                        if display.widget == "image" || display.widget == "miniSpectrum" {
-                            let bits = if display.widget == "image" {
-                                display.image_bits.clone().unwrap_or(vec![0; 8192])
-                            } else {
-                                let mut bits = vec![0; 8192];
-                                for y in 0..64 {
-                                    for x in 0..128 {
-                                        if y >= 64 - (engine.bands[x / 16] * 64.) as usize {
-                                            bits[y * 128 + x] = 1;
-                                        }
-                                    }
-                                }
-                                bits
-                            };
-                            if let Ok(msg) = protocol::bitmap(&bits, 0x20) {
-                                messages.push(msg);
-                                bitmap_pending = Some(now);
-                                if settings.mock {
-                                    bitmap_pending = None;
-                                }
-                            }
-                        } else {
-                            let text = if display.widget == "clock" {
-                                local.format("%H:%M:%S").to_string()
-                            } else {
-                                active_preset.id.clone()
-                            };
-                            if previous_widget != text {
-                                messages = protocol::display_text(&text, 0x20).unwrap_or_default();
-                                previous_widget = text;
-                            }
-                        }
-                        for msg in messages {
-                            let _ =
-                                send(&mut **t, &msg, &mut status, &mut monitor, settings.midi_log);
-                        }
-                    }
+            let progress =
+                display_queue.pump(start.elapsed().as_secs_f64(), &mut **t, settings.mock);
+            for message in progress.sent {
+                status.messages += 1;
+                status.bytes += message.len() as u64;
+                if settings.midi_log {
+                    log_midi(&mut monitor, "→", &message);
                 }
+            }
+            if let Some(warning) = progress.warning {
+                warn(&mut status, &warning);
             }
         }
         if errors >= 3 {
