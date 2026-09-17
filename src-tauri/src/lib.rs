@@ -10,3 +10,6 @@ pub mod storage;
 pub mod updates;
 
 pub mod performance;
+
+pub mod drums;
+pub mod groove;
