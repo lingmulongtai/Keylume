@@ -147,7 +147,7 @@ export default function Piano({
               value={p.outputDevice}
               onChange={(e) => update({ outputDevice: e.target.value })}
             >
-              <option value="">Windows の既定の出力</option>
+              <option value="">Windows の既定に自動追従</option>
               {[
                 ...new Set([
                   ...state.status.audioDevices,
