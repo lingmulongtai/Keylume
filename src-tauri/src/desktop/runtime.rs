@@ -111,6 +111,7 @@ pub struct Core {
     pub action: Sender<Action>,
     pub input: Mutex<InputState>,
     pub piano: Piano,
+    pub performance: Arc<super::performance::Performance>,
     pub quitting: AtomicBool,
     pub terminated: AtomicBool,
 }
@@ -128,6 +129,12 @@ pub enum Action {
 impl Core {
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
         let settings = storage.settings();
+        let performance_settings = storage
+            .load(
+                "performance.json",
+                crate::performance::StageSettings::validate,
+            )
+            .unwrap_or_default();
         let presets = storage.presets();
         let profiles = storage.profiles();
         let layout = storage.layout();
@@ -159,6 +166,7 @@ impl Core {
                 action: tx,
                 input: Mutex::new(InputState::default()),
                 piano: Piano::new(),
+                performance: super::performance::Performance::new(performance_settings),
                 quitting: AtomicBool::new(false),
                 terminated: AtomicBool::new(false),
             }),
@@ -366,6 +374,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 keyboard = None;
                 *core.input.lock().unwrap() = InputState::default();
                 core.piano.bus.panic();
+                core.performance.pause();
                 keyboard_retry = now;
             }
             desired = next;
@@ -376,6 +385,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 Action::Input(packet) => {
                     if packet.source == "keyboard" {
                         core.piano.bus.midi(false, &packet.bytes);
+                        core.performance
+                            .input("keyboard", &packet.bytes, core.piano.bus.octave());
                     }
                     if tx.try_send(packet).is_err() {
                         hardware::INPUT_OVERFLOW.store(true, Ordering::SeqCst);
@@ -383,6 +394,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
                 Action::Panic => {
                     core.piano.bus.panic();
+                    core.performance.pause();
                     engine.held.clear();
                     *core.input.lock().unwrap() = InputState::default();
                     for _ in rx.try_iter() {}
@@ -393,6 +405,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     core.input.lock().unwrap().clear_port("keyboard");
                     keyboard_retry = now;
                     core.piano.bus.panic();
+                    core.performance.pause();
                     core.input.lock().unwrap().clear_port("daw");
                     release(
                         &mut transport,
@@ -435,6 +448,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     if v {
                         *core.input.lock().unwrap() = InputState::default();
                         core.piano.bus.panic();
+                        core.performance.pause();
                         transport = None;
                         forward.close();
                     } else {
@@ -608,6 +622,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         {
             if keyboard.take().is_some() {
                 core.piano.bus.panic();
+                core.performance.pause();
                 core.input.lock().unwrap().clear_port("keyboard");
             }
             status.keyboard = if handoff {
@@ -619,7 +634,11 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         }
         if keyboard_needed && keyboard.is_none() && now >= keyboard_retry && discovery_ready {
             let bus = core.piano.bus.clone();
-            match hardware::open_keyboard(tx.clone(), move |b| bus.midi(false, b)) {
+            let performance = core.performance.clone();
+            match hardware::open_keyboard(tx.clone(), move |b| {
+                bus.midi(false, b);
+                performance.input("keyboard", b, bus.octave());
+            }) {
                 Ok(input) => {
                     status.keyboard = input.name.clone();
                     keyboard = Some(input);
@@ -676,6 +695,17 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         .unwrap()
                         .save("settings.json", &settings);
                 }
+                {
+                    let settings = core.performance.engine.lock().unwrap().settings.clone();
+                    if let Err(error) = core
+                        .storage
+                        .lock()
+                        .unwrap()
+                        .save("performance.json", &settings)
+                    {
+                        warn(&mut status, &format!("演奏設定の保存に失敗: {error}"));
+                    }
+                }
                 core.piano.stop();
                 drop(keyboard.take());
                 core.terminated.store(true, Ordering::SeqCst);
@@ -729,7 +759,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     if success {
                         native_fx.clear();
                         display_queue.reset();
-                        last_display = -10.;
                         transport = Some(t);
                         last_full = -5.;
                         last_frame.clear();
@@ -789,6 +818,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             forward.release();
             engine.held.clear();
             core.piano.bus.panic();
+            core.performance.pause();
             *core.input.lock().unwrap() = InputState::default();
             warn(&mut status, "入力が集中したため、転送ノートを解放しました");
         }
@@ -807,6 +837,13 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 continue;
             }
             let b = &packet.bytes;
+            if !inactive {
+                if let Some((pad, velocity)) =
+                    crate::drums::pad_hit(&packet.source, b, &desired.layout)
+                {
+                    core.piano.bus.drum(pad, velocity);
+                }
+            }
             if let Some(volume) =
                 crate::piano::fader_volume(settings.piano.volume_fader, &packet.source, b)
             {
@@ -1141,6 +1178,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                             &mut monitor,
                             settings.midi_log,
                         );
+                        native_fx.clear();
                         last_full = -5.;
                         repair_after = now + 30.;
                     }

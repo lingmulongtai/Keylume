@@ -1,4 +1,8 @@
 use crate::piano::{self, PianoSettings, PianoSynth};
+use crate::{
+    drums::DrumSynth,
+    groove::{LoopCommand, LoopStatus, Looper, SoundEvent},
+};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use serde::Serialize;
@@ -22,17 +26,27 @@ pub struct PianoStatus {
 #[derive(Clone, Copy)]
 struct Event {
     generation: u64,
-    screen: bool,
-    bytes: [u8; 3],
+    sound: Option<SoundEvent>,
+    command: Option<LoopCommand>,
 }
 struct Shared {
     generation: AtomicU64,
+    looper: Arc<Mutex<Looper>>,
     enabled: AtomicBool,
     blocked: AtomicBool,
     volume: AtomicU32,
     octave: AtomicI8,
     peak: AtomicU32,
     frames: AtomicU32,
+    drums: AtomicBool,
+    drum_volume: AtomicU32,
+    loop_mode: AtomicU32,
+    loop_beat: AtomicU64,
+    loop_count: AtomicU32,
+    loop_bars: AtomicU32,
+    loop_bpm: AtomicU64,
+    loop_full: AtomicBool,
+    loop_metronome: AtomicBool,
 }
 #[derive(Clone)]
 pub struct PianoBus {
@@ -40,6 +54,9 @@ pub struct PianoBus {
     shared: Arc<Shared>,
 }
 impl PianoBus {
+    pub fn octave(&self) -> i8 {
+        self.shared.octave.load(Ordering::Acquire)
+    }
     pub fn midi(&self, screen: bool, bytes: &[u8]) {
         if bytes.len() != 3
             || !self.shared.enabled.load(Ordering::Acquire)
@@ -51,12 +68,61 @@ impl PianoBus {
             .tx
             .try_send(Event {
                 generation: self.shared.generation.load(Ordering::Acquire),
-                screen,
-                bytes: [bytes[0], bytes[1], bytes[2]],
+                sound: Some(SoundEvent::Piano(screen, [bytes[0], bytes[1], bytes[2]])),
+                command: None,
             })
             .is_err()
         {
             self.panic();
+        }
+    }
+    pub fn drum(&self, pad: u8, velocity: u8) {
+        if pad >= 16
+            || velocity == 0
+            || velocity > 127
+            || !self.shared.drums.load(Ordering::Acquire)
+            || !self.shared.enabled.load(Ordering::Acquire)
+            || self.shared.blocked.load(Ordering::Acquire)
+        {
+            return;
+        }
+        if self
+            .tx
+            .try_send(Event {
+                generation: self.shared.generation.load(Ordering::Acquire),
+                sound: Some(SoundEvent::Drum(pad, velocity)),
+                command: None,
+            })
+            .is_err()
+        {
+            self.panic();
+        }
+    }
+    pub fn loop_command(&self, command: LoopCommand) -> Result<(), String> {
+        if !self.shared.enabled.load(Ordering::Acquire)
+            || self.shared.blocked.load(Ordering::Acquire)
+        {
+            return Err("ピアノをオンにして音声出力が準備できてから操作してください".into());
+        }
+        self.tx
+            .try_send(Event {
+                generation: self.shared.generation.load(Ordering::Acquire),
+                sound: None,
+                command: Some(command),
+            })
+            .map_err(|_| "演奏操作が混み合っています".into())
+    }
+    pub fn loop_status(&self) -> LoopStatus {
+        LoopStatus {
+            mode: ["stopped", "countIn", "recording", "playing", "overdub"]
+                [self.shared.loop_mode.load(Ordering::Acquire).min(4) as usize]
+                .into(),
+            beat: f64::from_bits(self.shared.loop_beat.load(Ordering::Relaxed)),
+            count: self.shared.loop_count.load(Ordering::Relaxed) as usize,
+            beats: self.shared.loop_bars.load(Ordering::Relaxed) as f64 * 4.,
+            bpm: f64::from_bits(self.shared.loop_bpm.load(Ordering::Relaxed)),
+            metronome: self.shared.loop_metronome.load(Ordering::Relaxed),
+            full: self.shared.loop_full.load(Ordering::Relaxed),
         }
     }
     pub fn panic(&self) {
@@ -81,12 +147,22 @@ impl Piano {
         let (wake, wakeup) = bounded(1);
         let shared = Arc::new(Shared {
             generation: AtomicU64::new(0),
+            looper: Arc::new(Mutex::new(Looper::default())),
             enabled: AtomicBool::new(false),
             blocked: AtomicBool::new(false),
             volume: AtomicU32::new(0.5f32.to_bits()),
             octave: AtomicI8::new(0),
             peak: AtomicU32::new(0),
             frames: AtomicU32::new(0),
+            drums: AtomicBool::new(true),
+            drum_volume: AtomicU32::new(0.7f32.to_bits()),
+            loop_mode: AtomicU32::new(0),
+            loop_beat: AtomicU64::new(0),
+            loop_count: AtomicU32::new(0),
+            loop_bars: AtomicU32::new(2),
+            loop_bpm: AtomicU64::new(100f64.to_bits()),
+            loop_full: AtomicBool::new(false),
+            loop_metronome: AtomicBool::new(true),
         });
         let bus = PianoBus { tx, shared };
         let config = Arc::new(Mutex::new(PianoSettings::default()));
@@ -102,25 +178,56 @@ impl Piano {
             let mut font = None;
             let mut current = PianoSettings::default();
             let mut retry = Instant::now();
+            let mut endpoint: Option<cpal::Device> = None;
+            let mut checked = Instant::now();
             let (error_tx, error_rx) = bounded::<String>(1);
             while !thread_stop.load(Ordering::Acquire) {
                 let next = thread_config.lock().unwrap().clone();
-                let restart = next.sound != current.sound
+                let default_changed = if next.enabled
+                    && next.output_device.is_empty()
+                    && checked.elapsed() >= Duration::from_secs(1)
+                {
+                    checked = Instant::now();
+                    let candidate = cpal::default_host().default_output_device();
+                    !same_endpoint(endpoint.as_ref(), candidate.as_ref())
+                } else {
+                    false
+                };
+                let manual_restart = next.sound != current.sound
                     || next.enabled != current.enabled
                     || next.output_device != current.output_device
                     || next.buffer_frames != current.buffer_frames;
-                if restart {
+                if manual_restart || default_changed {
                     thread_bus.shared.enabled.store(false, Ordering::Release);
-                    thread_bus.panic();
                     stream = None;
+                    thread_bus.panic();
+                    endpoint = None;
+                    if manual_restart {
+                        thread_bus
+                            .shared
+                            .looper
+                            .lock()
+                            .unwrap()
+                            .command(LoopCommand::Stop);
+                    }
+                    if !next.enabled {
+                        thread_bus
+                            .shared
+                            .looper
+                            .lock()
+                            .unwrap()
+                            .command(LoopCommand::Clear);
+                        thread_bus.shared.loop_mode.store(0, Ordering::Release);
+                        thread_bus.shared.loop_count.store(0, Ordering::Release);
+                    }
                     retry = Instant::now();
                     for _ in error_rx.try_iter() {}
                 }
                 current = next;
                 if let Ok(error) = error_rx.try_recv() {
                     thread_bus.shared.enabled.store(false, Ordering::Release);
-                    thread_bus.panic();
                     stream = None;
+                    thread_bus.panic();
                     *thread_status.lock().unwrap() = PianoStatus {
                         state: "error".into(),
                         error,
@@ -151,9 +258,9 @@ impl Piano {
                         )
                     })();
                     match result {
-                        Ok((output, status)) => {
+                        Ok((output, status, device)) => {
                             for _ in rx.try_iter() {}
-                            thread_bus.panic();
+                            endpoint = Some(device);
                             stream = Some(output);
                             *thread_status.lock().unwrap() = status;
                             thread_bus.shared.enabled.store(true, Ordering::Release);
@@ -187,6 +294,14 @@ impl Piano {
         if *config == *settings {
             return;
         }
+        self.bus
+            .shared
+            .drums
+            .store(settings.drums, Ordering::Release);
+        self.bus
+            .shared
+            .drum_volume
+            .store(settings.drum_volume.to_bits(), Ordering::Release);
         self.bus
             .shared
             .volume
@@ -245,7 +360,7 @@ fn start(
     rx: Receiver<Event>,
     shared: Arc<Shared>,
     errors: Sender<String>,
-) -> Result<(cpal::Stream, PianoStatus), String> {
+) -> Result<(cpal::Stream, PianoStatus, cpal::Device), String> {
     let host = cpal::default_host();
     let device = if settings.output_device.is_empty() {
         host.default_output_device()
@@ -307,6 +422,7 @@ fn start(
             sample_rate: config.sample_rate.0,
             ..Default::default()
         },
+        device,
     ))
 }
 fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
@@ -318,6 +434,14 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     errors: Sender<String>,
 ) -> Result<cpal::Stream, String> {
     let mut synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
+    let mut loop_synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
+    let mut drums = DrumSynth::new(config.sample_rate.0);
+    let mut loop_drums = DrumSynth::new(config.sample_rate.0);
+    let loop_session = shared.looper.clone();
+    let mut loop_events = Vec::with_capacity(8193);
+    let mut loop_left = [0.; 256];
+    let mut loop_right = [0.; 256];
+    let rate = config.sample_rate.0 as f64;
     let mut generation = shared.generation.load(Ordering::Acquire);
     let mut left = [0.; 256];
     let mut right = [0.; 256];
@@ -326,9 +450,17 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
         .build_output_stream(
             config,
             move |data: &mut [T], _| {
+                let Ok(mut looper) = loop_session.try_lock() else {
+                    data.fill(T::from_sample(0.));
+                    return;
+                };
                 let next = shared.generation.load(Ordering::Acquire);
                 if generation != next {
                     synth.panic();
+                    loop_synth.panic();
+                    drums.panic();
+                    loop_drums.panic();
+                    looper.command(LoopCommand::Stop);
                     generation = next;
                 }
                 synth.set_octave(shared.octave.load(Ordering::Acquire));
@@ -336,18 +468,47 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     && !shared.blocked.load(Ordering::Acquire);
                 for event in rx.try_iter().take(1024) {
                     if active && event.generation == generation {
-                        synth.midi(event.screen, event.bytes);
+                        if let Some(command) = event.command {
+                            looper.command(command);
+                            if !matches!(command, LoopCommand::Overdub) {
+                                loop_synth.panic();
+                                loop_drums.panic();
+                            }
+                        }
+                        if let Some(sound) = event.sound {
+                            looper.capture(sound, shared.octave.load(Ordering::Acquire));
+                            match sound {
+                                SoundEvent::Piano(screen, bytes) => synth.midi(screen, bytes),
+                                SoundEvent::Drum(pad, velocity) => drums.hit(pad, velocity),
+                                SoundEvent::Release => {}
+                            }
+                        }
                     }
                 }
                 shared
                     .frames
                     .store((data.len() / channels) as u32, Ordering::Relaxed);
                 let volume = f32::from_bits(shared.volume.load(Ordering::Relaxed));
+                let drum_volume = f32::from_bits(shared.drum_volume.load(Ordering::Relaxed));
                 let mut peak = 0f32;
-                for chunk in data.chunks_mut(256 * channels) {
+                for chunk in data.chunks_mut(64 * channels) {
                     let frames = chunk.len() / channels;
                     if active {
+                        looper.advance(frames as f64 / rate, &mut loop_events);
+                        for event in &loop_events {
+                            match *event {
+                                SoundEvent::Piano(screen, bytes) => loop_synth.midi(screen, bytes),
+                                SoundEvent::Drum(pad, velocity) => loop_drums.hit(pad, velocity),
+                                SoundEvent::Release => loop_synth.panic(),
+                            }
+                        }
                         synth.render(&mut left[..frames], &mut right[..frames]);
+                        loop_synth.render(&mut loop_left[..frames], &mut loop_right[..frames]);
+                        for i in 0..frames {
+                            let d = (drums.sample() + loop_drums.sample()) * drum_volume;
+                            left[i] = (left[i] + loop_left[i]) * volume + d;
+                            right[i] = (right[i] + loop_right[i]) * volume + d;
+                        }
                     }
                     for (i, frame) in chunk.chunks_mut(channels).enumerate() {
                         for (channel, sample) in frame.iter_mut().enumerate() {
@@ -362,12 +523,31 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                             } else {
                                 0.
                             };
-                            let value = (value * volume).tanh();
+                            let value = value.tanh();
                             peak = peak.max(value.abs());
                             *sample = T::from_sample(value);
                         }
                     }
                 }
+                shared
+                    .loop_mode
+                    .store(looper.mode as u32, Ordering::Release);
+                shared
+                    .loop_beat
+                    .store(looper.beat.to_bits(), Ordering::Relaxed);
+                shared
+                    .loop_count
+                    .store(looper.count() as u32, Ordering::Relaxed);
+                shared
+                    .loop_bars
+                    .store(looper.config.bars as u32, Ordering::Relaxed);
+                shared
+                    .loop_bpm
+                    .store(looper.config.bpm.to_bits(), Ordering::Relaxed);
+                shared
+                    .loop_metronome
+                    .store(looper.config.metronome, Ordering::Relaxed);
+                shared.loop_full.store(looper.full, Ordering::Relaxed);
                 shared.peak.store(peak.to_bits(), Ordering::Relaxed);
             },
             move |e| {
@@ -376,4 +556,24 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
             None,
         )
         .map_err(|e| e.to_string())
+}
+
+// CPAL WASAPI compares IMMDevice endpoint IDs, including devices with identical display names.
+fn same_endpoint(a: Option<&cpal::Device>, b: Option<&cpal::Device>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            #[cfg(windows)]
+            {
+                use cpal::platform::DeviceInner::Wasapi;
+                let (Wasapi(a), Wasapi(b)) = (a.as_inner(), b.as_inner());
+                a == b
+            }
+            #[cfg(not(windows))]
+            {
+                a.name().ok() == b.name().ok()
+            }
+        }
+        _ => false,
+    }
 }

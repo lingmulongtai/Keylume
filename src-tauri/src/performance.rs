@@ -372,7 +372,8 @@ impl PerformanceEngine {
         }
     }
     pub fn tick(&mut self, now: f64) {
-        let dt = (now - self.clock).max(0.);
+        let now = now.max(self.clock);
+        let dt = now - self.clock;
         self.clock = now;
         if self.running {
             if dt > 1. {
@@ -571,7 +572,26 @@ impl PerformanceEngine {
                     }
                 }
             }
-            0xb0 if [120, 121, 123].contains(&b[1]) => self.release_source(source),
+            0xb0 if [120, 121, 123].contains(&b[1]) => {
+                self.pedals.remove(&pedal);
+                if let Some(ids) = self.sustained.remove(&pedal) {
+                    for id in ids {
+                        self.end_note(id);
+                    }
+                }
+                if b[1] != 121 {
+                    let ids: Vec<_> = self
+                        .pressed
+                        .iter()
+                        .filter(|((s, c, _), _)| s == source && *c == ch)
+                        .map(|(_, id)| *id)
+                        .collect();
+                    for id in ids {
+                        self.end_note(id);
+                    }
+                    self.pressed.retain(|(s, c, _), _| s != source || *c != ch);
+                }
+            }
             _ => {}
         }
     }
@@ -777,9 +797,11 @@ mod tests {
         assert_eq!(e.targets.len(), 3);
         song.notes[0].end = f64::NAN;
         assert!(song.validate().is_err());
-        let mut settings = StageSettings::default();
-        settings.left = 0.9;
-        settings.right = 0.5;
+        let settings = StageSettings {
+            left: 0.9,
+            right: 0.5,
+            ..Default::default()
+        };
         assert!(settings.validate().is_err());
         assert_eq!(StageSettings::default().practice_mode, "timing");
     }

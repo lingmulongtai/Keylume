@@ -1,0 +1,1 @@
+{"identifier":"stage","description":"Local performance display events","windows":["stage-*"],"permissions":["core:event:default"]}

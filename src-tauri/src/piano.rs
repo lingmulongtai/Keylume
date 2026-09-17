@@ -7,6 +7,8 @@ use std::{io::Cursor, sync::Arc};
 pub struct PianoSettings {
     pub enabled: bool,
     pub sound: String,
+    pub drums: bool,
+    pub drum_volume: f32,
     pub volume: f32,
     pub volume_fader: u8,
     pub octave: i8,
@@ -19,6 +21,8 @@ impl Default for PianoSettings {
         Self {
             enabled: false,
             sound: "upright".into(),
+            drums: true,
+            drum_volume: 0.7,
             volume: 0.5,
             volume_fader: 9,
             octave: 0,
@@ -32,6 +36,7 @@ impl PianoSettings {
     pub fn validate(&self) -> Result<(), String> {
         if !["upright", "bright", "fm-piano", "honky-tonk"].contains(&self.sound.as_str())
             || !(0.0..=1.0).contains(&self.volume)
+            || !(0.0..=1.0).contains(&self.drum_volume)
             || self.volume_fader > 9
             || !(-3..=3).contains(&self.octave)
             || ![128, 256, 512, 1024].contains(&self.buffer_frames)
