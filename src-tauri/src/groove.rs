@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub enum SoundEvent {
     Piano(bool, [u8; 3]),
     Drum(u8, u8),
+    Release,
 }
 #[derive(Clone, Copy)]
 struct Recorded {
@@ -129,7 +130,20 @@ impl Looper {
         self.cursor = self.events.partition_point(|e| e.beat < self.beat);
     }
     pub fn capture(&mut self, event: SoundEvent, octave: i8) {
-        if ![2, 4].contains(&self.mode) {
+        if ![2, 4].contains(&self.mode) || event == SoundEvent::Release {
+            return;
+        }
+        if event == SoundEvent::Piano(true, [0, 0, 0]) {
+            for channel in 0..16 {
+                for key in 0..128 {
+                    if self.held[1][channel][key].is_some() {
+                        self.capture(
+                            SoundEvent::Piano(true, [0x80 | channel as u8, key as u8, 0]),
+                            octave,
+                        );
+                    }
+                }
+            }
             return;
         }
         if self.events.len() + self.pending.len() >= 8192 {
@@ -187,8 +201,16 @@ impl Looper {
             self.mode = 2;
             self.cursor = 0;
             reset = true;
+            out.push(SoundEvent::Release);
         }
         if self.beat >= length {
+            if self.mode >= 3 {
+                while self.cursor < self.events.len() {
+                    out.push(self.events[self.cursor].event);
+                    self.cursor += 1;
+                }
+            }
+            out.push(SoundEvent::Release);
             self.beat -= length;
             self.merge();
             if self.mode == 2 {
@@ -263,6 +285,44 @@ mod tests {
         assert_eq!(l.mode, 3);
         l.command(LoopCommand::Clear);
         assert_eq!(l.status().count, 0);
+    }
+    #[test]
+    fn a_hit_just_before_the_boundary_is_not_lost() {
+        let mut l = Looper {
+            config: LoopConfig {
+                bpm: 120.,
+                bars: 1,
+                metronome: false,
+            },
+            mode: 3,
+            beat: 3.998,
+            ..Default::default()
+        };
+        l.events.push(Recorded {
+            beat: 3.999,
+            event: SoundEvent::Drum(8, 100),
+            order: 0,
+        });
+        let mut out = Vec::new();
+        l.advance(0.002, &mut out);
+        assert_eq!(out, vec![SoundEvent::Drum(8, 100), SoundEvent::Release]);
+    }
+    #[test]
+    fn focus_loss_records_screen_note_releases() {
+        let mut l = Looper::default();
+        let mut out = Vec::new();
+        l.command(LoopCommand::Record(LoopConfig {
+            bpm: 120.,
+            bars: 1,
+            metronome: false,
+        }));
+        l.advance(2., &mut out);
+        l.capture(SoundEvent::Piano(true, [0x90, 60, 100]), 0);
+        l.advance(0.25, &mut out);
+        l.capture(SoundEvent::Piano(true, [0, 0, 0]), 0);
+        l.advance(1.75, &mut out);
+        l.advance(0.25, &mut out);
+        assert!(out.contains(&SoundEvent::Piano(true, [0x80, 60, 0])));
     }
     #[test]
     fn overdub_is_bounded_and_stopping_commits_the_current_layer() {
