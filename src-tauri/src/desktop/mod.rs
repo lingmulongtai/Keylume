@@ -76,6 +76,7 @@ fn groove_command(
         "overdub" => bus.loop_command(LoopCommand::Overdub)?,
         "stop" => bus.loop_command(LoopCommand::Stop)?,
         "clear" => bus.loop_command(LoopCommand::Clear)?,
+        "undo" => bus.loop_command(LoopCommand::Undo)?,
         _ => return Err("未対応のルーパー操作です".into()),
     }
     Ok(json!(bus.loop_status()))

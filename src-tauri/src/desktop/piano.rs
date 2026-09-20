@@ -53,6 +53,7 @@ struct Shared {
     loop_bpm: AtomicU64,
     loop_full: AtomicBool,
     loop_metronome: AtomicBool,
+    loop_undo: AtomicBool,
 }
 impl Shared {
     fn hit_drum(&self, synth: &mut DrumSynth, pad: u8, velocity: u8) {
@@ -154,6 +155,7 @@ impl PianoBus {
             bpm: f64::from_bits(self.shared.loop_bpm.load(Ordering::Relaxed)),
             metronome: self.shared.loop_metronome.load(Ordering::Relaxed),
             full: self.shared.loop_full.load(Ordering::Relaxed),
+            can_undo: self.shared.loop_undo.load(Ordering::Relaxed),
         }
     }
     pub fn panic(&self) {
@@ -203,6 +205,7 @@ impl Piano {
             loop_bpm: AtomicU64::new(100f64.to_bits()),
             loop_full: AtomicBool::new(false),
             loop_metronome: AtomicBool::new(true),
+            loop_undo: AtomicBool::new(false),
         });
         let bus = PianoBus { tx, shared };
         let config = Arc::new(Mutex::new(PianoSettings::default()));
@@ -252,12 +255,8 @@ impl Piano {
                             .command(LoopCommand::Stop);
                     }
                     if !next.enabled {
-                        thread_bus
-                            .shared
-                            .looper
-                            .lock()
-                            .unwrap()
-                            .command(LoopCommand::Clear);
+                        thread_bus.shared.looper.lock().unwrap().reset();
+                        thread_bus.shared.loop_undo.store(false, Ordering::Release);
                         thread_bus.shared.loop_mode.store(0, Ordering::Release);
                         thread_bus.shared.loop_count.store(0, Ordering::Release);
                     }
@@ -642,6 +641,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     .loop_metronome
                     .store(looper.config.metronome, Ordering::Relaxed);
                 shared.loop_full.store(looper.full, Ordering::Relaxed);
+                shared.loop_undo.store(looper.can_undo(), Ordering::Relaxed);
                 shared.peak.store(peak.to_bits(), Ordering::Relaxed);
             },
             move |e| {

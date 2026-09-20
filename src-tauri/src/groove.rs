@@ -43,6 +43,7 @@ pub enum LoopCommand {
     Overdub,
     Stop,
     Clear,
+    Undo,
 }
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +55,11 @@ pub struct LoopStatus {
     pub bpm: f64,
     pub metronome: bool,
     pub full: bool,
+    pub can_undo: bool,
+}
+struct Snapshot {
+    events: Vec<Recorded>,
+    config: LoopConfig,
 }
 pub struct Looper {
     events: Vec<Recorded>,
@@ -65,6 +71,9 @@ pub struct Looper {
     last_click: i32,
     held: [[[Option<u8>; 128]; 16]; 2],
     pub full: bool,
+    history: [Snapshot; 8],
+    history_next: usize,
+    history_len: usize,
 }
 impl Default for Looper {
     fn default() -> Self {
@@ -78,13 +87,39 @@ impl Default for Looper {
             last_click: i32::MIN,
             held: [[[None; 128]; 16]; 2],
             full: false,
+            history: std::array::from_fn(|_| Snapshot {
+                events: Vec::with_capacity(8192),
+                config: LoopConfig::default(),
+            }),
+            history_next: 0,
+            history_len: 0,
         }
     }
 }
 impl Looper {
+    pub fn can_undo(&self) -> bool {
+        self.history_len > 0
+    }
+    fn checkpoint(&mut self) {
+        let snapshot = &mut self.history[self.history_next];
+        snapshot.events.clear();
+        snapshot.events.extend_from_slice(&self.events);
+        snapshot.events.extend_from_slice(&self.pending);
+        snapshot
+            .events
+            .sort_unstable_by(|a, b| a.beat.total_cmp(&b.beat).then(a.order.cmp(&b.order)));
+        snapshot.config = self.config;
+        self.history_next = (self.history_next + 1) % 8;
+        self.history_len = (self.history_len + 1).min(8);
+    }
+    pub fn reset(&mut self) {
+        self.command(LoopCommand::Clear);
+        self.history_len = 0;
+    }
     pub fn command(&mut self, c: LoopCommand) {
         match c {
             LoopCommand::Record(config) => {
+                self.checkpoint();
                 self.config = config;
                 self.events.clear();
                 self.pending.clear();
@@ -100,6 +135,7 @@ impl Looper {
             }
             LoopCommand::Overdub => {
                 if self.mode == 3 {
+                    self.checkpoint();
                     self.mode = 4;
                 } else if self.mode == 4 {
                     self.merge();
@@ -112,8 +148,26 @@ impl Looper {
                 self.beat = 0.;
             }
             LoopCommand::Clear => {
+                if self.count() > 0 {
+                    self.checkpoint();
+                }
                 self.events.clear();
                 self.pending.clear();
+                self.mode = 0;
+                self.beat = 0.;
+                self.full = false;
+            }
+            LoopCommand::Undo => {
+                if self.history_len == 0 {
+                    return;
+                }
+                self.history_next = (self.history_next + 7) % 8;
+                self.history_len -= 1;
+                let snapshot = &self.history[self.history_next];
+                self.events.clear();
+                self.events.extend_from_slice(&snapshot.events);
+                self.pending.clear();
+                self.config = snapshot.config;
                 self.mode = 0;
                 self.beat = 0.;
                 self.full = false;
@@ -251,12 +305,49 @@ impl Looper {
             bpm: self.config.bpm,
             metronome: self.config.metronome,
             full: self.full,
+            can_undo: self.can_undo(),
         }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn undo_restores_overdub_clear_and_new_recording_without_growing_buffers() {
+        let mut l = Looper::default();
+        let mut out = Vec::with_capacity(8193);
+        l.command(LoopCommand::Record(LoopConfig {
+            bpm: 120.,
+            bars: 1,
+            metronome: false,
+        }));
+        l.advance(2., &mut out);
+        l.capture(SoundEvent::Drum(8, 100), 0);
+        l.advance(2., &mut out);
+        l.command(LoopCommand::Overdub);
+        l.capture(SoundEvent::Drum(9, 100), 0);
+        l.command(LoopCommand::Stop);
+        assert_eq!(l.count(), 2);
+        l.command(LoopCommand::Undo);
+        assert_eq!(l.count(), 1);
+        assert_eq!(l.mode, 0);
+        l.command(LoopCommand::Clear);
+        assert_eq!(l.count(), 0);
+        l.command(LoopCommand::Undo);
+        assert_eq!(l.count(), 1);
+        l.command(LoopCommand::Record(LoopConfig::default()));
+        l.command(LoopCommand::Undo);
+        assert_eq!(l.count(), 1);
+        assert_eq!(l.config.bpm, 120.);
+        for _ in 0..16 {
+            l.command(LoopCommand::Record(LoopConfig::default()));
+        }
+        assert_eq!(l.history_len, 8);
+        assert!(l.history.iter().all(|s| s.events.capacity() == 8192));
+        l.reset();
+        assert!(!l.can_undo());
+        assert_eq!(l.count(), 0);
+    }
     #[test]
     fn records_transposed_notes_and_drums_after_count_in_then_loops() {
         let mut l = Looper::default();

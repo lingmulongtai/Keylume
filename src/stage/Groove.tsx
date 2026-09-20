@@ -12,6 +12,7 @@ interface LoopStatus {
   bpm: number;
   metronome: boolean;
   full: boolean;
+  canUndo: boolean;
 }
 export default function Groove({
   state,
@@ -26,6 +27,7 @@ export default function Groove({
       bpm: 100,
       metronome: true,
       full: false,
+      canUndo: false,
     }),
     [bpm, setBpm] = useState(100),
     [bars, setBars] = useState(2),
@@ -224,8 +226,11 @@ export default function Groove({
         <button disabled={!ready || (!loop.count && !active)} onClick={() => run('clear')}>
           ループを消去
         </button>
+        <button disabled={!ready || !loop.canUndo} onClick={() => run('undo')}>
+          元に戻す
+        </button>
         <span>
-          4拍のカウント後に録音し、指定の小節で自動再生。ピアノ・ペダル・ドラムを重ねられます。
+          4拍のカウント後に録音し、指定の小節で自動再生。Undoで録音・重ね録り・消去を8段階まで戻せます。
         </span>
       </div>
       {loop.full && (
