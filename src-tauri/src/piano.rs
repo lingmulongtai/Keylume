@@ -8,6 +8,7 @@ pub struct PianoSettings {
     pub enabled: bool,
     pub sound: String,
     pub drums: bool,
+    pub drum_kit: crate::drums::DrumSettings,
     pub drum_volume: f32,
     pub volume: f32,
     pub volume_fader: u8,
@@ -24,6 +25,7 @@ impl Default for PianoSettings {
             enabled: false,
             sound: "upright".into(),
             drums: true,
+            drum_kit: Default::default(),
             drum_volume: 0.7,
             volume: 0.5,
             volume_fader: 9,
@@ -51,6 +53,7 @@ impl Default for PianoSettings {
 impl PianoSettings {
     pub fn validate(&self) -> Result<(), String> {
         self.effects.validate()?;
+        self.drum_kit.validate()?;
         if self.favorites.len() > 128
             || self
                 .favorites

@@ -2,7 +2,7 @@ use crate::instrument_fx::{Effects, InstrumentFx};
 use crate::piano::{PianoSettings, PianoSynth};
 use crate::sound_library::SoundId;
 use crate::{
-    drums::DrumSynth,
+    drums::{DrumSettings, DrumSynth, PadSound},
     groove::{LoopCommand, LoopStatus, Looper, SoundEvent},
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -42,6 +42,8 @@ struct Shared {
     frames: AtomicU32,
     drums: AtomicBool,
     drum_volume: AtomicU32,
+    drum_kit: AtomicU32,
+    drum_pads: [[AtomicU32; 5]; 16],
     effects: [AtomicU32; 8],
     patch: AtomicU32,
     loop_mode: AtomicU32,
@@ -51,6 +53,31 @@ struct Shared {
     loop_bpm: AtomicU64,
     loop_full: AtomicBool,
     loop_metronome: AtomicBool,
+}
+impl Shared {
+    fn hit_drum(&self, synth: &mut DrumSynth, pad: u8, velocity: u8) {
+        if pad == 16 {
+            synth.hit(16, velocity);
+            return;
+        }
+        let Some(params) = self.drum_pads.get(pad as usize) else {
+            return;
+        };
+        let p = params
+            .each_ref()
+            .map(|v| f32::from_bits(v.load(Ordering::Relaxed)));
+        synth.hit_sound(
+            PadSound {
+                kind: p[0] as u8,
+                tune: p[1],
+                decay: p[2],
+                level: p[3],
+                pan: p[4],
+            },
+            self.drum_kit.load(Ordering::Relaxed) as u8,
+            velocity,
+        );
+    }
 }
 #[derive(Clone)]
 pub struct PianoBus {
@@ -160,6 +187,11 @@ impl Piano {
             frames: AtomicU32::new(0),
             drums: AtomicBool::new(true),
             drum_volume: AtomicU32::new(0.7f32.to_bits()),
+            drum_kit: AtomicU32::new(0),
+            drum_pads: DrumSettings::default().banks[0].map(|p| {
+                [p.kind as f32, p.tune, p.decay, p.level, p.pan]
+                    .map(|v| AtomicU32::new(v.to_bits()))
+            }),
             effects: InstrumentFx::default()
                 .values()
                 .map(|v| AtomicU32::new(v.to_bits())),
@@ -314,6 +346,24 @@ impl Piano {
             .shared
             .drums
             .store(settings.drums, Ordering::Release);
+        self.bus
+            .shared
+            .drum_kit
+            .store(settings.drum_kit.kit as u32, Ordering::Release);
+        for (atomic, p) in self
+            .bus
+            .shared
+            .drum_pads
+            .iter()
+            .zip(&settings.drum_kit.banks[settings.drum_kit.kit as usize])
+        {
+            for (a, v) in atomic
+                .iter()
+                .zip([p.kind as f32, p.tune, p.decay, p.level, p.pan])
+            {
+                a.store(v.to_bits(), Ordering::Release);
+            }
+        }
         self.bus
             .shared
             .drum_volume
@@ -510,7 +560,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                             looper.capture(sound, shared.octave.load(Ordering::Acquire));
                             match sound {
                                 SoundEvent::Piano(screen, bytes) => synth.midi(screen, bytes),
-                                SoundEvent::Drum(pad, velocity) => drums.hit(pad, velocity),
+                                SoundEvent::Drum(pad, velocity) => {
+                                    shared.hit_drum(&mut drums, pad, velocity)
+                                }
                                 SoundEvent::Release => {}
                             }
                         }
@@ -532,7 +584,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                         for event in &loop_events {
                             match *event {
                                 SoundEvent::Piano(screen, bytes) => loop_synth.midi(screen, bytes),
-                                SoundEvent::Drum(pad, velocity) => loop_drums.hit(pad, velocity),
+                                SoundEvent::Drum(pad, velocity) => {
+                                    shared.hit_drum(&mut loop_drums, pad, velocity)
+                                }
                                 SoundEvent::Release => loop_synth.panic(),
                             }
                         }
@@ -544,9 +598,10 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                         }
                         effects.process(&mut left[..frames], &mut right[..frames], effect_settings);
                         for i in 0..frames {
-                            let d = (drums.sample() + loop_drums.sample()) * drum_volume;
-                            left[i] = left[i] * volume + d;
-                            right[i] = right[i] * volume + d;
+                            let (dl, dr) = drums.stereo();
+                            let (ll, lr) = loop_drums.stereo();
+                            left[i] = left[i] * volume + (dl + ll) * drum_volume;
+                            right[i] = right[i] * volume + (dr + lr) * drum_volume;
                         }
                     }
                     for (i, frame) in chunk.chunks_mut(channels).enumerate() {
