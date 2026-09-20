@@ -1,5 +1,6 @@
 use crate::instrument_fx::{Effects, InstrumentFx};
-use crate::piano::{self, PianoSettings, PianoSynth};
+use crate::piano::{PianoSettings, PianoSynth};
+use crate::sound_library::SoundId;
 use crate::{
     drums::DrumSynth,
     groove::{LoopCommand, LoopStatus, Looper, SoundEvent},
@@ -42,6 +43,7 @@ struct Shared {
     drums: AtomicBool,
     drum_volume: AtomicU32,
     effects: [AtomicU32; 8],
+    patch: AtomicU32,
     loop_mode: AtomicU32,
     loop_beat: AtomicU64,
     loop_count: AtomicU32,
@@ -144,7 +146,7 @@ pub struct Piano {
     wake: Sender<()>,
 }
 impl Piano {
-    pub fn new() -> Self {
+    pub fn new(library: Arc<super::sound_library::Library>) -> Self {
         let (tx, rx) = bounded(1024);
         let (wake, wakeup) = bounded(1);
         let shared = Arc::new(Shared {
@@ -162,6 +164,7 @@ impl Piano {
                 .values()
                 .map(|v| AtomicU32::new(v.to_bits())),
             loop_mode: AtomicU32::new(0),
+            patch: AtomicU32::new(0),
             loop_beat: AtomicU64::new(0),
             loop_count: AtomicU32::new(0),
             loop_bars: AtomicU32::new(2),
@@ -198,7 +201,8 @@ impl Piano {
                 } else {
                     false
                 };
-                let manual_restart = next.sound != current.sound
+                let bank_key = |id: &str| SoundId::parse(id).map(|s| s.key).unwrap_or_default();
+                let manual_restart = bank_key(&next.sound) != bank_key(&current.sound)
                     || next.enabled != current.enabled
                     || next.output_device != current.output_device
                     || next.buffer_frames != current.buffer_frames;
@@ -248,11 +252,9 @@ impl Piano {
                 } else if stream.is_none() && Instant::now() >= retry {
                     thread_status.lock().unwrap().state = "loading".into();
                     let result = (|| {
-                        if font.as_ref().is_none_or(|(id, _)| id != &current.sound) {
-                            font = Some((
-                                current.sound.clone(),
-                                piano::sound_font_for(&current.sound)?,
-                            ));
+                        let key = bank_key(&current.sound);
+                        if font.as_ref().is_none_or(|(id, _)| id != &key) {
+                            font = Some((key, library.load(&current.sound)?));
                         }
                         start(
                             &font.as_ref().unwrap().1,
@@ -324,8 +326,13 @@ impl Piano {
             .shared
             .octave
             .store(settings.octave, Ordering::Release);
-        if settings.sound != config.sound
-            || settings.octave != config.octave
+        if let Ok(id) = SoundId::parse(&settings.sound) {
+            self.bus.shared.patch.store(
+                ((id.bank as u32) << 8) | id.program as u32,
+                Ordering::Release,
+            );
+        }
+        if settings.octave != config.octave
             || settings.enabled != config.enabled
             || settings.output_device != config.output_device
             || settings.buffer_frames != config.buffer_frames
@@ -485,6 +492,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     generation = next;
                 }
                 synth.set_octave(shared.octave.load(Ordering::Acquire));
+                let patch = shared.patch.load(Ordering::Acquire);
+                synth.set_patch((patch >> 8) as u16, patch as u8);
+                loop_synth.set_patch((patch >> 8) as u16, patch as u8);
                 let active = shared.enabled.load(Ordering::Acquire)
                     && !shared.blocked.load(Ordering::Acquire);
                 for event in rx.try_iter().take(1024) {

@@ -111,6 +111,7 @@ pub struct Core {
     pub action: Sender<Action>,
     pub input: Mutex<InputState>,
     pub piano: Piano,
+    pub library: Arc<super::sound_library::Library>,
     pub performance: Arc<super::performance::Performance>,
     pub quitting: AtomicBool,
     pub terminated: AtomicBool,
@@ -150,6 +151,7 @@ impl Core {
         storage.prune_logs();
         storage.log("Keylume starting");
         let (tx, rx) = bounded(256);
+        let library = super::sound_library::Library::new(storage.root.join("sounds"));
         (
             Arc::new(Self {
                 control: Mutex::new(Control {
@@ -165,7 +167,8 @@ impl Core {
                 storage: Mutex::new(storage),
                 action: tx,
                 input: Mutex::new(InputState::default()),
-                piano: Piano::new(),
+                piano: Piano::new(library.clone()),
+                library,
                 performance: super::performance::Performance::new(performance_settings),
                 quitting: AtomicBool::new(false),
                 terminated: AtomicBool::new(false),

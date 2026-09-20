@@ -4,6 +4,7 @@ mod performance;
 mod piano;
 mod runtime;
 mod smoke;
+mod sound_library;
 mod system;
 mod update_http;
 mod updater;
@@ -458,6 +459,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             performance::stage_command,
+            sound_library::library_command,
             groove_command,
             get_state,
             get_input_state,
