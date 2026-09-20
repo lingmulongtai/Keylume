@@ -370,6 +370,12 @@ export default function Stage(props: ViewProps) {
               <option value="glow">やわらかい光</option>
               <option value="particles">光の粒</option>
               <option value="rainbow">音ごとのカラー＋粒</option>
+              <option value="sparks">火花</option>
+              <option value="flame">炎</option>
+              <option value="aurora">オーロラ</option>
+              <option value="rings">光の波紋</option>
+              <option value="laser">レーザー</option>
+              <option value="snow">星のきらめき</option>
             </select>
           </label>
           <label className="stage-field">
@@ -384,6 +390,29 @@ export default function Stage(props: ViewProps) {
           {range('先読み（秒）', 'lookAhead', 1.5, 12, 0.5)}
           {range('演奏の軌跡（秒）', 'trail', 2, 16, 1)}
           {range('光の粒の量', 'particles', 0, 1, 0.1)}
+          {(
+            [
+              ['showBars', 'ノートのバー'],
+              ['showKeyboard', '鍵盤を表示'],
+              ['showHud', 'タイトルと採点を表示'],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key}>
+              <input
+                type="checkbox"
+                checked={settings[key]}
+                onChange={(e) => change({ [key]: e.target.checked })}
+              />
+              {label}
+            </label>
+          ))}
+          <button
+            onClick={() =>
+              change({ showBars: false, showKeyboard: false, showHud: false, style: 'sparks' })
+            }
+          >
+            エフェクトだけにする
+          </button>
           <label>
             <input
               type="checkbox"
