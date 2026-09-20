@@ -307,3 +307,18 @@ html[data-surface='stage'] #root {
 .record-button {
   color: #f1a0a0 !important;
 }
+.drum-editor {
+  margin: -12px 0 26px;
+  font-size: 12px;
+}
+.drum-editor summary {
+  cursor: pointer;
+  padding: 10px 0;
+  color: var(--muted);
+}
+.drum-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+}

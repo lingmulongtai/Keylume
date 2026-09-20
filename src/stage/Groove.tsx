@@ -2,24 +2,8 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { native } from '../api';
 import type { ViewProps } from '../ui-state';
-const pads = [
-  'Low tom',
-  'Mid tom',
-  'High tom',
-  'Rim shot',
-  'Ride',
-  'Bell',
-  'Wood low',
-  'Wood high',
-  'Kick',
-  'Snare',
-  'Closed hat',
-  'Open hat',
-  'Clap',
-  'Shaker',
-  'Crash',
-  'Cowbell',
-];
+import { drumNames, kitNames } from '../drum-kits';
+import DrumEditor from './DrumEditor';
 interface LoopStatus {
   mode: string;
   beat: number;
@@ -82,6 +66,22 @@ export default function Groove({
     <section className="groove-panel" aria-label="ドラムとルーパー">
       <div className="groove-heading">
         <strong>PAD DRUMS</strong>
+        <select
+          aria-label="ドラムキット"
+          value={p.drumKit.kit}
+          onChange={(e) =>
+            saveSettings({
+              ...state.settings,
+              piano: { ...p, drumKit: { ...p.drumKit, kit: Number(e.target.value) } },
+            })
+          }
+        >
+          {kitNames.map((name, i) => (
+            <option key={name} value={i}>
+              {name}
+            </option>
+          ))}
+        </select>
         <label>
           <input
             type="checkbox"
@@ -116,9 +116,9 @@ export default function Groove({
         </small>
       </div>
       <div className="drum-pads">
-        {pads.map((name, i) => (
+        {p.drumKit.banks[p.drumKit.kit].map((sound, i) => (
           <button
-            key={name}
+            key={i}
             disabled={!ready || !p.drums}
             className={hit === i ? 'hit' : ''}
             onPointerDown={() => {
@@ -137,10 +137,11 @@ export default function Groove({
             onKeyUp={() => setHit(-1)}
           >
             <small>{i + 1}</small>
-            {name}
+            {drumNames[sound.kind]}
           </button>
         ))}
       </div>
+      <DrumEditor state={state} saveSettings={saveSettings} />
       <div className="groove-heading">
         <strong>LOOPER</strong>
         <label>

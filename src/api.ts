@@ -78,6 +78,7 @@ export const defaults: Settings = {
     enabled: false,
     sound: 'upright',
     drums: true,
+    drumKit: defaultDrumKit(),
     drumVolume: 0.7,
     volume: 0.5,
     volumeFader: 9,
@@ -559,3 +560,4 @@ export async function getPianoState(): Promise<PianoStatus> {
         muted: false,
       };
 }
+import { defaultDrumKit } from './drum-kits';

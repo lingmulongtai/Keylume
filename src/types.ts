@@ -83,6 +83,7 @@ export interface PianoSettings {
   enabled: boolean;
   sound: string;
   drums: boolean;
+  drumKit: import('./drum-kits').DrumSettings;
   drumVolume: number;
   volume: number;
   volumeFader: number;
