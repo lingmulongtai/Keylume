@@ -33,7 +33,7 @@ import HardwareFace from './HardwareFace';
 import { UpdatesCard, type UpdateController } from './Updates';
 const serviceUrl = 'https://microsoft.github.io/MIDI/get-latest/';
 const loopbackUrl = 'https://microsoft.github.io/MIDI/kb/virtual-loopback/';
-function Miniature({ preset, layout }: { preset: Preset; layout: Layout }) {
+export function Miniature({ preset, layout }: { preset: Preset; layout: Layout }) {
   return (
     <svg viewBox={`0 0 ${layout.canvas.w} ${layout.canvas.h}`} aria-hidden="true">
       <HardwareFace

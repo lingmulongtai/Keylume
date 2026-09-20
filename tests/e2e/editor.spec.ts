@@ -12,10 +12,9 @@ test('edits, saves, reloads, exports and deletes a preset', async ({ page }) => 
   await page.getByRole('button', { name: '保存する', exact: true }).click();
   await expect(page.locator('.toast')).toContainText('保存しました');
   await page.reload();
-  await expect(page.getByLabel('適用するプリセット').locator('option:checked')).toHaveText(
-    'E2E Sunset',
-  );
-  await page.getByRole('button', { name: 'プリセット', exact: true }).click();
+  await expect(page.getByLabel('適用するプリセット')).toContainText('E2E Sunset');
+  await page.getByLabel('適用するプリセット').click();
+  await page.getByRole('button', { name: '一覧・管理', exact: true }).click();
   await page.getByLabel('プリセットを検索', { exact: true }).fill('sunset');
   await expect(page.getByRole('heading', { name: 'E2E Sunset', exact: true })).toBeVisible();
   await expect(
@@ -40,6 +39,7 @@ test('pauses, resumes, selects LED zones, and paints', async ({ page }) => {
   await expect(page.locator('.inspector-effect h2')).toHaveText('ペイント');
 });
 test('creates a profile and exercises mock DAW handoff', async ({ page }) => {
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByRole('button', { name: 'プロファイル', exact: true }).click();
   await page.getByRole('button', { name: '夜間プロファイルを作る', exact: true }).click();
   await page.getByRole('button', { name: 'プロファイルを保存', exact: true }).click();
@@ -53,6 +53,7 @@ test('creates a profile and exercises mock DAW handoff', async ({ page }) => {
   await expect(page.locator('.connection')).toContainText('プレビュー');
 });
 test('probe never claims hardware verification in mock mode', async ({ page }) => {
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByRole('button', { name: 'デバイス', exact: true }).click();
   await page.getByRole('button', { name: '点灯テスト', exact: true }).click();
   await expect(page.getByRole('button', { name: 'テストを再実行', exact: true })).toBeVisible();
@@ -65,6 +66,7 @@ test('probe never claims hardware verification in mock mode', async ({ page }) =
 test('validates edited layouts and keeps selection within a smaller layout', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByRole('button', { name: 'デバイス', exact: true }).click();
   await page.getByRole('button', { name: '光った（白のみ）', exact: true }).click();
   await expect(page.locator('.toast')).toContainText('LED のアドレスがありません');
@@ -88,12 +90,18 @@ test('all screens load without browser errors at the minimum window size', async
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 1024, height: 680 });
+  await page.getByLabel('適用するプリセット').click();
+  await page.getByRole('button', { name: '一覧・管理', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
   for (const name of [
-    'プリセット',
+    '設定',
     'プロファイル',
     '共存設定',
     'デバイス',
-    '設定',
+    '一般',
+    'コントローラー',
+    '演奏',
     'ライティング',
   ]) {
     await page.getByRole('button', { name, exact: true }).click();
@@ -123,6 +131,7 @@ test('hardware face and clickable controls stay aligned at full zoom', async ({ 
     page.getByRole('button', { name: 'btn.record mono LED', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '表示をリセット', exact: true }).click();
-  await page.getByRole('button', { name: 'プリセット', exact: true }).click();
+  await page.getByLabel('適用するプリセット').click();
+  await page.getByRole('button', { name: '一覧・管理', exact: true }).click();
   await expect(page.locator('.preset-card').first().locator('[data-key]')).toHaveCount(61);
 });

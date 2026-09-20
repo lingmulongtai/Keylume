@@ -18,6 +18,7 @@ import type { ViewProps } from './ui-state';
 import type { Layer, Zone, Blend } from './types';
 import { effects, zones, blends, uid, includesLed } from './types';
 import Piano from './Piano';
+import LightingPicker from './LightingPicker';
 import { command } from './api';
 import DeviceCanvas from './DeviceCanvas';
 import { Slider, Note, Modal } from './components';
@@ -90,18 +91,13 @@ export default function Editor({
           <div>
             <h1>ライティング</h1>
           </div>
-          <select
-            className="preset-picker"
-            aria-label="適用するプリセット"
-            value={state.preset.id}
-            onChange={(event) => act('apply_preset', { id: event.target.value })}
-          >
-            {state.presets.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {preset.name}
-              </option>
-            ))}
-          </select>
+          <LightingPicker
+            state={state}
+            act={act}
+            edit={edit}
+            toast={toast}
+            saveSettings={saveSettings}
+          />
         </div>
         <div className="device-stage">
           <div className="stage-label">

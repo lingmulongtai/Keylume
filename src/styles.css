@@ -2066,3 +2066,78 @@ code,
   font-size: 11px;
   white-space: nowrap;
 }
+.lighting-picker {
+  position: relative;
+}
+.lighting-picker-current {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--panel);
+  min-height: 42px;
+}
+.lighting-picker-current > svg:first-child {
+  width: 122px;
+  height: 36px;
+}
+.lighting-picker-current > span {
+  font-size: 12px;
+}
+.lighting-picker-tray {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  width: min(680px, 75vw);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 14px 32px #0007;
+}
+.lighting-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.lighting-picker-heading button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+}
+.lighting-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  max-height: 380px;
+  overflow: auto;
+}
+.lighting-picker-grid button {
+  padding: 10px;
+  background: var(--bg);
+  min-width: 0;
+}
+.lighting-picker-grid button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lighting-picker-grid svg {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+}
+.lighting-picker-grid span {
+  font-size: 10px;
+}
+.settings-navigation {
+  display: flex;
+  gap: 8px;
+  padding: 24px 28px 0;
+}
+.settings-navigation .active {
+  color: var(--accent);
+  border-color: var(--accent);
+}

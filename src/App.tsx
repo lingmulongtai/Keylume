@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SlidersHorizontal,
-  LayoutGrid,
-  Workflow,
   Radio,
   Keyboard,
   Settings2,
@@ -23,7 +21,6 @@ import Stage from './stage/Stage';
 import Controller from './ControllerScreen';
 import { settingsDiff, mergeSettings } from './settings-patch';
 import {
-  PresetsScreen,
   ProfilesScreen,
   CoexistScreen,
   DeviceScreen,
@@ -33,17 +30,18 @@ import {
 import { Modal } from './components';
 import { appVersion } from './version';
 import { useUpdates, UpdateBanner } from './Updates';
-type Page =
-  'stage' | 'lighting' | 'controller' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
+type Page = 'stage' | 'lighting' | 'controller' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
   { id: 'lighting', name: 'ライティング', icon: SlidersHorizontal },
   { id: 'stage', name: '演奏', icon: Play },
   { id: 'controller', name: 'コントローラー', icon: Keyboard },
-  { id: 'presets', name: 'プリセット', icon: LayoutGrid },
-  { id: 'profiles', name: 'プロファイル', icon: Workflow },
-  { id: 'coexist', name: '共存設定', icon: Radio },
-  { id: 'device', name: 'デバイス', icon: Keyboard },
   { id: 'settings', name: '設定', icon: Settings2 },
+] as const;
+const settingsPages = [
+  { id: 'settings', name: '一般' },
+  { id: 'profiles', name: 'プロファイル' },
+  { id: 'coexist', name: '共存設定' },
+  { id: 'device', name: 'デバイス' },
 ] as const;
 const statusLabels: Record<string, string> = {
   starting: '接続を準備中',
@@ -224,8 +222,16 @@ export default function App() {
           {pages.map((p) => (
             <button
               key={p.id}
-              className={page === p.id ? 'active' : ''}
-              aria-current={page === p.id ? 'page' : undefined}
+              className={
+                page === p.id || (p.id === 'settings' && settingsPages.some((s) => s.id === page))
+                  ? 'active'
+                  : ''
+              }
+              aria-current={
+                page === p.id || (p.id === 'settings' && settingsPages.some((s) => s.id === page))
+                  ? 'page'
+                  : undefined
+              }
               onClick={() => setPage(p.id)}
             >
               <p.icon size={18} />
@@ -322,14 +328,25 @@ export default function App() {
           </div>
         )}
         <main className={'main-view ' + (page === 'lighting' ? 'editing' : '')}>
+          {settingsPages.some((s) => s.id === page) && (
+            <nav className="settings-navigation" aria-label="設定のカテゴリ">
+              {settingsPages.map((s) => (
+                <button
+                  key={s.id}
+                  className={page === s.id ? 'active' : ''}
+                  onClick={() => setPage(s.id)}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </nav>
+          )}
           {page === 'lighting' ? (
             <Editor {...props} onSave={onSave} />
           ) : page === 'stage' ? (
             <Stage {...props} />
           ) : page === 'controller' ? (
             <Controller {...props} />
-          ) : page === 'presets' ? (
-            <PresetsScreen {...props} />
           ) : page === 'profiles' ? (
             <ProfilesScreen {...props} />
           ) : page === 'coexist' ? (

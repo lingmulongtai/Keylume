@@ -4,7 +4,7 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
 }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'ライティング', exact: true })).toBeVisible();
-  const fader = page.locator('[data-control="fader-1"]');
+  const fader = page.locator('.device-base [data-control="fader-1"]');
   await expect(fader).toHaveAttribute('data-value', 'unknown');
   await page.evaluate(async () => {
     // Exercise the same browser command boundary as the diagnostic screen.
@@ -24,14 +24,20 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
       await api.command('simulate_input', { source, bytes });
   });
   await expect(fader).toHaveAttribute('data-value', '127');
-  await expect(page.locator('[data-control=arp]')).toHaveAttribute('data-active', '1');
-  await expect(page.locator('[data-control="encoder-1"]')).toHaveAttribute('data-value', '96');
-  await expect(page.locator('[data-control="pitch-wheel"]')).toHaveAttribute('data-value', '8192');
+  await expect(page.locator('.device-base [data-control=arp]')).toHaveAttribute('data-active', '1');
+  await expect(page.locator('.device-base [data-control="encoder-1"]')).toHaveAttribute(
+    'data-value',
+    '96',
+  );
+  await expect(page.locator('.device-base [data-control="pitch-wheel"]')).toHaveAttribute(
+    'data-value',
+    '8192',
+  );
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
   await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByRole('button', { name: 'ライティング', exact: true }).click();
   await expect(fader).toHaveAttribute('data-value', '127');
-  await expect(page.locator('[data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
   await page.getByRole('button', { name: '一時停止', exact: true }).click();
   await expect(fader).toHaveAttribute('data-value', 'unknown');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain —');
@@ -66,9 +72,9 @@ test('piano preferences persist and screen keys release on focus loss', async ({
   const key = page.getByRole('button', { name: '鍵盤 60（ピアノ）', exact: true });
   await key.focus();
   await page.keyboard.down('Space');
-  await expect(page.locator('[data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  await expect(page.locator('[data-key="60"]')).not.toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).not.toHaveAttribute('fill', '#e8c48e');
   await page.keyboard.up('Space');
   await page.getByRole('button', { name: '全音停止', exact: true }).click();
 });
@@ -93,11 +99,14 @@ test('lighting pause and resume retain playing keys and pedal with piano enabled
   });
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
   await page.getByRole('button', { name: '一時停止', exact: true }).click();
-  await expect(page.locator('[data-control="fader-1"]')).toHaveAttribute('data-value', 'unknown');
-  await expect(page.locator('[data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-control="fader-1"]')).toHaveAttribute(
+    'data-value',
+    'unknown',
+  );
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
   await page.getByRole('button', { name: '再開', exact: true }).click();
-  await expect(page.locator('[data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
 });
 
