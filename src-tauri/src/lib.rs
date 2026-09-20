@@ -13,3 +13,4 @@ pub mod performance;
 
 pub mod drums;
 pub mod groove;
+pub mod instrument_fx;
