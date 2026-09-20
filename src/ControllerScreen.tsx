@@ -323,10 +323,9 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
             <button
               className="primary"
               onClick={() =>
-                void act('save_settings', {
-                  settings: {
-                    ...state.settings,
-                    controller: { ...c, [mode]: { ...c[mode], [selected]: draft } },
+                void act('patch_settings', {
+                  patch: {
+                    controller: { [mode]: { [selected]: draft } },
                   },
                 }).then((ok) => ok && toast('割り当てを保存しました'))
               }

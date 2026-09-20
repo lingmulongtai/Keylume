@@ -115,7 +115,7 @@ fn command(
     app: tauri::AppHandle,
 ) -> Result<Value, String> {
     let value = dispatch(&core, &name, args)?;
-    if name == "save_settings" {
+    if name == "save_settings" || name == "patch_settings" {
         updater.settings_changed(&core, &app);
     }
     Ok(value)
@@ -271,6 +271,11 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
             s.validate()?;
             core.storage.lock().unwrap().save("settings.json", &s)?;
             c.settings = s;
+        }
+        "patch_settings" => {
+            let next = c.settings.patched(args["patch"].clone())?;
+            core.storage.lock().unwrap().save("settings.json", &next)?;
+            c.settings = next;
         }
         "save_layout" => {
             let l: DeviceLayout =

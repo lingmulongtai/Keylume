@@ -21,6 +21,7 @@ import { getState, command, subscribe, native } from './api';
 import Editor from './Editor';
 import Stage from './stage/Stage';
 import Controller from './ControllerScreen';
+import { settingsDiff, mergeSettings } from './settings-patch';
 import {
   PresetsScreen,
   ProfilesScreen,
@@ -60,6 +61,8 @@ export default function App() {
     [error, setError] = useState(''),
     [setup, setSetup] = useState(false),
     [saveName, setSaveName] = useState<string | null>(null);
+  const latest = useRef(state);
+  latest.current = state;
   const queue = useRef<Promise<unknown>>(Promise.resolve()),
     revision = useRef(0),
     timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined),
@@ -103,7 +106,13 @@ export default function App() {
           .catch(() => {})
           .then(() => command(previous.name, previous.args));
       }
-      pending.current = { name, args };
+      pending.current = {
+        name,
+        args:
+          name === 'patch_settings' && pending.current?.name === name
+            ? { patch: mergeSettings(pending.current.args.patch, args.patch) }
+            : args,
+      };
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         const p = pending.current;
@@ -122,8 +131,9 @@ export default function App() {
   );
   const saveSettings = useCallback(
     (settings: Settings) => {
+      const patch = settingsDiff(latest.current?.settings, settings);
       setState((s) => (s ? { ...s, settings } : s));
-      deferred('save_settings', { settings });
+      deferred('patch_settings', { patch });
     },
     [deferred],
   );
@@ -148,7 +158,18 @@ export default function App() {
         preset: Preset;
       }
     >('hardware_settings', ({ preset, ...settings }) =>
-      setState((s) => (s ? { ...s, settings: { ...s.settings, ...settings }, preset } : s)),
+      setState((s) =>
+        s
+          ? {
+              ...s,
+              settings: mergeSettings(
+                { ...s.settings, ...settings },
+                pending.current?.name === 'patch_settings' ? pending.current.args.patch : {},
+              ),
+              preset: pending.current?.name === 'update_preset' ? s.preset : preset,
+            }
+          : s,
+      ),
     ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     subscribe<string>('notice', toast).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     return () => {

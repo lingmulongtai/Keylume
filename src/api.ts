@@ -1,5 +1,6 @@
 import { previewStageInput } from './stage/api';
 import { defaultController } from './controller';
+import { mergeSettings } from './settings-patch';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
@@ -419,6 +420,13 @@ export async function command<T = unknown>(
       mock.settings.coexistMode = args.mode as Settings['coexistMode'];
       mock.status.effectiveMode = mock.settings.coexistMode;
       break;
+    case 'patch_settings': {
+      const settings = mergeSettings(mock.settings, args.patch);
+      if (!settings.mock) throw Error('実機接続はデスクトップ版で利用できます');
+      mock.settings = settings;
+      mock.status.effectiveMode = mock.settings.coexistMode;
+      break;
+    }
     case 'save_settings': {
       const settings = args.settings as Settings;
       if (!settings.mock) throw Error('実機接続はデスクトップ版で利用できます');
