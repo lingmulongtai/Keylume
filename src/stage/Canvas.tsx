@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { keys, noteName } from './geometry';
+import { calibrationHandle, keys, noteName } from './geometry';
 import type { Song, StageSnapshot, StageView, StageSettings } from './types';
 type Frame = { state: StageSnapshot; received: number };
 export default function StageCanvas({
@@ -17,6 +17,7 @@ export default function StageCanvas({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null),
     latest = useRef({ song, view, calibrate, change });
+  const draggingSettings = useRef<StageSettings | null>(null);
   latest.current = { song, view, calibrate, change };
   useEffect(() => {
     const c = canvas.current!;
@@ -39,7 +40,7 @@ export default function StageCanvas({
         raf = requestAnimationFrame(draw);
         return;
       }
-      const a = s.settings,
+      const a = draggingSettings.current ?? s.settings,
         d = view.desktop,
         m = view.monitor;
       ctx.setTransform(
@@ -276,20 +277,23 @@ export default function StageCanvas({
       aria-label="演奏ノート表示"
       onPointerDown={(e) => {
         if (!calibrate) return;
-        const p = point(e),
-          s = frame.current.state.settings;
-        drag.current =
-          Math.abs(p.y - s.lineY) < 0.08
-            ? 'lineY'
-            : Math.abs(p.x - s.left) < Math.abs(p.x - s.right)
-              ? 'left'
-              : 'right';
+        const r = e.currentTarget.getBoundingClientRect();
+        drag.current = calibrationHandle(
+          e.clientX - r.left,
+          e.clientY - r.top,
+          frame.current.state.settings,
+          latest.current.view,
+          r.width,
+          r.height,
+        );
+        if (!drag.current) return;
+        draggingSettings.current = { ...frame.current.state.settings };
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
         if (!drag.current) return;
         const p = point(e),
-          s = frame.current.state.settings,
+          s = draggingSettings.current ?? frame.current.state.settings,
           k = drag.current;
         const value =
           k === 'lineY'
@@ -297,10 +301,23 @@ export default function StageCanvas({
             : k === 'left'
               ? Math.max(0, Math.min(s.right - 0.1, p.x))
               : Math.max(s.left + 0.1, Math.min(1, p.x));
+        draggingSettings.current = { ...s, [k]: value };
         latest.current.change?.({ [k]: value });
       }}
-      onPointerUp={() => (drag.current = null)}
-      onLostPointerCapture={() => (drag.current = null)}
+      onPointerUp={(e) => {
+        drag.current = null;
+        draggingSettings.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId))
+          e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        draggingSettings.current = null;
+      }}
+      onLostPointerCapture={() => {
+        drag.current = null;
+        draggingSettings.current = null;
+      }}
     />
   );
 }

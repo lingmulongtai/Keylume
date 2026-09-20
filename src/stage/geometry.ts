@@ -1,4 +1,22 @@
-import type { Rect } from './types';
+import type { Rect, StageSettings, StageView } from './types';
+export function calibrationHandle(
+  x: number,
+  y: number,
+  settings: StageSettings,
+  view: StageView,
+  width: number,
+  height: number,
+): 'left' | 'right' | 'lineY' | null {
+  const d = view.desktop,
+    m = view.monitor;
+  const candidates = [
+    ['left', Math.abs(x - ((d.x + settings.left * d.width - m.x) / m.width) * width)],
+    ['right', Math.abs(x - ((d.x + settings.right * d.width - m.x) / m.width) * width)],
+    ['lineY', Math.abs(y - ((d.y + settings.lineY * d.height - m.y) / m.height) * height)],
+  ] as const;
+  const nearest = [...candidates].sort((a, b) => a[1] - b[1])[0];
+  return nearest[1] <= 18 ? nearest[0] : null;
+}
 export const black = (n: number) => [1, 3, 6, 8, 10].includes(n % 12);
 export function keys(low: number, high: number) {
   const result: { pitch: number; x: number; width: number; black: boolean }[] = [];

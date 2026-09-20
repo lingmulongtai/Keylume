@@ -6,6 +6,7 @@ import Groove from './Groove';
 import StageCanvas from './Canvas';
 import { stageCommand } from './api';
 import { useStage } from './useStage';
+import { useStageChange } from './useStageChange';
 import { demoSong } from './midi';
 import { importMidi } from './import-midi';
 import { union } from './geometry';
@@ -21,24 +22,13 @@ export default function Stage(props: ViewProps) {
     [selected, setSelected] = useState<number[]>([]),
     [calibrate, setCalibrate] = useState(false),
     [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null),
-    queue = useRef(Promise.resolve());
+  const input = useRef<HTMLInputElement>(null);
   const run = (name: string, args: Record<string, unknown> = {}) =>
     stageCommand(name, args).catch((e) => {
       props.toast(String(e));
       return null;
     });
-  const change = useCallback(
-    (patch: Partial<StageSettings>) => {
-      queue.current = queue.current
-        .catch(() => {})
-        .then(async () => {
-          await stageCommand('settings', { patch });
-        })
-        .catch((e) => props.toast(String(e)));
-    },
-    [props.toast],
-  );
+  const change = useStageChange(props.toast);
   const refresh = useCallback(() => {
     void stageCommand<StageMonitor[]>('monitors')
       .then((ms) => {
@@ -420,26 +410,7 @@ export function StageWindow() {
     { state, song, frame } = useStage(setError),
     [view, setView] = useState<StageView | null>(null),
     [calibrate, setCalibrate] = useState(false);
-  const pending = useRef<Partial<StageSettings>>({}),
-    sending = useRef(false);
-  const change = useCallback((patch: Partial<StageSettings>) => {
-    pending.current = { ...pending.current, ...patch };
-    const flush = async () => {
-      if (sending.current) return;
-      sending.current = true;
-      while (Object.keys(pending.current).length) {
-        const p = pending.current;
-        pending.current = {};
-        try {
-          await stageCommand('settings', { patch: p });
-        } catch (e) {
-          setError(String(e));
-        }
-      }
-      sending.current = false;
-    };
-    void flush();
-  }, []);
+  const change = useStageChange(setError);
   useEffect(() => {
     void stageCommand<StageView>('view')
       .then(setView)
