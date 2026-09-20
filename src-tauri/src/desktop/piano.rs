@@ -1,3 +1,4 @@
+use crate::instrument_fx::{Effects, InstrumentFx};
 use crate::piano::{self, PianoSettings, PianoSynth};
 use crate::{
     drums::DrumSynth,
@@ -40,6 +41,7 @@ struct Shared {
     frames: AtomicU32,
     drums: AtomicBool,
     drum_volume: AtomicU32,
+    effects: [AtomicU32; 8],
     loop_mode: AtomicU32,
     loop_beat: AtomicU64,
     loop_count: AtomicU32,
@@ -156,6 +158,9 @@ impl Piano {
             frames: AtomicU32::new(0),
             drums: AtomicBool::new(true),
             drum_volume: AtomicU32::new(0.7f32.to_bits()),
+            effects: InstrumentFx::default()
+                .values()
+                .map(|v| AtomicU32::new(v.to_bits())),
             loop_mode: AtomicU32::new(0),
             loop_beat: AtomicU64::new(0),
             loop_count: AtomicU32::new(0),
@@ -293,6 +298,15 @@ impl Piano {
         let mut config = self.config.lock().unwrap();
         if *config == *settings {
             return;
+        }
+        for (atomic, value) in self
+            .bus
+            .shared
+            .effects
+            .iter()
+            .zip(settings.effects.values())
+        {
+            atomic.store(value.to_bits(), Ordering::Release);
         }
         self.bus
             .shared
@@ -437,6 +451,12 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     let mut loop_synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
     let mut drums = DrumSynth::new(config.sample_rate.0);
     let mut loop_drums = DrumSynth::new(config.sample_rate.0);
+    let mut effects = Effects::new(
+        config.sample_rate.0,
+        InstrumentFx::from_values(std::array::from_fn(|i| {
+            f32::from_bits(shared.effects[i].load(Ordering::Acquire))
+        })),
+    );
     let loop_session = shared.looper.clone();
     let mut loop_events = Vec::with_capacity(8193);
     let mut loop_left = [0.; 256];
@@ -460,6 +480,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     loop_synth.panic();
                     drums.panic();
                     loop_drums.panic();
+                    effects.reset();
                     looper.command(LoopCommand::Stop);
                     generation = next;
                 }
@@ -490,6 +511,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     .store((data.len() / channels) as u32, Ordering::Relaxed);
                 let volume = f32::from_bits(shared.volume.load(Ordering::Relaxed));
                 let drum_volume = f32::from_bits(shared.drum_volume.load(Ordering::Relaxed));
+                let effect_settings = InstrumentFx::from_values(std::array::from_fn(|i| {
+                    f32::from_bits(shared.effects[i].load(Ordering::Relaxed))
+                }));
                 let mut peak = 0f32;
                 for chunk in data.chunks_mut(64 * channels) {
                     let frames = chunk.len() / channels;
@@ -505,9 +529,14 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                         synth.render(&mut left[..frames], &mut right[..frames]);
                         loop_synth.render(&mut loop_left[..frames], &mut loop_right[..frames]);
                         for i in 0..frames {
+                            left[i] += loop_left[i];
+                            right[i] += loop_right[i];
+                        }
+                        effects.process(&mut left[..frames], &mut right[..frames], effect_settings);
+                        for i in 0..frames {
                             let d = (drums.sample() + loop_drums.sample()) * drum_volume;
-                            left[i] = (left[i] + loop_left[i]) * volume + d;
-                            right[i] = (right[i] + loop_right[i]) * volume + d;
+                            left[i] = left[i] * volume + d;
+                            right[i] = right[i] * volume + d;
                         }
                     }
                     for (i, frame) in chunk.chunks_mut(channels).enumerate() {

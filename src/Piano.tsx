@@ -5,6 +5,7 @@ import type { PianoStatus, PianoSettings } from './types';
 import type { ViewProps } from './ui-state';
 import { Slider, Toggle } from './components';
 import { pianoSounds } from './piano-sounds';
+import InstrumentEffects from './InstrumentEffects';
 
 export default function Piano({
   state,
@@ -120,6 +121,7 @@ export default function Piano({
           {status.error}
         </p>
       )}
+      <InstrumentEffects value={p.effects} change={(effects) => update({ effects })} />
       <details className="piano-details">
         <summary>音声と演奏の設定</summary>
         <div className="piano-options">

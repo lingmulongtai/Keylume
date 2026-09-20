@@ -15,6 +15,7 @@ pub struct PianoSettings {
     pub output_device: String,
     pub buffer_frames: u32,
     pub mute_with_daw: bool,
+    pub effects: crate::instrument_fx::InstrumentFx,
 }
 impl Default for PianoSettings {
     fn default() -> Self {
@@ -29,11 +30,13 @@ impl Default for PianoSettings {
             output_device: String::new(),
             buffer_frames: 256,
             mute_with_daw: true,
+            effects: Default::default(),
         }
     }
 }
 impl PianoSettings {
     pub fn validate(&self) -> Result<(), String> {
+        self.effects.validate()?;
         if !["upright", "bright", "fm-piano", "honky-tonk"].contains(&self.sound.as_str())
             || !(0.0..=1.0).contains(&self.volume)
             || !(0.0..=1.0).contains(&self.drum_volume)

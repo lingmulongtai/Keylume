@@ -11,7 +11,7 @@ import type {
   Color,
   PianoStatus,
 } from './types';
-import { effects, uid } from './types';
+import { effects, uid, defaultInstrumentFx } from './types';
 import layout from '../resources/layout.json';
 import presets from '../resources/presets.json';
 import { previewInput, renderPreview } from './preview';
@@ -64,6 +64,7 @@ export const defaults: Settings = {
   checkForUpdates: true,
   includePrereleases: true,
   piano: {
+    effects: { ...defaultInstrumentFx },
     enabled: false,
     sound: 'upright',
     drums: true,
@@ -121,7 +122,11 @@ try {
       settings: {
         ...defaults,
         ...saved.settings,
-        piano: { ...defaults.piano, ...saved.settings.piano },
+        piano: {
+          ...defaults.piano,
+          ...saved.settings.piano,
+          effects: { ...defaultInstrumentFx, ...saved.settings.piano?.effects },
+        },
       },
       status: { ...defaultStatus },
     };
