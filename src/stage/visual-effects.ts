@@ -21,7 +21,7 @@ export function drawNoteEffects(
   if (settings.style === 'clean' || settings.particles === 0) return;
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
-  const count = Math.round(8 + settings.particles * 32);
+  const count = Math.round(8 + settings.particles * 56);
   // Bounded work even during dense imported/physical MIDI and long pedal holds.
   for (const n of notes.slice(-64)) {
     const key = layout.get(n.pitch);
@@ -35,7 +35,7 @@ export function drawNoteEffects(
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = settings.style === 'sparks' ? 3 : 14;
+    ctx.shadowBlur = settings.style === 'sparks' ? 7 : 14;
     // A soft impact light remains at the strike position even with bars/keyboard hidden.
     ctx.globalAlpha = tail * power * 0.6;
     ctx.beginPath();
@@ -81,8 +81,8 @@ export function drawNoteEffects(
       const t = cycle % 1,
         spread = (noise(seed + 1) - 0.5) * 2;
       const px = x + spread * (settings.style === 'flame' ? kw * 0.9 : kw * 1.8 + 90) * t;
-      const py = line - t * (100 + noise(seed + 2) * 260) * power;
-      ctx.globalAlpha = (1 - t) * tail * power;
+      const py = line - t * (160 + noise(seed + 2) * 480) * power;
+      ctx.globalAlpha = Math.sqrt(1 - t) * tail * power;
       ctx.lineWidth = 1 + noise(seed + 4) * 2;
       ctx.fillStyle = color;
       ctx.strokeStyle = color;

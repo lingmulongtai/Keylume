@@ -94,10 +94,17 @@ export default function StageCanvas({
           ctx.stroke();
         }
       }
-      function bar(pitch: number, start: number, end: number, velocity: number, live: boolean) {
+      function bar(
+        pitch: number,
+        start: number,
+        end: number,
+        velocity: number,
+        live: boolean,
+        dark: boolean,
+      ) {
         if (!a.showBars) return;
         const k = map.get(pitch);
-        if (!k) return;
+        if (!k || k.black !== dark) return;
         const x = left + k.x * width + 2,
           bw = Math.max(2, k.width * width - 4);
         let top, bottom;
@@ -130,16 +137,23 @@ export default function StageCanvas({
           ctx.fillStyle = k.black ? '#f2f5fa' : '#09121d';
           ctx.font = `600 ${Math.min(18, bw * 0.42)}px sans-serif`;
           ctx.textAlign = 'center';
-          ctx.fillText(noteName(pitch, a.labelFormat), x + bw / 2, Math.min(bottom - 7, top + 23));
+          ctx.fillText(
+            noteName(pitch, a.labelFormat),
+            x + bw / 2,
+            Math.min(bottom - 7, top + (k.black ? 45 : 23)),
+            bw - 4,
+          );
         }
       }
-      if (a.mode === 'practice' && song) {
-        for (const n of song.notes) {
-          if (n.start > position + a.lookAhead) break;
-          if (n.end < position || !a.tracks.includes(n.track)) continue;
-          bar(n.pitch, n.start, n.end, n.velocity, false);
-        }
-      } else for (const n of s.live) bar(n.pitch, n.start, n.end ?? clock, n.velocity, true);
+      for (const dark of [false, true])
+        if (a.mode === 'practice' && song) {
+          for (const n of song.notes) {
+            if (n.start > position + a.lookAhead) break;
+            if (n.end < position || !a.tracks.includes(n.track)) continue;
+            bar(n.pitch, n.start, n.end, n.velocity, false, dark);
+          }
+        } else
+          for (const n of s.live) bar(n.pitch, n.start, n.end ?? clock, n.velocity, true, dark);
       drawNoteEffects(ctx, s.live, map, a, clock, left, width, line);
       ctx.shadowBlur = 12;
       ctx.shadowColor = a.color;
