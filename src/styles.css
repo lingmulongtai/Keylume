@@ -1996,3 +1996,73 @@ code,
 .sound-card.selected .sound-status {
   color: var(--accent);
 }
+.controller-page > .card {
+  margin-bottom: 20px;
+}
+.controller-mode {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 15px 0;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.controller-mode [aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.controller-editor {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(350px, 1.1fr);
+  gap: 20px;
+  align-items: start;
+}
+.controller-search {
+  width: 100%;
+  margin: 14px 0;
+}
+.controller-list {
+  max-height: 560px;
+  overflow: auto;
+}
+.controller-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  border-radius: 0;
+  padding: 12px 9px;
+  text-align: left;
+}
+.controller-list button.selected {
+  background: var(--raised);
+  color: var(--accent);
+}
+.controller-list small {
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.controller-editor .field {
+  margin: 20px 0;
+}
+.controller-save {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 24px 0;
+}
+.controller-editor p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.mode-switch {
+  font-size: 11px;
+  white-space: nowrap;
+}

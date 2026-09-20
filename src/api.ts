@@ -1,4 +1,5 @@
 import { previewStageInput } from './stage/api';
+import { defaultController } from './controller';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
@@ -23,6 +24,7 @@ export async function getInputState(): Promise<InputState> {
   return native ? invoke('get_input_state') : structuredClone(liveInput.state);
 }
 export const defaults: Settings = {
+  controller: defaultController(),
   schema: 1,
   activePreset: 'aurora',
   masterBrightness: 1,
@@ -455,6 +457,8 @@ export async function command<T = unknown>(
       mock.status.probe = null;
       break;
     }
+    case 'controller_learn':
+      break;
     case 'piano_panic':
       liveInput.reset();
       emit('input_state', structuredClone(liveInput.state));

@@ -60,7 +60,9 @@ export default function Piano({
     : !p.enabled
       ? 'オフ'
       : status.muted
-        ? 'DAW / スリープ中は消音'
+        ? state.settings.controller.enabled && state.settings.controller.mode === 'desktop'
+          ? 'デスクトップ操作中は消音'
+          : 'DAW / スリープ中は消音'
         : status.state === 'ready'
           ? '演奏できます'
           : status.state === 'error'

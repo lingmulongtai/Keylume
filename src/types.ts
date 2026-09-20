@@ -122,6 +122,7 @@ export interface PianoStatus {
   muted: boolean;
 }
 export interface Settings {
+  controller: import('./controller').ControllerSettings;
   schema: number;
   activePreset: string;
   masterBrightness: number;

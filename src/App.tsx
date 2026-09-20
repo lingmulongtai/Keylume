@@ -20,6 +20,7 @@ import { uid } from './types';
 import { getState, command, subscribe, native } from './api';
 import Editor from './Editor';
 import Stage from './stage/Stage';
+import Controller from './ControllerScreen';
 import {
   PresetsScreen,
   ProfilesScreen,
@@ -31,10 +32,12 @@ import {
 import { Modal } from './components';
 import { appVersion } from './version';
 import { useUpdates, UpdateBanner } from './Updates';
-type Page = 'stage' | 'lighting' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
+type Page =
+  'stage' | 'lighting' | 'controller' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
   { id: 'lighting', name: 'ライティング', icon: SlidersHorizontal },
   { id: 'stage', name: '演奏', icon: Play },
+  { id: 'controller', name: 'コントローラー', icon: Keyboard },
   { id: 'presets', name: 'プリセット', icon: LayoutGrid },
   { id: 'profiles', name: 'プロファイル', icon: Workflow },
   { id: 'coexist', name: '共存設定', icon: Radio },
@@ -140,6 +143,13 @@ export default function App() {
         s ? { ...s, settings: { ...s.settings, piano: { ...s.settings.piano, volume } } } : s,
       ),
     ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
+    subscribe<
+      Pick<Settings, 'piano' | 'controller' | 'masterBrightness' | 'activePreset'> & {
+        preset: Preset;
+      }
+    >('hardware_settings', ({ preset, ...settings }) =>
+      setState((s) => (s ? { ...s, settings: { ...s.settings, ...settings }, preset } : s)),
+    ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     subscribe<string>('notice', toast).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     return () => {
       disposed = true;
@@ -227,6 +237,26 @@ export default function App() {
             <ChevronRight size={12} />
           </button>
           <div className="header-divider" />
+          {state.settings.controller.enabled && (
+            <button
+              className="mode-switch"
+              aria-label="演奏とデスクトップを切替"
+              onClick={() =>
+                saveSettings({
+                  ...state.settings,
+                  controller: {
+                    ...state.settings.controller,
+                    mode:
+                      state.settings.controller.mode === 'performance' ? 'desktop' : 'performance',
+                  },
+                })
+              }
+            >
+              {state.settings.controller.mode === 'performance'
+                ? '演奏モード'
+                : 'デスクトップモード'}
+            </button>
+          )}
           <label className="master-brightness">
             <Sun size={17} />
             <span className="sr-only">マスター輝度</span>
@@ -275,6 +305,8 @@ export default function App() {
             <Editor {...props} onSave={onSave} />
           ) : page === 'stage' ? (
             <Stage {...props} />
+          ) : page === 'controller' ? (
+            <Controller {...props} />
           ) : page === 'presets' ? (
             <PresetsScreen {...props} />
           ) : page === 'profiles' ? (
