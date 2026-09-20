@@ -1,6 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { keys, union } from './geometry';
+import { calibrationHandle, keys, noteColor, noteName, union } from './geometry';
+import { defaultStageSettings } from './types';
 describe('stage geometry', () => {
+  it('distinguishes black notes by width, luminance and readable note names', () => {
+    const k = keys(60, 72);
+    expect(k[1].width / k[0].width).toBeCloseTo(0.64);
+    const light = noteColor(60, '#80a0c0', false).match(/\d+/g)!.map(Number);
+    const dark = noteColor(61, '#80a0c0', false).match(/\d+/g)!.map(Number);
+    expect(dark.every((n, i) => n < light[i] * 0.6)).toBe(true);
+    expect(noteName(61)).toBe('C♯4');
+    expect(noteName(61, 'solfege')).toBe('ド♯4');
+  });
+  it('grabs the closest calibration line in screen pixels without a wide height dead zone', () => {
+    const desktop = { x: -2560, y: 0, width: 5120, height: 1440 };
+    const view = { desktop, monitor: { ...desktop, id: 0, name: 'preview', scale: 1 } };
+    const s = defaultStageSettings;
+    expect(calibrationHandle(51, 405, s, view, 1000, 500)).toBe('left');
+    expect(calibrationHandle(949, 400, s, view, 1000, 500)).toBe('right');
+    expect(calibrationHandle(500, 411, s, view, 1000, 500)).toBe('lineY');
+    expect(calibrationHandle(500, 250, s, view, 1000, 500)).toBeNull();
+    const right = { ...view, monitor: { ...view.monitor, x: 0, width: 2560 } };
+    expect(calibrationHandle(900, 200, s, right, 1000, 500)).toBe('right');
+  });
   it('aligns 61 keys with black keys straddling white boundaries', () => {
     const k = keys(36, 96);
     expect(k).toHaveLength(61);

@@ -174,7 +174,18 @@
 .stage-fullscreen {
   position: fixed;
   inset: 0;
-  background: #080b10;
+  background: transparent;
+}
+html[data-surface='stage'],
+html[data-surface='stage'] body,
+html[data-surface='stage'] #root {
+  background: transparent;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.transparent-preview {
+  background: repeating-conic-gradient(#25282d 0% 25%, #31353b 0% 50%) 0 / 28px 28px;
 }
 .stage-exit {
   position: fixed;
@@ -295,4 +306,19 @@
 }
 .record-button {
   color: #f1a0a0 !important;
+}
+.drum-editor {
+  margin: -12px 0 26px;
+  font-size: 12px;
+}
+.drum-editor summary {
+  cursor: pointer;
+  padding: 10px 0;
+  color: var(--muted);
+}
+.drum-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
 }

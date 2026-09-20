@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SlidersHorizontal,
-  LayoutGrid,
-  Workflow,
   Radio,
   Keyboard,
   Settings2,
@@ -20,8 +18,9 @@ import { uid } from './types';
 import { getState, command, subscribe, native } from './api';
 import Editor from './Editor';
 import Stage from './stage/Stage';
+import Controller from './ControllerScreen';
+import { settingsDiff, mergeSettings } from './settings-patch';
 import {
-  PresetsScreen,
   ProfilesScreen,
   CoexistScreen,
   DeviceScreen,
@@ -31,15 +30,18 @@ import {
 import { Modal } from './components';
 import { appVersion } from './version';
 import { useUpdates, UpdateBanner } from './Updates';
-type Page = 'stage' | 'lighting' | 'presets' | 'profiles' | 'coexist' | 'device' | 'settings';
+type Page = 'stage' | 'lighting' | 'controller' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
   { id: 'lighting', name: 'ライティング', icon: SlidersHorizontal },
   { id: 'stage', name: '演奏', icon: Play },
-  { id: 'presets', name: 'プリセット', icon: LayoutGrid },
-  { id: 'profiles', name: 'プロファイル', icon: Workflow },
-  { id: 'coexist', name: '共存設定', icon: Radio },
-  { id: 'device', name: 'デバイス', icon: Keyboard },
+  { id: 'controller', name: 'コントローラー', icon: Keyboard },
   { id: 'settings', name: '設定', icon: Settings2 },
+] as const;
+const settingsPages = [
+  { id: 'settings', name: '一般' },
+  { id: 'profiles', name: 'プロファイル' },
+  { id: 'coexist', name: '共存設定' },
+  { id: 'device', name: 'デバイス' },
 ] as const;
 const statusLabels: Record<string, string> = {
   starting: '接続を準備中',
@@ -57,6 +59,8 @@ export default function App() {
     [error, setError] = useState(''),
     [setup, setSetup] = useState(false),
     [saveName, setSaveName] = useState<string | null>(null);
+  const latest = useRef(state);
+  latest.current = state;
   const queue = useRef<Promise<unknown>>(Promise.resolve()),
     revision = useRef(0),
     timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined),
@@ -100,7 +104,13 @@ export default function App() {
           .catch(() => {})
           .then(() => command(previous.name, previous.args));
       }
-      pending.current = { name, args };
+      pending.current = {
+        name,
+        args:
+          name === 'patch_settings' && pending.current?.name === name
+            ? { patch: mergeSettings(pending.current.args.patch, args.patch) }
+            : args,
+      };
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         const p = pending.current;
@@ -119,8 +129,9 @@ export default function App() {
   );
   const saveSettings = useCallback(
     (settings: Settings) => {
+      const patch = settingsDiff(latest.current?.settings, settings);
       setState((s) => (s ? { ...s, settings } : s));
-      deferred('save_settings', { settings });
+      deferred('patch_settings', { patch });
     },
     [deferred],
   );
@@ -138,6 +149,24 @@ export default function App() {
     subscribe<number>('piano_volume', (volume) =>
       setState((s) =>
         s ? { ...s, settings: { ...s.settings, piano: { ...s.settings.piano, volume } } } : s,
+      ),
+    ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
+    subscribe<
+      Pick<Settings, 'piano' | 'controller' | 'masterBrightness' | 'activePreset'> & {
+        preset: Preset;
+      }
+    >('hardware_settings', ({ preset, ...settings }) =>
+      setState((s) =>
+        s
+          ? {
+              ...s,
+              settings: mergeSettings(
+                { ...s.settings, ...settings },
+                pending.current?.name === 'patch_settings' ? pending.current.args.patch : {},
+              ),
+              preset: pending.current?.name === 'update_preset' ? s.preset : preset,
+            }
+          : s,
       ),
     ).then((fn) => (disposed ? fn() : cleanup.push(fn)));
     subscribe<string>('notice', toast).then((fn) => (disposed ? fn() : cleanup.push(fn)));
@@ -193,8 +222,16 @@ export default function App() {
           {pages.map((p) => (
             <button
               key={p.id}
-              className={page === p.id ? 'active' : ''}
-              aria-current={page === p.id ? 'page' : undefined}
+              className={
+                page === p.id || (p.id === 'settings' && settingsPages.some((s) => s.id === page))
+                  ? 'active'
+                  : ''
+              }
+              aria-current={
+                page === p.id || (p.id === 'settings' && settingsPages.some((s) => s.id === page))
+                  ? 'page'
+                  : undefined
+              }
               onClick={() => setPage(p.id)}
             >
               <p.icon size={18} />
@@ -227,6 +264,26 @@ export default function App() {
             <ChevronRight size={12} />
           </button>
           <div className="header-divider" />
+          {state.settings.controller.enabled && (
+            <button
+              className="mode-switch"
+              aria-label="演奏とデスクトップを切替"
+              onClick={() =>
+                saveSettings({
+                  ...state.settings,
+                  controller: {
+                    ...state.settings.controller,
+                    mode:
+                      state.settings.controller.mode === 'performance' ? 'desktop' : 'performance',
+                  },
+                })
+              }
+            >
+              {state.settings.controller.mode === 'performance'
+                ? '演奏モード'
+                : 'デスクトップモード'}
+            </button>
+          )}
           <label className="master-brightness">
             <Sun size={17} />
             <span className="sr-only">マスター輝度</span>
@@ -271,12 +328,25 @@ export default function App() {
           </div>
         )}
         <main className={'main-view ' + (page === 'lighting' ? 'editing' : '')}>
+          {settingsPages.some((s) => s.id === page) && (
+            <nav className="settings-navigation" aria-label="設定のカテゴリ">
+              {settingsPages.map((s) => (
+                <button
+                  key={s.id}
+                  className={page === s.id ? 'active' : ''}
+                  onClick={() => setPage(s.id)}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </nav>
+          )}
           {page === 'lighting' ? (
             <Editor {...props} onSave={onSave} />
           ) : page === 'stage' ? (
             <Stage {...props} />
-          ) : page === 'presets' ? (
-            <PresetsScreen {...props} />
+          ) : page === 'controller' ? (
+            <Controller {...props} />
           ) : page === 'profiles' ? (
             <ProfilesScreen {...props} />
           ) : page === 'coexist' ? (

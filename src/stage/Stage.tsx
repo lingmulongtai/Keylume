@@ -4,8 +4,9 @@ import type { ViewProps } from '../ui-state';
 import Piano from '../Piano';
 import Groove from './Groove';
 import StageCanvas from './Canvas';
-import { stageCommand } from './api';
+import { stageCommand, subscribeInteraction } from './api';
 import { useStage } from './useStage';
+import { useStageChange } from './useStageChange';
 import { demoSong } from './midi';
 import { importMidi } from './import-midi';
 import { union } from './geometry';
@@ -16,29 +17,18 @@ const seconds = (s: number) =>
     .toString()
     .padStart(2, '0')}`;
 export default function Stage(props: ViewProps) {
-  const { state, song, frame } = useStage(props.toast),
+  const { state, song, frame, optimistic, settled } = useStage(props.toast),
     [monitors, setMonitors] = useState<StageMonitor[]>([]),
     [selected, setSelected] = useState<number[]>([]),
     [calibrate, setCalibrate] = useState(false),
     [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null),
-    queue = useRef(Promise.resolve());
+  const input = useRef<HTMLInputElement>(null);
   const run = (name: string, args: Record<string, unknown> = {}) =>
     stageCommand(name, args).catch((e) => {
       props.toast(String(e));
       return null;
     });
-  const change = useCallback(
-    (patch: Partial<StageSettings>) => {
-      queue.current = queue.current
-        .catch(() => {})
-        .then(async () => {
-          await stageCommand('settings', { patch });
-        })
-        .catch((e) => props.toast(String(e)));
-    },
-    [props.toast],
-  );
+  const change = useStageChange(props.toast, optimistic, settled);
   const refresh = useCallback(() => {
     void stageCommand<StageMonitor[]>('monitors')
       .then((ms) => {
@@ -115,7 +105,10 @@ export default function Stage(props: ViewProps) {
         <summary>パッドドラムとルーパー</summary>
         <Groove {...props} />
       </details>
-      <div className="stage-preview" style={{ aspectRatio: `${desktop.width}/${desktop.height}` }}>
+      <div
+        className={`stage-preview ${settings.transparent ? 'transparent-preview' : ''}`}
+        style={{ aspectRatio: `${desktop.width}/${desktop.height}` }}
+      >
         <StageCanvas frame={frame} song={song} view={view} calibrate={calibrate} change={change} />
       </div>
       <div className="stage-toolbar">
@@ -133,6 +126,12 @@ export default function Stage(props: ViewProps) {
           選択した画面に表示
         </button>
         <button onClick={() => void run('close')}>表示を閉じる</button>
+        <button onClick={() => void run('interaction', { editing: true })}>
+          別画面の位置合わせを開く
+        </button>
+        <button onClick={() => void run('interaction', { editing: false })}>
+          別画面の位置を固定
+        </button>
       </div>
       {settings.mode === 'practice' && (
         <section className="stage-practice">
@@ -369,6 +368,25 @@ export default function Stage(props: ViewProps) {
         </fieldset>
         <fieldset>
           <legend>ノートの演出</legend>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.transparent}
+              onChange={(e) => change({ transparent: e.target.checked })}
+            />
+            背景を透明にする
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.clickThrough}
+              onChange={(e) => change({ clickThrough: e.target.checked })}
+            />
+            固定中はクリックを下のアプリへ通す
+          </label>
+          <p className="stage-hint">
+            操作解除は上の「別画面の位置合わせを開く」かトレイから。クリック透過中は演奏画面へキー入力を取り込みません。
+          </p>
           <label className="stage-field">
             <span>スタイル</span>
             <select
@@ -380,6 +398,12 @@ export default function Stage(props: ViewProps) {
               <option value="glow">やわらかい光</option>
               <option value="particles">光の粒</option>
               <option value="rainbow">音ごとのカラー＋粒</option>
+              <option value="sparks">火花</option>
+              <option value="flame">炎</option>
+              <option value="aurora">オーロラ</option>
+              <option value="rings">光の波紋</option>
+              <option value="laser">レーザー</option>
+              <option value="snow">星のきらめき</option>
             </select>
           </label>
           <label className="stage-field">
@@ -394,6 +418,29 @@ export default function Stage(props: ViewProps) {
           {range('先読み（秒）', 'lookAhead', 1.5, 12, 0.5)}
           {range('演奏の軌跡（秒）', 'trail', 2, 16, 1)}
           {range('光の粒の量', 'particles', 0, 1, 0.1)}
+          {(
+            [
+              ['showBars', 'ノートのバー'],
+              ['showKeyboard', '鍵盤を表示'],
+              ['showHud', 'タイトルと採点を表示'],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key}>
+              <input
+                type="checkbox"
+                checked={settings[key]}
+                onChange={(e) => change({ [key]: e.target.checked })}
+              />
+              {label}
+            </label>
+          ))}
+          <button
+            onClick={() =>
+              change({ showBars: false, showKeyboard: false, showHud: false, style: 'sparks' })
+            }
+          >
+            エフェクトだけにする
+          </button>
           <label>
             <input
               type="checkbox"
@@ -401,6 +448,19 @@ export default function Stage(props: ViewProps) {
               onChange={(e) => change({ labels: e.target.checked })}
             />
             音名を表示
+          </label>
+          <label className="stage-field">
+            <span>音名の表記</span>
+            <select
+              aria-label="音名の表記"
+              value={settings.labelFormat}
+              onChange={(e) =>
+                change({ labelFormat: e.target.value as StageSettings['labelFormat'] })
+              }
+            >
+              <option value="english">C・D・E（英語）</option>
+              <option value="solfege">ド・レ・ミ</option>
+            </select>
           </label>
           <label>
             <input
@@ -417,51 +477,52 @@ export default function Stage(props: ViewProps) {
 }
 export function StageWindow() {
   const [error, setError] = useState(''),
-    { state, song, frame } = useStage(setError),
+    { state, song, frame, optimistic, settled } = useStage(setError),
     [view, setView] = useState<StageView | null>(null),
     [calibrate, setCalibrate] = useState(false);
-  const pending = useRef<Partial<StageSettings>>({}),
-    sending = useRef(false);
-  const change = useCallback((patch: Partial<StageSettings>) => {
-    pending.current = { ...pending.current, ...patch };
-    const flush = async () => {
-      if (sending.current) return;
-      sending.current = true;
-      while (Object.keys(pending.current).length) {
-        const p = pending.current;
-        pending.current = {};
-        try {
-          await stageCommand('settings', { patch: p });
-        } catch (e) {
-          setError(String(e));
-        }
-      }
-      sending.current = false;
-    };
-    void flush();
-  }, []);
+  const change = useStageChange(setError, optimistic, settled);
   useEffect(() => {
+    let dead = false;
+    let off: (() => void) | undefined;
+    void subscribeInteraction(setCalibrate).then((unsubscribe) => {
+      if (dead) unsubscribe();
+      else off = unsubscribe;
+    });
+    void stageCommand<boolean>('interaction')
+      .then(setCalibrate)
+      .catch((e) => setError(String(e)));
     void stageCommand<StageView>('view')
       .then(setView)
       .catch((e) => setError(String(e)));
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') void stageCommand('close');
-      if (e.key.toLowerCase() === 'c') setCalibrate((v) => !v);
+      if (e.key.toLowerCase() === 'c')
+        void stageCommand<boolean>('interaction').then((editing) =>
+          stageCommand('interaction', { editing: !editing }),
+        );
     };
     window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    return () => {
+      dead = true;
+      off?.();
+      window.removeEventListener('keydown', key);
+    };
   }, []);
   return (
     <main className="stage-fullscreen">
       {view && (
         <StageCanvas frame={frame} song={song} view={view} calibrate={calibrate} change={change} />
       )}
-      <div className="stage-exit">
-        <button onClick={() => setCalibrate(!calibrate)}>C · 位置合わせ</button>
-        <button onClick={() => void stageCommand('close')}>Esc · 閉じる</button>
-        {state.waiting.length > 0 && <span>正しい音を待っています</span>}
-        {error && <span role="alert">{error}</span>}
-      </div>
+      {(!state.settings.clickThrough || calibrate) && (
+        <div className="stage-exit">
+          <button onClick={() => void stageCommand('interaction', { editing: !calibrate })}>
+            {calibrate ? '位置を固定' : 'C · 位置合わせ'}
+          </button>
+          <button onClick={() => void stageCommand('close')}>Esc · 閉じる</button>
+          {state.waiting.length > 0 && <span>正しい音を待っています</span>}
+          {error && <span role="alert">{error}</span>}
+        </div>
+      )}
     </main>
   );
 }

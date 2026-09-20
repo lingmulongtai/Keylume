@@ -1,6 +1,8 @@
-use crate::piano::{self, PianoSettings, PianoSynth};
+use crate::instrument_fx::{Effects, InstrumentFx};
+use crate::piano::{PianoSettings, PianoSynth};
+use crate::sound_library::SoundId;
 use crate::{
-    drums::DrumSynth,
+    drums::{DrumSettings, DrumSynth, PadSound},
     groove::{LoopCommand, LoopStatus, Looper, SoundEvent},
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -34,12 +36,17 @@ struct Shared {
     looper: Arc<Mutex<Looper>>,
     enabled: AtomicBool,
     blocked: AtomicBool,
+    performing: AtomicBool,
     volume: AtomicU32,
     octave: AtomicI8,
     peak: AtomicU32,
     frames: AtomicU32,
     drums: AtomicBool,
     drum_volume: AtomicU32,
+    drum_kit: AtomicU32,
+    drum_pads: [[AtomicU32; 5]; 16],
+    effects: [AtomicU32; 8],
+    patch: AtomicU32,
     loop_mode: AtomicU32,
     loop_beat: AtomicU64,
     loop_count: AtomicU32,
@@ -47,6 +54,32 @@ struct Shared {
     loop_bpm: AtomicU64,
     loop_full: AtomicBool,
     loop_metronome: AtomicBool,
+    loop_undo: AtomicBool,
+}
+impl Shared {
+    fn hit_drum(&self, synth: &mut DrumSynth, pad: u8, velocity: u8) {
+        if pad == 16 {
+            synth.hit(16, velocity);
+            return;
+        }
+        let Some(params) = self.drum_pads.get(pad as usize) else {
+            return;
+        };
+        let p = params
+            .each_ref()
+            .map(|v| f32::from_bits(v.load(Ordering::Relaxed)));
+        synth.hit_sound(
+            PadSound {
+                kind: p[0] as u8,
+                tune: p[1],
+                decay: p[2],
+                level: p[3],
+                pan: p[4],
+            },
+            self.drum_kit.load(Ordering::Relaxed) as u8,
+            velocity,
+        );
+    }
 }
 #[derive(Clone)]
 pub struct PianoBus {
@@ -54,6 +87,14 @@ pub struct PianoBus {
     shared: Arc<Shared>,
 }
 impl PianoBus {
+    pub fn is_performing(&self) -> bool {
+        self.shared.performing.load(Ordering::Acquire)
+    }
+    pub fn set_performing(&self, performing: bool) {
+        if self.shared.performing.swap(performing, Ordering::AcqRel) != performing {
+            self.panic();
+        }
+    }
     pub fn octave(&self) -> i8 {
         self.shared.octave.load(Ordering::Acquire)
     }
@@ -61,6 +102,7 @@ impl PianoBus {
         if bytes.len() != 3
             || !self.shared.enabled.load(Ordering::Acquire)
             || self.shared.blocked.load(Ordering::Acquire)
+            || !self.is_performing()
         {
             return;
         }
@@ -83,6 +125,7 @@ impl PianoBus {
             || !self.shared.drums.load(Ordering::Acquire)
             || !self.shared.enabled.load(Ordering::Acquire)
             || self.shared.blocked.load(Ordering::Acquire)
+            || !self.is_performing()
         {
             return;
         }
@@ -101,6 +144,7 @@ impl PianoBus {
     pub fn loop_command(&self, command: LoopCommand) -> Result<(), String> {
         if !self.shared.enabled.load(Ordering::Acquire)
             || self.shared.blocked.load(Ordering::Acquire)
+            || !self.is_performing()
         {
             return Err("ピアノをオンにして音声出力が準備できてから操作してください".into());
         }
@@ -123,6 +167,7 @@ impl PianoBus {
             bpm: f64::from_bits(self.shared.loop_bpm.load(Ordering::Relaxed)),
             metronome: self.shared.loop_metronome.load(Ordering::Relaxed),
             full: self.shared.loop_full.load(Ordering::Relaxed),
+            can_undo: self.shared.loop_undo.load(Ordering::Relaxed),
         }
     }
     pub fn panic(&self) {
@@ -142,7 +187,7 @@ pub struct Piano {
     wake: Sender<()>,
 }
 impl Piano {
-    pub fn new() -> Self {
+    pub fn new(library: Arc<super::sound_library::Library>) -> Self {
         let (tx, rx) = bounded(1024);
         let (wake, wakeup) = bounded(1);
         let shared = Arc::new(Shared {
@@ -150,19 +195,30 @@ impl Piano {
             looper: Arc::new(Mutex::new(Looper::default())),
             enabled: AtomicBool::new(false),
             blocked: AtomicBool::new(false),
+            performing: AtomicBool::new(true),
             volume: AtomicU32::new(0.5f32.to_bits()),
             octave: AtomicI8::new(0),
             peak: AtomicU32::new(0),
             frames: AtomicU32::new(0),
             drums: AtomicBool::new(true),
             drum_volume: AtomicU32::new(0.7f32.to_bits()),
+            drum_kit: AtomicU32::new(0),
+            drum_pads: DrumSettings::default().banks[0].map(|p| {
+                [p.kind as f32, p.tune, p.decay, p.level, p.pan]
+                    .map(|v| AtomicU32::new(v.to_bits()))
+            }),
+            effects: InstrumentFx::default()
+                .values()
+                .map(|v| AtomicU32::new(v.to_bits())),
             loop_mode: AtomicU32::new(0),
+            patch: AtomicU32::new(0),
             loop_beat: AtomicU64::new(0),
             loop_count: AtomicU32::new(0),
             loop_bars: AtomicU32::new(2),
             loop_bpm: AtomicU64::new(100f64.to_bits()),
             loop_full: AtomicBool::new(false),
             loop_metronome: AtomicBool::new(true),
+            loop_undo: AtomicBool::new(false),
         });
         let bus = PianoBus { tx, shared };
         let config = Arc::new(Mutex::new(PianoSettings::default()));
@@ -193,7 +249,8 @@ impl Piano {
                 } else {
                     false
                 };
-                let manual_restart = next.sound != current.sound
+                let bank_key = |id: &str| SoundId::parse(id).map(|s| s.key).unwrap_or_default();
+                let manual_restart = bank_key(&next.sound) != bank_key(&current.sound)
                     || next.enabled != current.enabled
                     || next.output_device != current.output_device
                     || next.buffer_frames != current.buffer_frames;
@@ -211,12 +268,8 @@ impl Piano {
                             .command(LoopCommand::Stop);
                     }
                     if !next.enabled {
-                        thread_bus
-                            .shared
-                            .looper
-                            .lock()
-                            .unwrap()
-                            .command(LoopCommand::Clear);
+                        thread_bus.shared.looper.lock().unwrap().reset();
+                        thread_bus.shared.loop_undo.store(false, Ordering::Release);
                         thread_bus.shared.loop_mode.store(0, Ordering::Release);
                         thread_bus.shared.loop_count.store(0, Ordering::Release);
                     }
@@ -243,11 +296,9 @@ impl Piano {
                 } else if stream.is_none() && Instant::now() >= retry {
                     thread_status.lock().unwrap().state = "loading".into();
                     let result = (|| {
-                        if font.as_ref().is_none_or(|(id, _)| id != &current.sound) {
-                            font = Some((
-                                current.sound.clone(),
-                                piano::sound_font_for(&current.sound)?,
-                            ));
+                        let key = bank_key(&current.sound);
+                        if font.as_ref().is_none_or(|(id, _)| id != &key) {
+                            font = Some((key, library.load(&current.sound)?));
                         }
                         start(
                             &font.as_ref().unwrap().1,
@@ -294,10 +345,37 @@ impl Piano {
         if *config == *settings {
             return;
         }
+        for (atomic, value) in self
+            .bus
+            .shared
+            .effects
+            .iter()
+            .zip(settings.effects.values())
+        {
+            atomic.store(value.to_bits(), Ordering::Release);
+        }
         self.bus
             .shared
             .drums
             .store(settings.drums, Ordering::Release);
+        self.bus
+            .shared
+            .drum_kit
+            .store(settings.drum_kit.kit as u32, Ordering::Release);
+        for (atomic, p) in self
+            .bus
+            .shared
+            .drum_pads
+            .iter()
+            .zip(&settings.drum_kit.banks[settings.drum_kit.kit as usize])
+        {
+            for (a, v) in atomic
+                .iter()
+                .zip([p.kind as f32, p.tune, p.decay, p.level, p.pan])
+            {
+                a.store(v.to_bits(), Ordering::Release);
+            }
+        }
         self.bus
             .shared
             .drum_volume
@@ -310,8 +388,13 @@ impl Piano {
             .shared
             .octave
             .store(settings.octave, Ordering::Release);
-        if settings.sound != config.sound
-            || settings.octave != config.octave
+        if let Ok(id) = SoundId::parse(&settings.sound) {
+            self.bus.shared.patch.store(
+                ((id.bank as u32) << 8) | id.program as u32,
+                Ordering::Release,
+            );
+        }
+        if settings.octave != config.octave
             || settings.enabled != config.enabled
             || settings.output_device != config.output_device
             || settings.buffer_frames != config.buffer_frames
@@ -338,7 +421,7 @@ impl Piano {
         let mut status = self.status.lock().unwrap().clone();
         status.peak = f32::from_bits(self.bus.shared.peak.load(Ordering::Relaxed));
         status.buffer_frames = self.bus.shared.frames.load(Ordering::Relaxed);
-        status.muted = self.bus.shared.blocked.load(Ordering::Acquire);
+        status.muted = self.bus.shared.blocked.load(Ordering::Acquire) || !self.bus.is_performing();
         status
     }
     pub fn stop(&self) {
@@ -437,6 +520,12 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     let mut loop_synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
     let mut drums = DrumSynth::new(config.sample_rate.0);
     let mut loop_drums = DrumSynth::new(config.sample_rate.0);
+    let mut effects = Effects::new(
+        config.sample_rate.0,
+        InstrumentFx::from_values(std::array::from_fn(|i| {
+            f32::from_bits(shared.effects[i].load(Ordering::Acquire))
+        })),
+    );
     let loop_session = shared.looper.clone();
     let mut loop_events = Vec::with_capacity(8193);
     let mut loop_left = [0.; 256];
@@ -460,12 +549,17 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     loop_synth.panic();
                     drums.panic();
                     loop_drums.panic();
+                    effects.reset();
                     looper.command(LoopCommand::Stop);
                     generation = next;
                 }
                 synth.set_octave(shared.octave.load(Ordering::Acquire));
+                let patch = shared.patch.load(Ordering::Acquire);
+                synth.set_patch((patch >> 8) as u16, patch as u8);
+                loop_synth.set_patch((patch >> 8) as u16, patch as u8);
                 let active = shared.enabled.load(Ordering::Acquire)
-                    && !shared.blocked.load(Ordering::Acquire);
+                    && !shared.blocked.load(Ordering::Acquire)
+                    && shared.performing.load(Ordering::Acquire);
                 for event in rx.try_iter().take(1024) {
                     if active && event.generation == generation {
                         if let Some(command) = event.command {
@@ -479,7 +573,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                             looper.capture(sound, shared.octave.load(Ordering::Acquire));
                             match sound {
                                 SoundEvent::Piano(screen, bytes) => synth.midi(screen, bytes),
-                                SoundEvent::Drum(pad, velocity) => drums.hit(pad, velocity),
+                                SoundEvent::Drum(pad, velocity) => {
+                                    shared.hit_drum(&mut drums, pad, velocity)
+                                }
                                 SoundEvent::Release => {}
                             }
                         }
@@ -490,6 +586,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     .store((data.len() / channels) as u32, Ordering::Relaxed);
                 let volume = f32::from_bits(shared.volume.load(Ordering::Relaxed));
                 let drum_volume = f32::from_bits(shared.drum_volume.load(Ordering::Relaxed));
+                let effect_settings = InstrumentFx::from_values(std::array::from_fn(|i| {
+                    f32::from_bits(shared.effects[i].load(Ordering::Relaxed))
+                }));
                 let mut peak = 0f32;
                 for chunk in data.chunks_mut(64 * channels) {
                     let frames = chunk.len() / channels;
@@ -498,16 +597,24 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                         for event in &loop_events {
                             match *event {
                                 SoundEvent::Piano(screen, bytes) => loop_synth.midi(screen, bytes),
-                                SoundEvent::Drum(pad, velocity) => loop_drums.hit(pad, velocity),
+                                SoundEvent::Drum(pad, velocity) => {
+                                    shared.hit_drum(&mut loop_drums, pad, velocity)
+                                }
                                 SoundEvent::Release => loop_synth.panic(),
                             }
                         }
                         synth.render(&mut left[..frames], &mut right[..frames]);
                         loop_synth.render(&mut loop_left[..frames], &mut loop_right[..frames]);
                         for i in 0..frames {
-                            let d = (drums.sample() + loop_drums.sample()) * drum_volume;
-                            left[i] = (left[i] + loop_left[i]) * volume + d;
-                            right[i] = (right[i] + loop_right[i]) * volume + d;
+                            left[i] += loop_left[i];
+                            right[i] += loop_right[i];
+                        }
+                        effects.process(&mut left[..frames], &mut right[..frames], effect_settings);
+                        for i in 0..frames {
+                            let (dl, dr) = drums.stereo();
+                            let (ll, lr) = loop_drums.stereo();
+                            left[i] = left[i] * volume + (dl + ll) * drum_volume;
+                            right[i] = right[i] * volume + (dr + lr) * drum_volume;
                         }
                     }
                     for (i, frame) in chunk.chunks_mut(channels).enumerate() {
@@ -548,6 +655,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     .loop_metronome
                     .store(looper.config.metronome, Ordering::Relaxed);
                 shared.loop_full.store(looper.full, Ordering::Relaxed);
+                shared.loop_undo.store(looper.can_undo(), Ordering::Relaxed);
                 shared.peak.store(peak.to_bits(), Ordering::Relaxed);
             },
             move |e| {

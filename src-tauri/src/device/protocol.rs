@@ -1,5 +1,15 @@
 use super::constants::*;
 use crate::model::LedDef;
+/// Configure the owned DAW session once, without overriding a later Custom-mode selection.
+pub fn instrument_controls() -> [[u8; 3]; 5] {
+    [
+        [0xb6, 68, 0],
+        [0xb6, 69, 0],
+        [0xb6, 71, 1],
+        [0xb6, 30, 2],
+        [0xb6, 31, 1],
+    ]
+}
 pub fn sysex(body: &[u8]) -> Result<Vec<u8>, String> {
     if body.iter().any(|&b| b > 127) {
         return Err("SysEx data must be 7-bit".into());

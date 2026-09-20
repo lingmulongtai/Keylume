@@ -1,5 +1,7 @@
 # Third-party notices
 
+Optional instrument library: **GeneralUser GS 2.0.3**, S. Christian Collins. Downloaded only when requested; not embedded in the installer. Original license and documentation are in `licenses/generaluser/`. See https://www.schristiancollins.com/generaluser.php and `docs/sound-library.md` for the source, integrity check, and supported SoundFont features.
+
 Keylume is an independent application and is not affiliated with Novation or Focusrite. No Novation logo, product photograph, or GPL control-surface implementation is included.
 
 Fonts are bundled for offline use under the SIL Open Font License 1.1:

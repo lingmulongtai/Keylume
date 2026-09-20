@@ -1,4 +1,6 @@
 import { previewStageInput } from './stage/api';
+import { defaultController } from './controller';
+import { mergeSettings } from './settings-patch';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
@@ -11,7 +13,7 @@ import type {
   Color,
   PianoStatus,
 } from './types';
-import { effects, uid } from './types';
+import { effects, uid, defaultInstrumentFx } from './types';
 import layout from '../resources/layout.json';
 import presets from '../resources/presets.json';
 import { previewInput, renderPreview } from './preview';
@@ -23,6 +25,7 @@ export async function getInputState(): Promise<InputState> {
   return native ? invoke('get_input_state') : structuredClone(liveInput.state);
 }
 export const defaults: Settings = {
+  controller: defaultController(),
   schema: 1,
   activePreset: 'aurora',
   masterBrightness: 1,
@@ -64,9 +67,21 @@ export const defaults: Settings = {
   checkForUpdates: true,
   includePrereleases: true,
   piano: {
+    favorites: [
+      'upright',
+      'bright',
+      'fm-piano',
+      'honky-tonk',
+      'generaluser:0:0',
+      'generaluser:0:81',
+      'generaluser:0:89',
+      'generaluser:0:48',
+    ],
+    effects: { ...defaultInstrumentFx },
     enabled: false,
     sound: 'upright',
     drums: true,
+    drumKit: defaultDrumKit(),
     drumVolume: 0.7,
     volume: 0.5,
     volumeFader: 9,
@@ -121,7 +136,11 @@ try {
       settings: {
         ...defaults,
         ...saved.settings,
-        piano: { ...defaults.piano, ...saved.settings.piano },
+        piano: {
+          ...defaults.piano,
+          ...saved.settings.piano,
+          effects: { ...defaultInstrumentFx, ...saved.settings.piano?.effects },
+        },
       },
       status: { ...defaultStatus },
     };
@@ -401,6 +420,13 @@ export async function command<T = unknown>(
       mock.settings.coexistMode = args.mode as Settings['coexistMode'];
       mock.status.effectiveMode = mock.settings.coexistMode;
       break;
+    case 'patch_settings': {
+      const settings = mergeSettings(mock.settings, args.patch);
+      if (!settings.mock) throw Error('実機接続はデスクトップ版で利用できます');
+      mock.settings = settings;
+      mock.status.effectiveMode = mock.settings.coexistMode;
+      break;
+    }
     case 'save_settings': {
       const settings = args.settings as Settings;
       if (!settings.mock) throw Error('実機接続はデスクトップ版で利用できます');
@@ -439,6 +465,8 @@ export async function command<T = unknown>(
       mock.status.probe = null;
       break;
     }
+    case 'controller_learn':
+      break;
     case 'piano_panic':
       liveInput.reset();
       emit('input_state', structuredClone(liveInput.state));
@@ -544,3 +572,4 @@ export async function getPianoState(): Promise<PianoStatus> {
         muted: false,
       };
 }
+import { defaultDrumKit } from './drum-kits';

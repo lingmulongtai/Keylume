@@ -82,6 +82,12 @@ pub struct StageSettings {
     pub style: String,
     pub color: String,
     pub labels: bool,
+    pub label_format: String,
+    pub show_bars: bool,
+    pub show_keyboard: bool,
+    pub show_hud: bool,
+    pub transparent: bool,
+    pub click_through: bool,
     pub guides: bool,
     pub particles: f64,
     pub latency_ms: f64,
@@ -106,6 +112,12 @@ impl Default for StageSettings {
             style: "glow".into(),
             color: "#75c8fa".into(),
             labels: true,
+            label_format: "english".into(),
+            show_bars: true,
+            show_keyboard: true,
+            show_hud: true,
+            transparent: false,
+            click_through: false,
             guides: false,
             particles: 0.6,
             latency_ms: 0.,
@@ -119,8 +131,21 @@ impl Default for StageSettings {
 impl StageSettings {
     pub fn validate(&self) -> Result<(), String> {
         if !["live", "practice"].contains(&self.mode.as_str())
+            || !["english", "solfege"].contains(&self.label_format.as_str())
             || !["timing", "wait"].contains(&self.practice_mode.as_str())
-            || !["clean", "glow", "particles", "rainbow"].contains(&self.style.as_str())
+            || ![
+                "clean",
+                "glow",
+                "particles",
+                "rainbow",
+                "sparks",
+                "flame",
+                "aurora",
+                "rings",
+                "laser",
+                "snow",
+            ]
+            .contains(&self.style.as_str())
             || !(0.25..=2.).contains(&self.speed)
             || !(1.5..=12.).contains(&self.look_ahead)
             || !(2.0..=16.).contains(&self.trail)

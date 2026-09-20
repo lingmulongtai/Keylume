@@ -30,9 +30,25 @@ export interface StageSettings {
   left: number;
   right: number;
   lineY: number;
-  style: 'clean' | 'glow' | 'particles' | 'rainbow';
+  style:
+    | 'clean'
+    | 'glow'
+    | 'particles'
+    | 'rainbow'
+    | 'sparks'
+    | 'flame'
+    | 'aurora'
+    | 'rings'
+    | 'laser'
+    | 'snow';
   color: string;
   labels: boolean;
+  labelFormat: 'english' | 'solfege';
+  showBars: boolean;
+  showKeyboard: boolean;
+  showHud: boolean;
+  transparent: boolean;
+  clickThrough: boolean;
   guides: boolean;
   particles: number;
   latencyMs: number;
@@ -55,6 +71,12 @@ export const defaultStageSettings: StageSettings = {
   style: 'glow',
   color: '#75c8fa',
   labels: true,
+  labelFormat: 'english',
+  showBars: true,
+  showKeyboard: true,
+  showHud: true,
+  transparent: false,
+  clickThrough: false,
   guides: false,
   particles: 0.6,
   latencyMs: 0,

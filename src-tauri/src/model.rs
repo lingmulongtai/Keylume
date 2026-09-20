@@ -435,6 +435,7 @@ pub struct Settings {
     pub check_for_updates: bool,
     pub include_prereleases: bool,
     pub piano: crate::piano::PianoSettings,
+    pub controller: crate::controller::ControllerSettings,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -485,12 +486,41 @@ impl Default for Settings {
             check_for_updates: true,
             include_prereleases: true,
             piano: Default::default(),
+            controller: Default::default(),
         }
     }
 }
 impl Settings {
+    pub fn patched(&self, patch: Value) -> Result<Self, String> {
+        fn merge(target: &mut Value, patch: Value, depth: u8) -> Result<(), String> {
+            if depth > 12 {
+                return Err("設定の階層が深すぎます".into());
+            }
+            if let (Some(to), Some(from)) = (target.as_object_mut(), patch.as_object()) {
+                for (key, value) in from {
+                    merge(
+                        to.entry(key).or_insert(Value::Null),
+                        value.clone(),
+                        depth + 1,
+                    )?;
+                }
+            } else {
+                *target = patch;
+            }
+            Ok(())
+        }
+        if !patch.is_object() {
+            return Err("設定の差分が不正です".into());
+        }
+        let mut value = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        merge(&mut value, patch, 0)?;
+        let next: Self = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        next.validate()?;
+        Ok(next)
+    }
     pub fn validate(&self) -> Result<(), String> {
         self.piano.validate()?;
+        self.controller.validate()?;
         if self.schema != 1
             || ![15, 30, 60].contains(&self.fps)
             || !(0.0..=1.0).contains(&self.master_brightness)
@@ -512,6 +542,23 @@ impl Settings {
             return Err("時間は HH:MM で指定してください".into());
         }
         Ok(())
+    }
+}
+#[cfg(test)]
+mod settings_patch_tests {
+    use super::*;
+    #[test]
+    fn patch_preserves_hardware_values_and_validates_nested_fields() {
+        let mut settings = Settings::default();
+        settings.piano.effects.reverb = 0.8;
+        let next=settings.patched(serde_json::json!({"piano":{"volume":0.3},"controller":{"desktop":{"btn.undo":{"action":"shortcut","value":"Ctrl+Y"}}}})).unwrap();
+        assert_eq!(next.piano.volume, 0.3);
+        assert_eq!(next.piano.effects.reverb, 0.8);
+        assert!(next.controller.desktop.contains_key("fbtn.9"));
+        assert!(settings
+            .patched(serde_json::json!({"piano":{"effects":{"cutoff":5}}}))
+            .is_err());
+        assert_eq!(settings.piano.volume, 0.5);
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

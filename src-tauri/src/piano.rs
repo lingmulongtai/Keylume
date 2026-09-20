@@ -8,6 +8,7 @@ pub struct PianoSettings {
     pub enabled: bool,
     pub sound: String,
     pub drums: bool,
+    pub drum_kit: crate::drums::DrumSettings,
     pub drum_volume: f32,
     pub volume: f32,
     pub volume_fader: u8,
@@ -15,6 +16,8 @@ pub struct PianoSettings {
     pub output_device: String,
     pub buffer_frames: u32,
     pub mute_with_daw: bool,
+    pub effects: crate::instrument_fx::InstrumentFx,
+    pub favorites: Vec<String>,
 }
 impl Default for PianoSettings {
     fn default() -> Self {
@@ -22,6 +25,7 @@ impl Default for PianoSettings {
             enabled: false,
             sound: "upright".into(),
             drums: true,
+            drum_kit: Default::default(),
             drum_volume: 0.7,
             volume: 0.5,
             volume_fader: 9,
@@ -29,13 +33,37 @@ impl Default for PianoSettings {
             output_device: String::new(),
             buffer_frames: 256,
             mute_with_daw: true,
+            effects: Default::default(),
+            favorites: [
+                "upright",
+                "bright",
+                "fm-piano",
+                "honky-tonk",
+                "generaluser:0:0",
+                "generaluser:0:81",
+                "generaluser:0:89",
+                "generaluser:0:48",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
         }
     }
 }
 impl PianoSettings {
     pub fn validate(&self) -> Result<(), String> {
-        if !["upright", "bright", "fm-piano", "honky-tonk"].contains(&self.sound.as_str())
-            || !(0.0..=1.0).contains(&self.volume)
+        self.effects.validate()?;
+        self.drum_kit.validate()?;
+        if self.favorites.len() > 128
+            || self
+                .favorites
+                .iter()
+                .any(|id| crate::sound_library::SoundId::parse(id).is_err())
+        {
+            return Err("音源のお気に入りが不正です".into());
+        }
+        crate::sound_library::SoundId::parse(&self.sound)?;
+        if !(0.0..=1.0).contains(&self.volume)
             || !(0.0..=1.0).contains(&self.drum_volume)
             || self.volume_fader > 9
             || !(-3..=3).contains(&self.octave)
@@ -79,6 +107,7 @@ pub struct PianoSynth {
     // Track screen and physical notes separately, including their original MIDI channel.
     held: [[[Option<u8>; 128]; 16]; 2],
     octave: i8,
+    patch: (u16, u8),
 }
 impl PianoSynth {
     pub fn new(font: &Arc<SoundFont>, sample_rate: i32) -> Result<Self, String> {
@@ -87,15 +116,38 @@ impl PianoSynth {
         settings.enable_reverb_and_chorus = false;
         let mut synth = Synthesizer::new(font, &settings).map_err(|e| e.to_string())?;
         synth.set_master_volume(0.7);
-        Ok(Self {
+        let mut instrument = Self {
             synth,
             held: [[[None; 128]; 16]; 2],
             octave: 0,
-        })
+            patch: (0, 0),
+        };
+        instrument.apply_patch();
+        Ok(instrument)
     }
     pub fn panic(&mut self) {
         self.synth.reset();
+        self.apply_patch();
         self.held = [[[None; 128]; 16]; 2];
+    }
+    fn apply_patch(&mut self) {
+        for channel in 0..16 {
+            // RustySynth adds128 to channel10's bank; explicitly select the same instrument on all inputs.
+            self.synth.process_midi_message(
+                channel,
+                0xb0,
+                0,
+                self.patch.0 as i32 - if channel == 9 { 128 } else { 0 },
+            );
+            self.synth
+                .process_midi_message(channel, 0xc0, self.patch.1 as i32, 0);
+        }
+    }
+    pub fn set_patch(&mut self, bank: u16, program: u8) {
+        if self.patch != (bank, program) {
+            self.patch = (bank, program);
+            self.panic();
+        }
     }
     pub fn set_octave(&mut self, octave: i8) {
         if self.octave != octave {

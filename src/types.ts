@@ -78,9 +78,12 @@ export interface Profile {
   priority: number;
 }
 export interface PianoSettings {
+  favorites: string[];
+  effects: InstrumentFx;
   enabled: boolean;
   sound: string;
   drums: boolean;
+  drumKit: import('./drum-kits').DrumSettings;
   drumVolume: number;
   volume: number;
   volumeFader: number;
@@ -89,6 +92,26 @@ export interface PianoSettings {
   bufferFrames: number;
   muteWithDaw: boolean;
 }
+export interface InstrumentFx {
+  reverb: number;
+  delay: number;
+  cutoff: number;
+  resonance: number;
+  chorus: number;
+  drive: number;
+  width: number;
+  tremolo: number;
+}
+export const defaultInstrumentFx: InstrumentFx = {
+  reverb: 0,
+  delay: 0,
+  cutoff: 1,
+  resonance: 0,
+  chorus: 0,
+  drive: 0,
+  width: 0.5,
+  tremolo: 0,
+};
 export interface PianoStatus {
   state: string;
   device: string;
@@ -99,6 +122,7 @@ export interface PianoStatus {
   muted: boolean;
 }
 export interface Settings {
+  controller: import('./controller').ControllerSettings;
   schema: number;
   activePreset: string;
   masterBrightness: number;

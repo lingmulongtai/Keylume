@@ -42,6 +42,7 @@ pub struct Performance {
     dirty: AtomicBool,
     window_generation: AtomicU64,
     windows_op: Mutex<()>,
+    calibrating: AtomicBool,
     pub engine: Mutex<PerformanceEngine>,
     epoch: Instant,
     views: Mutex<HashMap<String, View>>,
@@ -57,6 +58,7 @@ impl Performance {
             dirty: AtomicBool::new(false),
             window_generation: AtomicU64::new(0),
             windows_op: Mutex::new(()),
+            calibrating: AtomicBool::new(false),
             engine: Mutex::new(PerformanceEngine::new(settings)),
             epoch: Instant::now(),
             views: Mutex::new(HashMap::new()),
@@ -197,6 +199,38 @@ fn desktop(ms: &[Monitor]) -> Result<Rect, String> {
         height: (bottom - y as i64) as u32,
     })
 }
+pub fn interaction(app: &tauri::AppHandle, core: &Core, editing: bool) -> Result<(), String> {
+    core.performance
+        .calibrating
+        .store(editing, Ordering::Release);
+    let through = core
+        .performance
+        .engine
+        .lock()
+        .unwrap()
+        .settings
+        .click_through
+        && !editing;
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("stage-") {
+            window
+                .set_ignore_cursor_events(through)
+                .map_err(|e| e.to_string())?;
+            if editing {
+                let _ = window.set_focus();
+            }
+        }
+    }
+    let _ = app.emit("stage_interaction", editing);
+    Ok(())
+}
+pub fn close_views(app: &tauri::AppHandle) {
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("stage-") {
+            let _ = window.close();
+        }
+    }
+}
 #[tauri::command]
 pub async fn stage_command(
     name: String,
@@ -206,6 +240,12 @@ pub async fn stage_command(
     window: tauri::WebviewWindow,
 ) -> Result<Value, String> {
     match name.as_str() {
+        "interaction" => {
+            if let Some(editing) = args["editing"].as_bool() {
+                interaction(&app, &core, editing)?;
+            }
+            return Ok(json!(core.performance.calibrating.load(Ordering::Acquire)));
+        }
         "monitors" => return Ok(json!(monitors(&app)?)),
         "view" => {
             return Ok(json!(core
@@ -274,6 +314,9 @@ pub async fn stage_command(
                 )
                 .title("Keylume · 演奏画面")
                 .decorations(false)
+                .transparent(true)
+                .shadow(false)
+                .always_on_top(true)
                 .resizable(false)
                 .visible(false)
                 .build()
@@ -282,10 +325,19 @@ pub async fn stage_command(
                     .map_err(|e| e.to_string())?;
                 w.set_size(PhysicalSize::new(m.rect.width, m.rect.height))
                     .map_err(|e| e.to_string())?;
-                w.set_always_on_top(true).map_err(|e| e.to_string())?;
                 w.show().map_err(|e| e.to_string())?;
-                let _ = w.set_focus();
+                if !core
+                    .performance
+                    .engine
+                    .lock()
+                    .unwrap()
+                    .settings
+                    .click_through
+                {
+                    let _ = w.set_focus();
+                }
             }
+            interaction(&app, &core, false)?;
             return Ok(Value::Null);
         }
         "close" => {
@@ -329,6 +381,13 @@ pub async fn stage_command(
     drop(e);
     if name == "settings" || name == "load" {
         core.performance.dirty.store(true, Ordering::Release);
+    }
+    if name == "settings" {
+        interaction(
+            &app,
+            &core,
+            core.performance.calibrating.load(Ordering::Acquire),
+        )?;
     }
     let _ = app.emit("stage_state", &state);
     Ok(json!(state))

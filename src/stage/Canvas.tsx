@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { keys, noteName } from './geometry';
+import { drawNoteEffects } from './visual-effects';
+import { calibrationHandle, keys, noteColor, noteName } from './geometry';
 import type { Song, StageSnapshot, StageView, StageSettings } from './types';
 type Frame = { state: StageSnapshot; received: number };
 export default function StageCanvas({
@@ -17,6 +18,7 @@ export default function StageCanvas({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null),
     latest = useRef({ song, view, calibrate, change });
+  const draggingSettings = useRef<StageSettings | null>(null);
   latest.current = { song, view, calibrate, change };
   useEffect(() => {
     const c = canvas.current!;
@@ -39,9 +41,11 @@ export default function StageCanvas({
         raf = requestAnimationFrame(draw);
         return;
       }
-      const a = s.settings,
+      const a = draggingSettings.current ?? s.settings,
         d = view.desktop,
         m = view.monitor;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
       ctx.setTransform(
         w / m.width,
         0,
@@ -51,7 +55,7 @@ export default function StageCanvas({
         ((d.y - m.y) * h) / m.height,
       );
       ctx.fillStyle = '#080b10';
-      ctx.fillRect(m.x - d.x, m.y - d.y, m.width, m.height);
+      if (!a.transparent) ctx.fillRect(m.x - d.x, m.y - d.y, m.width, m.height);
       const left = a.left * d.width,
         width = (a.right - a.left) * d.width,
         line = a.lineY * d.height,
@@ -95,11 +99,12 @@ export default function StageCanvas({
         start: number,
         end: number,
         velocity: number,
-        id: number,
         live: boolean,
+        dark: boolean,
       ) {
+        if (!a.showBars) return;
         const k = map.get(pitch);
-        if (!k) return;
+        if (!k || k.black !== dark) return;
         const x = left + k.x * width + 2,
           bw = Math.max(2, k.width * width - 4);
         let top, bottom;
@@ -113,7 +118,7 @@ export default function StageCanvas({
         if (bottom < 0 || top > line) return;
         top = Math.max(-4, top);
         bottom = Math.min(line, bottom);
-        const color = a.style === 'rainbow' ? `hsl(${(pitch * 29) % 360} 80% 68%)` : a.color;
+        const color = noteColor(pitch, a.color, a.style === 'rainbow');
         ctx.globalAlpha = 0.55 + (velocity / 127) * 0.45;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
@@ -121,104 +126,78 @@ export default function StageCanvas({
         ctx.beginPath();
         ctx.roundRect(x, top, bw, Math.max(3, bottom - top), Math.min(6, bw / 3));
         ctx.fill();
+        if (k.black) {
+          ctx.strokeStyle = a.color;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
         if (a.labels && bw > 24 && bottom - top > 24) {
-          ctx.fillStyle = '#09121d';
+          ctx.fillStyle = k.black ? '#f2f5fa' : '#09121d';
           ctx.font = `600 ${Math.min(18, bw * 0.42)}px sans-serif`;
           ctx.textAlign = 'center';
-          ctx.fillText(noteName(pitch), x + bw / 2, Math.min(bottom - 7, top + 23));
-        }
-        if (live && end >= clock - 0.1 && (a.style === 'particles' || a.style === 'rainbow')) {
-          ctx.fillStyle = color;
-          for (let i = 0; i < Math.round(12 * a.particles); i++) {
-            const t = (((clock - start + i * 0.071 + id * 0.013) % 1) + 1) % 1;
-            const dx = Math.sin(id * 19 + i * 17) * bw * 2 * t;
-            ctx.globalAlpha = 1 - t;
-            ctx.beginPath();
-            ctx.arc(
-              x + bw / 2 + dx,
-              line - t * 150 * (0.5 + (i % 4) / 4),
-              Math.max(1, 3 * (1 - t)),
-              0,
-              Math.PI * 2,
-            );
-            ctx.fill();
-          }
-          ctx.globalAlpha = 1;
+          ctx.fillText(
+            noteName(pitch, a.labelFormat),
+            x + bw / 2,
+            Math.min(bottom - 7, top + (k.black ? 45 : 23)),
+            bw - 4,
+          );
         }
       }
-      if (a.mode === 'practice' && song) {
-        for (const n of song.notes) {
-          if (n.start > position + a.lookAhead) break;
-          if (n.end < position || !a.tracks.includes(n.track)) continue;
-          bar(n.pitch, n.start, n.end, n.velocity, n.id, false);
-        }
-      } else for (const n of s.live) bar(n.pitch, n.start, n.end ?? clock, n.velocity, n.id, true);
-      if (a.mode === 'practice' && (a.style === 'particles' || a.style === 'rainbow')) {
-        for (let index = Math.max(0, s.live.length - 128); index < s.live.length; index++) {
-          const note = s.live[index],
-            key = map.get(note.pitch);
-          if (!key || (note.end !== null && clock - note.end > 0.7)) continue;
-          const age = clock - note.start;
-          ctx.fillStyle =
-            a.style === 'rainbow' ? `hsl(${(note.pitch * 29) % 360} 80% 68%)` : a.color;
-          for (let i = 0; i < Math.round(a.particles * 12); i++) {
-            const t = (((age + i * 0.071 + note.id * 0.013) % 1) + 1) % 1;
-            const x =
-              left +
-              (key.x + key.width / 2) * width +
-              Math.sin(note.id * 19 + i * 17) * key.width * width * 2 * t;
-            ctx.globalAlpha =
-              (1 - t) * (note.end === null ? 1 : Math.max(0, 1 - (clock - note.end) / 0.7));
-            ctx.beginPath();
-            ctx.arc(x, line - t * 150, Math.max(1, 3 * (1 - t)), 0, Math.PI * 2);
-            ctx.fill();
+      for (const dark of [false, true])
+        if (a.mode === 'practice' && song) {
+          for (const n of song.notes) {
+            if (n.start > position + a.lookAhead) break;
+            if (n.end < position || !a.tracks.includes(n.track)) continue;
+            bar(n.pitch, n.start, n.end, n.velocity, false, dark);
           }
-        }
-        ctx.globalAlpha = 1;
-      }
+        } else
+          for (const n of s.live) bar(n.pitch, n.start, n.end ?? clock, n.velocity, true, dark);
+      drawNoteEffects(ctx, s.live, map, a, clock, left, width, line);
       ctx.shadowBlur = 12;
       ctx.shadowColor = a.color;
       ctx.fillStyle = a.color;
-      ctx.fillRect(left, line - 2, width, 2);
+      if (a.showKeyboard || calibrate) ctx.fillRect(left, line - 2, width, 2);
       ctx.shadowBlur = 0;
-      for (const dark of [false, true])
-        for (const k of layout) {
-          if (k.black !== dark) continue;
-          const held = s.held.includes(k.pitch),
-            waiting = s.waiting.includes(k.pitch);
-          ctx.fillStyle = held ? a.color : waiting ? '#eac17c' : dark ? '#121722' : '#d0d6df';
-          const x = left + k.x * width,
-            kw = k.width * width;
-          ctx.fillRect(x + 1, line + 2, Math.max(1, kw - 2), kh * (dark ? 0.62 : 1));
-          if (a.labels && !dark && k.pitch % 12 === 0) {
-            ctx.fillStyle = '#535b6a';
-            ctx.font = '14px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(noteName(k.pitch), x + kw / 2, line + kh - 10);
+      if (a.showKeyboard || calibrate)
+        for (const dark of [false, true])
+          for (const k of layout) {
+            if (k.black !== dark) continue;
+            const held = s.held.includes(k.pitch),
+              waiting = s.waiting.includes(k.pitch);
+            ctx.fillStyle = held ? a.color : waiting ? '#eac17c' : dark ? '#121722' : '#d0d6df';
+            const x = left + k.x * width,
+              kw = k.width * width;
+            ctx.fillRect(x + 1, line + 2, Math.max(1, kw - 2), kh * (dark ? 0.62 : 1));
+            if (a.labels && !dark && k.pitch % 12 === 0) {
+              ctx.fillStyle = '#535b6a';
+              ctx.font = '14px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(noteName(k.pitch, a.labelFormat), x + kw / 2, line + kh - 10);
+            }
           }
-        }
       ctx.textAlign = 'left';
       ctx.font = '18px sans-serif';
       ctx.fillStyle = '#a1aec0';
       const ox = m.x - d.x + 24,
         oy = m.y - d.y + 32;
-      ctx.fillText(
-        a.mode === 'live'
-          ? 'KEYLUME  /  LIVE'
-          : `${s.title || 'MIDI PRACTICE'}   ·   ${s.score.points} pt   ·   ${s.score.combo} combo`,
-        ox,
-        oy,
-      );
-      if (a.mode === 'practice' && s.running && s.position < 0) {
+      if (a.showHud)
+        ctx.fillText(
+          a.mode === 'live'
+            ? 'KEYLUME  /  LIVE'
+            : `${s.title || 'MIDI PRACTICE'}   ·   ${s.score.points} pt   ·   ${s.score.combo} combo`,
+          ox,
+          oy,
+        );
+      if (a.showHud && a.mode === 'practice' && s.running && s.position < 0) {
         ctx.font = '600 64px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#d4dce8';
         ctx.fillText(String(Math.ceil(-position / a.speed)), left + width / 2, line * 0.5);
       }
       const j = s.judgements.at(-1);
-      if (j && clock - j.at < 1) {
+      if (a.showHud && j && clock - j.at < 1) {
         ctx.font = '600 28px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = j.result === 'miss' || j.result === 'wrong' ? '#f69898' : a.color;
@@ -276,20 +255,23 @@ export default function StageCanvas({
       aria-label="演奏ノート表示"
       onPointerDown={(e) => {
         if (!calibrate) return;
-        const p = point(e),
-          s = frame.current.state.settings;
-        drag.current =
-          Math.abs(p.y - s.lineY) < 0.08
-            ? 'lineY'
-            : Math.abs(p.x - s.left) < Math.abs(p.x - s.right)
-              ? 'left'
-              : 'right';
+        const r = e.currentTarget.getBoundingClientRect();
+        drag.current = calibrationHandle(
+          e.clientX - r.left,
+          e.clientY - r.top,
+          frame.current.state.settings,
+          latest.current.view,
+          r.width,
+          r.height,
+        );
+        if (!drag.current) return;
+        draggingSettings.current = { ...frame.current.state.settings };
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
         if (!drag.current) return;
         const p = point(e),
-          s = frame.current.state.settings,
+          s = draggingSettings.current ?? frame.current.state.settings,
           k = drag.current;
         const value =
           k === 'lineY'
@@ -297,10 +279,23 @@ export default function StageCanvas({
             : k === 'left'
               ? Math.max(0, Math.min(s.right - 0.1, p.x))
               : Math.max(s.left + 0.1, Math.min(1, p.x));
+        draggingSettings.current = { ...s, [k]: value };
         latest.current.change?.({ [k]: value });
       }}
-      onPointerUp={() => (drag.current = null)}
-      onLostPointerCapture={() => (drag.current = null)}
+      onPointerUp={(e) => {
+        drag.current = null;
+        draggingSettings.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId))
+          e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        draggingSettings.current = null;
+      }}
+      onLostPointerCapture={() => {
+        drag.current = null;
+        draggingSettings.current = null;
+      }}
     />
   );
 }

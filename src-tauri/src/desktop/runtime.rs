@@ -111,6 +111,8 @@ pub struct Core {
     pub action: Sender<Action>,
     pub input: Mutex<InputState>,
     pub piano: Piano,
+    pub library: Arc<super::sound_library::Library>,
+    pub controller_learning: AtomicBool,
     pub performance: Arc<super::performance::Performance>,
     pub quitting: AtomicBool,
     pub terminated: AtomicBool,
@@ -125,6 +127,7 @@ pub enum Action {
     MockDisconnect(bool),
     Tap,
     Panic,
+    ControllerLearn(bool),
 }
 impl Core {
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
@@ -150,6 +153,7 @@ impl Core {
         storage.prune_logs();
         storage.log("Keylume starting");
         let (tx, rx) = bounded(256);
+        let library = super::sound_library::Library::new(storage.root.join("sounds"));
         (
             Arc::new(Self {
                 control: Mutex::new(Control {
@@ -165,7 +169,9 @@ impl Core {
                 storage: Mutex::new(storage),
                 action: tx,
                 input: Mutex::new(InputState::default()),
-                piano: Piano::new(),
+                piano: Piano::new(library.clone()),
+                library,
+                controller_learning: AtomicBool::new(false),
                 performance: super::performance::Performance::new(performance_settings),
                 quitting: AtomicBool::new(false),
                 terminated: AtomicBool::new(false),
@@ -318,25 +324,44 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut last_volume_save = -1f32;
     let mut native_fx: std::collections::HashMap<String, Vec<u8>> = Default::default();
     let mut was_native_fx = false;
+    let desktop = super::desktop_actions::DesktopActions::new(app.clone());
+    let mut edges = crate::controller::Edges::default();
+    let mut controls_dirty = false;
+    let mut last_controls_emit = -1f32;
+    let mut was_learning = false;
     loop {
         let tick = Instant::now();
         let now = start.elapsed().as_secs_f32();
         engine.advance_time(start.elapsed().as_secs_f64());
         desired.settings.piano.volume = core.piano.volume();
-        let changed = {
+        let (changed, piano, controller, brightness) = {
             let c = core.control.lock().unwrap();
-            if c.revision != desired.revision {
+            let changed = if c.revision != desired.revision {
                 Some(c.clone())
             } else {
                 None
-            }
+            };
+            (
+                changed,
+                c.settings.piano.clone(),
+                c.settings.controller.clone(),
+                c.settings.master_brightness,
+            )
         };
         if let Some(next) = changed {
             let a = &desired.settings;
             let b = &next.settings;
+            if a.controller != b.controller {
+                desktop.allowed(false);
+                edges.clear();
+                forward.release();
+            }
             let layout_changed = serde_json::to_string(&desired.layout).ok()
                 != serde_json::to_string(&next.layout).ok();
-            let reconnect = a.mock != b.mock || a.daw_drum != b.daw_drum || layout_changed;
+            let reconnect = a.mock != b.mock
+                || a.daw_drum != b.daw_drum
+                || a.controller.enabled != b.controller.enabled
+                || layout_changed;
             if a.pads_port != b.pads_port
                 || a.controls_port != b.controls_port
                 || a.pad_notes != b.pad_notes
@@ -380,10 +405,29 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             desired = next;
             last_full = -5.;
         }
+        // Live hardware values and the revision must belong to the same snapshot.
+        desired.settings.piano = piano;
+        desired.settings.controller = controller;
+        desired.settings.master_brightness = brightness;
+        let performing = !desired.settings.controller.enabled
+            || desired.settings.controller.mode == crate::controller::Mode::Performance;
+        if core.piano.bus.is_performing() != performing {
+            core.piano.bus.set_performing(performing);
+            core.performance.pause();
+            desktop.allowed(false);
+            edges.clear();
+            forward.release();
+        }
         for action in actions.try_iter().take(128) {
             match action {
+                Action::ControllerLearn(enabled) => {
+                    desktop.allowed(false);
+                    edges.clear();
+                    forward.release();
+                    core.controller_learning.store(enabled, Ordering::Release);
+                }
                 Action::Input(packet) => {
-                    if packet.source == "keyboard" {
+                    if packet.source == "keyboard" && core.piano.bus.is_performing() {
                         core.piano.bus.midi(false, &packet.bytes);
                         core.performance
                             .input("keyboard", &packet.bytes, core.piano.bus.octave());
@@ -393,6 +437,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     }
                 }
                 Action::Panic => {
+                    desktop.allowed(false);
                     core.piano.bus.panic();
                     core.performance.pause();
                     engine.held.clear();
@@ -401,6 +446,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
 
                 Action::Reconnect => {
+                    desktop.allowed(false);
+                    edges.clear();
+                    forward.release();
                     keyboard = None;
                     core.input.lock().unwrap().clear_port("keyboard");
                     keyboard_retry = now;
@@ -601,6 +649,25 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             || stopping
             || mock_disconnected
             || now < resume_at;
+        let learning = core.controller_learning.load(Ordering::Acquire);
+        if learning != was_learning {
+            desktop.allowed(false);
+            edges.clear();
+            forward.release();
+            was_learning = learning;
+        }
+        desktop.allowed(
+            settings.controller.enabled
+                && !settings.mock
+                && transport.is_some()
+                && !inactive
+                && !system::LOCKED.load(Ordering::Acquire)
+                && !core.controller_learning.load(Ordering::Acquire),
+        );
+        if inactive || (keyboard.is_none() && !settings.mock) {
+            desktop.stop_scroll();
+            edges.clear();
+        }
         core.piano.bus.block(
             suspended
                 || handoff
@@ -614,13 +681,15 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             && !handoff
             && !stopping
             && now >= resume_at
-            && (!desired.paused || settings.piano.enabled);
+            && (!desired.paused || settings.piano.enabled || settings.controller.enabled);
         if !keyboard_needed
             || keyboard
                 .as_ref()
                 .is_some_and(|k| !status.ports.inputs.contains(&k.name))
         {
             if keyboard.take().is_some() {
+                desktop.allowed(false);
+                edges.clear();
                 core.piano.bus.panic();
                 core.performance.pause();
                 core.input.lock().unwrap().clear_port("keyboard");
@@ -636,8 +705,10 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             let bus = core.piano.bus.clone();
             let performance = core.performance.clone();
             match hardware::open_keyboard(tx.clone(), move |b| {
-                bus.midi(false, b);
-                performance.input("keyboard", b, bus.octave());
+                if bus.is_performing() {
+                    bus.midi(false, b);
+                    performance.input("keyboard", b, bus.octave());
+                }
             }) {
                 Ok(input) => {
                     status.keyboard = input.name.clone();
@@ -688,12 +759,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             .into();
             if stopping {
                 if volume_dirty {
-                    let settings = core.control.lock().unwrap().settings.clone();
+                    let control = core.control.lock().unwrap();
                     let _ = core
                         .storage
                         .lock()
                         .unwrap()
-                        .save("settings.json", &settings);
+                        .save("settings.json", &control.settings);
                 }
                 {
                     let settings = core.performance.engine.lock().unwrap().settings.clone();
@@ -730,7 +801,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             };
             match result {
                 Ok(mut t) => {
-                    let init = [
+                    let mut init = vec![
                         INQUIRY.to_vec(),
                         DAW_ON.to_vec(),
                         vec![0x9f, 0x0b, 127],
@@ -741,6 +812,13 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         vec![0xb7, 0x4a, 0],
                         vec![0xb6, DAW_DRUM, if settings.daw_drum { 1 } else { 0 }],
                     ];
+                    if settings.controller.enabled {
+                        init.extend(
+                            protocol::instrument_controls()
+                                .into_iter()
+                                .map(|b| b.to_vec()),
+                        );
+                    }
                     let mut success = true;
                     for message in init {
                         if send(
@@ -757,6 +835,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         }
                     }
                     if success {
+                        edges.clear();
+                        if settings.controller.enabled {
+                            let mut input = core.input.lock().unwrap();
+                            input.encoder_mode = Some(2);
+                            input.fader_mode = Some(1);
+                        }
                         native_fx.clear();
                         display_queue.reset();
                         transport = Some(t);
@@ -837,15 +921,75 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 continue;
             }
             let b = &packet.bytes;
+            let mut consumed = false;
+            if !inactive && settings.controller.enabled {
+                let (encoder_mode, fader_mode) = {
+                    let input = core.input.lock().unwrap();
+                    (input.encoder_mode, input.fader_mode)
+                };
+                if let Some(mut input) = crate::controller::decode(
+                    &packet.source,
+                    b,
+                    &desired.layout,
+                    encoder_mode,
+                    fader_mode,
+                ) {
+                    if core.controller_learning.load(Ordering::Acquire) {
+                        consumed = true;
+                        if input.down && input.delta != Some(0.) {
+                            let _ = app.emit("control_learned", &input.id);
+                            core.controller_learning.store(false, Ordering::Release);
+                        }
+                    } else {
+                        let binding = {
+                            let c = core.control.lock().unwrap();
+                            c.settings
+                                .controller
+                                .bindings()
+                                .get(&input.id)
+                                .or_else(|| c.settings.controller.bindings().get(&input.raw))
+                                .cloned()
+                        };
+                        if let Some(binding) = binding.filter(|b| b.action != "none") {
+                            consumed = true;
+                            input.continuous = ["effect", "volume", "brightness", "scroll"]
+                                .contains(&binding.action.as_str());
+                            if edges.press(&input) {
+                                match super::controller_actions::perform(
+                                    &core, &desktop, &binding, &input,
+                                ) {
+                                    Ok(changed) => {
+                                        volume_dirty |= changed;
+                                        controls_dirty |= changed;
+                                    }
+                                    Err(error) => {
+                                        let _ = app.emit("notice", error);
+                                    }
+                                }
+                                if binding.action == "mode" {
+                                    forward.release();
+                                }
+                            }
+                        } else {
+                            edges.press(&input);
+                        }
+                    }
+                }
+            }
             if !inactive {
                 if let Some((pad, velocity)) =
                     crate::drums::pad_hit(&packet.source, b, &desired.layout)
                 {
-                    core.piano.bus.drum(pad, velocity);
+                    if !consumed {
+                        core.piano.bus.drum(pad, velocity);
+                    }
                 }
             }
-            if let Some(volume) =
-                crate::piano::fader_volume(settings.piano.volume_fader, &packet.source, b)
+            if let Some(volume) = (!consumed
+                && core.piano.bus.is_performing()
+                && core.input.lock().unwrap().fader_mode.is_none_or(|m| m == 1))
+            .then(|| crate::piano::fader_volume(settings.piano.volume_fader, &packet.source, b))
+            .flatten()
             {
                 core.piano.set_volume(volume);
                 core.control.lock().unwrap().settings.piano.volume = volume;
@@ -937,7 +1081,11 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         let _=app.emit("input_event",serde_json::json!({"note":b[1],"ledId":led.map(|l|&l.id),"pressed":pressed}));
                     }
                 }
-                if packet.source == "daw" && active_mode == CoexistMode::LightingFirst {
+                if !consumed
+                    && core.piano.bus.is_performing()
+                    && packet.source == "daw"
+                    && active_mode == CoexistMode::LightingFirst
+                {
                     if let Some((destination, bytes)) = routing::route(b, &desired.layout, settings)
                     {
                         forward.send(destination, bytes);
@@ -1287,13 +1435,21 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             let _ = app.emit("frame_preview", &frame);
             let _ = app.emit("input_state", &*core.input.lock().unwrap());
         }
+        if controls_dirty && now - last_controls_emit >= 0.05 {
+            let c = core.control.lock().unwrap();
+            let _=app.emit("hardware_settings",serde_json::json!({"piano":c.settings.piano,"controller":c.settings.controller,"masterBrightness":c.settings.master_brightness,"activePreset":c.settings.active_preset,"preset":c.draft}));
+            controls_dirty = false;
+            last_controls_emit = now;
+        }
         if volume_dirty && now - last_volume_save >= 1. {
-            let settings = core.control.lock().unwrap().settings.clone();
+            // Match IPC's control -> storage lock order so an older hardware snapshot
+            // cannot overwrite a settings patch that has already been saved.
+            let control = core.control.lock().unwrap();
             if let Err(error) = core
                 .storage
                 .lock()
                 .unwrap()
-                .save("settings.json", &settings)
+                .save("settings.json", &control.settings)
             {
                 warn(&mut status, &error);
             }

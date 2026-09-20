@@ -1,9 +1,12 @@
 mod audio;
+mod controller_actions;
+mod desktop_actions;
 mod discovery;
 mod performance;
 mod piano;
 mod runtime;
 mod smoke;
+mod sound_library;
 mod system;
 mod update_http;
 mod updater;
@@ -75,6 +78,7 @@ fn groove_command(
         "overdub" => bus.loop_command(LoopCommand::Overdub)?,
         "stop" => bus.loop_command(LoopCommand::Stop)?,
         "clear" => bus.loop_command(LoopCommand::Clear)?,
+        "undo" => bus.loop_command(LoopCommand::Undo)?,
         _ => return Err("未対応のルーパー操作です".into()),
     }
     Ok(json!(bus.loop_status()))
@@ -111,7 +115,7 @@ fn command(
     app: tauri::AppHandle,
 ) -> Result<Value, String> {
     let value = dispatch(&core, &name, args)?;
-    if name == "save_settings" {
+    if name == "save_settings" || name == "patch_settings" {
         updater.settings_changed(&core, &app);
     }
     Ok(value)
@@ -129,6 +133,12 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
             .map_err(|_| "操作が混み合っています。もう一度お試しください".to_string())
     };
     match name {
+        "controller_learn" => {
+            action(Action::ControllerLearn(
+                args["enabled"].as_bool().unwrap_or(false),
+            ))?;
+            return Ok(Value::Null);
+        }
         "list_presets" => return Ok(json!(c.presets)),
         "list_profiles" => return Ok(json!(c.profiles)),
         "get_layout" => return Ok(json!(c.layout)),
@@ -261,6 +271,11 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
             core.storage.lock().unwrap().save("settings.json", &s)?;
             c.settings = s;
         }
+        "patch_settings" => {
+            let next = c.settings.patched(args["patch"].clone())?;
+            core.storage.lock().unwrap().save("settings.json", &next)?;
+            c.settings = next;
+        }
         "save_layout" => {
             let l: DeviceLayout =
                 serde_json::from_value(args["layout"].clone()).map_err(|e| e.to_string())?;
@@ -361,8 +376,10 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
                 return Err("鍵盤入力が不正です".into());
             }
             core.piano.bus.midi(true, &bytes);
-            core.performance
-                .input("screen", &bytes, core.piano.bus.octave());
+            if core.piano.bus.is_performing() {
+                core.performance
+                    .input("screen", &bytes, core.piano.bus.octave());
+            }
             action(Action::Input(MidiPacket {
                 source: "screen".into(),
                 bytes,
@@ -458,6 +475,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             performance::stage_command,
+            sound_library::library_command,
             groove_command,
             get_state,
             get_input_state,
@@ -534,11 +552,38 @@ pub fn run() {
                 )?)?;
             }
             let quit = MenuItem::with_id(app, "quit", "終了", true, None::<&str>)?;
+            let stage_edit = MenuItem::with_id(
+                app,
+                "stage_edit",
+                "演奏表示の位置合わせ / 操作を解除",
+                true,
+                None::<&str>,
+            )?;
+            let stage_lock = MenuItem::with_id(
+                app,
+                "stage_lock",
+                "演奏表示の位置合わせを終了",
+                true,
+                None::<&str>,
+            )?;
+            let stage_hide =
+                MenuItem::with_id(app, "stage_hide", "演奏表示を閉じる", true, None::<&str>)?;
             let updates =
                 MenuItem::with_id(app, "updates", "アップデートを確認", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
-                &[&open, &recent, &pause, &bright, &modes, &updates, &quit],
+                &[
+                    &open,
+                    &recent,
+                    &pause,
+                    &bright,
+                    &modes,
+                    &stage_edit,
+                    &stage_lock,
+                    &stage_hide,
+                    &updates,
+                    &quit,
+                ],
             )?;
             let icon = app
                 .default_window_icon()
@@ -569,6 +614,12 @@ pub fn run() {
                         app.state::<Arc<Updater>>()
                             .request(true)
                             .map(|_| Value::Null)
+                    } else if id == "stage_edit" || id == "stage_lock" {
+                        performance::interaction(app, &core, id == "stage_edit")
+                            .map(|_| Value::Null)
+                    } else if id == "stage_hide" {
+                        performance::close_views(app);
+                        Ok(Value::Null)
                     } else if id == "quit" {
                         core.quitting.store(true, Ordering::SeqCst);
                         Ok(Value::Null)
