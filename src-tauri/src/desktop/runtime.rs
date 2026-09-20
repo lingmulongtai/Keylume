@@ -426,6 +426,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     }
                 }
                 Action::Panic => {
+                    desktop.allowed(false);
                     core.piano.bus.panic();
                     core.performance.pause();
                     engine.held.clear();
@@ -973,9 +974,11 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     }
                 }
             }
-            if let Some(volume) = (!consumed && core.piano.bus.is_performing())
-                .then(|| crate::piano::fader_volume(settings.piano.volume_fader, &packet.source, b))
-                .flatten()
+            if let Some(volume) = (!consumed
+                && core.piano.bus.is_performing()
+                && core.input.lock().unwrap().fader_mode.is_none_or(|m| m == 1))
+            .then(|| crate::piano::fader_volume(settings.piano.volume_fader, &packet.source, b))
+            .flatten()
             {
                 core.piano.set_volume(volume);
                 core.control.lock().unwrap().settings.piano.volume = volume;
