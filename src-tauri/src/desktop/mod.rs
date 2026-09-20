@@ -534,11 +534,38 @@ pub fn run() {
                 )?)?;
             }
             let quit = MenuItem::with_id(app, "quit", "終了", true, None::<&str>)?;
+            let stage_edit = MenuItem::with_id(
+                app,
+                "stage_edit",
+                "演奏表示の位置合わせ / 操作を解除",
+                true,
+                None::<&str>,
+            )?;
+            let stage_lock = MenuItem::with_id(
+                app,
+                "stage_lock",
+                "演奏表示の位置合わせを終了",
+                true,
+                None::<&str>,
+            )?;
+            let stage_hide =
+                MenuItem::with_id(app, "stage_hide", "演奏表示を閉じる", true, None::<&str>)?;
             let updates =
                 MenuItem::with_id(app, "updates", "アップデートを確認", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
-                &[&open, &recent, &pause, &bright, &modes, &updates, &quit],
+                &[
+                    &open,
+                    &recent,
+                    &pause,
+                    &bright,
+                    &modes,
+                    &stage_edit,
+                    &stage_lock,
+                    &stage_hide,
+                    &updates,
+                    &quit,
+                ],
             )?;
             let icon = app
                 .default_window_icon()
@@ -569,6 +596,12 @@ pub fn run() {
                         app.state::<Arc<Updater>>()
                             .request(true)
                             .map(|_| Value::Null)
+                    } else if id == "stage_edit" || id == "stage_lock" {
+                        performance::interaction(app, &core, id == "stage_edit")
+                            .map(|_| Value::Null)
+                    } else if id == "stage_hide" {
+                        performance::close_views(app);
+                        Ok(Value::Null)
                     } else if id == "quit" {
                         core.quitting.store(true, Ordering::SeqCst);
                         Ok(Value::Null)

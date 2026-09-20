@@ -8,6 +8,10 @@ let state = emptyStage(),
   started = false,
   id = 0;
 const listeners = new Set<(s: StageSnapshot) => void>();
+export async function subscribeInteraction(callback: (editing: boolean) => void) {
+  if (!native) return () => {};
+  return listen<boolean>('stage_interaction', (e) => callback(e.payload));
+}
 try {
   const saved = localStorage.getItem('keylume-stage');
   if (saved) state.settings = { ...state.settings, ...JSON.parse(saved) };
@@ -58,6 +62,7 @@ export async function stageCommand<T = StageSnapshot>(
   args: Record<string, unknown> = {},
 ): Promise<T> {
   if (native) return invoke('stage_command', { name, args });
+  if (name === 'interaction') return (args.editing ?? false) as T;
   start();
   if (name === 'song') return structuredClone(song) as T;
   if (name === 'monitors')

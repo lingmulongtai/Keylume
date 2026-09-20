@@ -174,7 +174,18 @@
 .stage-fullscreen {
   position: fixed;
   inset: 0;
-  background: #080b10;
+  background: transparent;
+}
+html[data-surface='stage'],
+html[data-surface='stage'] body,
+html[data-surface='stage'] #root {
+  background: transparent;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.transparent-preview {
+  background: repeating-conic-gradient(#25282d 0% 25%, #31353b 0% 50%) 0 / 28px 28px;
 }
 .stage-exit {
   position: fixed;

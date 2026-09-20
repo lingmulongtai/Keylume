@@ -44,6 +44,8 @@ export default function StageCanvas({
       const a = draggingSettings.current ?? s.settings,
         d = view.desktop,
         m = view.monitor;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
       ctx.setTransform(
         w / m.width,
         0,
@@ -53,7 +55,7 @@ export default function StageCanvas({
         ((d.y - m.y) * h) / m.height,
       );
       ctx.fillStyle = '#080b10';
-      ctx.fillRect(m.x - d.x, m.y - d.y, m.width, m.height);
+      if (!a.transparent) ctx.fillRect(m.x - d.x, m.y - d.y, m.width, m.height);
       const left = a.left * d.width,
         width = (a.right - a.left) * d.width,
         line = a.lineY * d.height,
