@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { calibrationHandle, keys, union } from './geometry';
+import { calibrationHandle, keys, noteColor, noteName, union } from './geometry';
 import { defaultStageSettings } from './types';
 describe('stage geometry', () => {
+  it('distinguishes black notes by width, luminance and readable note names', () => {
+    const k = keys(60, 72);
+    expect(k[1].width / k[0].width).toBeCloseTo(0.64);
+    const light = noteColor(60, '#80a0c0', false).match(/\d+/g)!.map(Number);
+    const dark = noteColor(61, '#80a0c0', false).match(/\d+/g)!.map(Number);
+    expect(dark.every((n, i) => n < light[i] * 0.6)).toBe(true);
+    expect(noteName(61)).toBe('C♯4');
+    expect(noteName(61, 'solfege')).toBe('ド♯4');
+  });
   it('grabs the closest calibration line in screen pixels without a wide height dead zone', () => {
     const desktop = { x: -2560, y: 0, width: 5120, height: 1440 };
     const view = { desktop, monitor: { ...desktop, id: 0, name: 'preview', scale: 1 } };

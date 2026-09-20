@@ -33,6 +33,7 @@ export interface StageSettings {
   style: 'clean' | 'glow' | 'particles' | 'rainbow';
   color: string;
   labels: boolean;
+  labelFormat: 'english' | 'solfege';
   guides: boolean;
   particles: number;
   latencyMs: number;
@@ -55,6 +56,7 @@ export const defaultStageSettings: StageSettings = {
   style: 'glow',
   color: '#75c8fa',
   labels: true,
+  labelFormat: 'english',
   guides: false,
   particles: 0.6,
   latencyMs: 0,

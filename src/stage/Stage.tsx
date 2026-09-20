@@ -392,6 +392,19 @@ export default function Stage(props: ViewProps) {
             />
             音名を表示
           </label>
+          <label className="stage-field">
+            <span>音名の表記</span>
+            <select
+              aria-label="音名の表記"
+              value={settings.labelFormat}
+              onChange={(e) =>
+                change({ labelFormat: e.target.value as StageSettings['labelFormat'] })
+              }
+            >
+              <option value="english">C・D・E（英語）</option>
+              <option value="solfege">ド・レ・ミ</option>
+            </select>
+          </label>
           <label>
             <input
               type="checkbox"

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { calibrationHandle, keys, noteName } from './geometry';
+import { calibrationHandle, keys, noteColor, noteName } from './geometry';
 import type { Song, StageSnapshot, StageView, StageSettings } from './types';
 type Frame = { state: StageSnapshot; received: number };
 export default function StageCanvas({
@@ -114,7 +114,7 @@ export default function StageCanvas({
         if (bottom < 0 || top > line) return;
         top = Math.max(-4, top);
         bottom = Math.min(line, bottom);
-        const color = a.style === 'rainbow' ? `hsl(${(pitch * 29) % 360} 80% 68%)` : a.color;
+        const color = noteColor(pitch, a.color, a.style === 'rainbow');
         ctx.globalAlpha = 0.55 + (velocity / 127) * 0.45;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
@@ -122,13 +122,18 @@ export default function StageCanvas({
         ctx.beginPath();
         ctx.roundRect(x, top, bw, Math.max(3, bottom - top), Math.min(6, bw / 3));
         ctx.fill();
+        if (k.black) {
+          ctx.strokeStyle = a.color;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
         if (a.labels && bw > 24 && bottom - top > 24) {
-          ctx.fillStyle = '#09121d';
+          ctx.fillStyle = k.black ? '#f2f5fa' : '#09121d';
           ctx.font = `600 ${Math.min(18, bw * 0.42)}px sans-serif`;
           ctx.textAlign = 'center';
-          ctx.fillText(noteName(pitch), x + bw / 2, Math.min(bottom - 7, top + 23));
+          ctx.fillText(noteName(pitch, a.labelFormat), x + bw / 2, Math.min(bottom - 7, top + 23));
         }
         if (live && end >= clock - 0.1 && (a.style === 'particles' || a.style === 'rainbow')) {
           ctx.fillStyle = color;
@@ -197,7 +202,7 @@ export default function StageCanvas({
             ctx.fillStyle = '#535b6a';
             ctx.font = '14px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(noteName(k.pitch), x + kw / 2, line + kh - 10);
+            ctx.fillText(noteName(k.pitch, a.labelFormat), x + kw / 2, line + kh - 10);
           }
         }
       ctx.textAlign = 'left';

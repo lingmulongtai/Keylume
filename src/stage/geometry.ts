@@ -41,6 +41,15 @@ export function union(rects: Rect[]): Rect {
     height: Math.max(...rects.map((r) => r.y + r.height)) - y,
   };
 }
-export const noteName = (n: number) =>
-  ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'][n % 12] +
+export const noteName = (n: number, format: 'english' | 'solfege' = 'english') =>
+  (format === 'solfege'
+    ? ['ド', 'ド♯', 'レ', 'レ♯', 'ミ', 'ファ', 'ファ♯', 'ソ', 'ソ♯', 'ラ', 'ラ♯', 'シ']
+    : ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'])[n % 12] +
   (Math.floor(n / 12) - 1);
+
+export function noteColor(pitch: number, color: string, rainbow: boolean) {
+  if (rainbow)
+    return `hsl(${(pitch * 29) % 360} ${black(pitch) ? 64 : 78}% ${black(pitch) ? 32 : 76}%)`;
+  const rgb = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  return `rgb(${rgb.map((n) => Math.round(black(pitch) ? n * 0.46 : n + (255 - n) * 0.32)).join(' ')})`;
+}
