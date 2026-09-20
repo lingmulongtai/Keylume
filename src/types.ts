@@ -78,6 +78,7 @@ export interface Profile {
   priority: number;
 }
 export interface PianoSettings {
+  favorites: string[];
   effects: InstrumentFx;
   enabled: boolean;
   sound: string;

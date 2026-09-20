@@ -3,15 +3,24 @@ import { Power, Minus, Plus, Volume2, Square } from 'lucide-react';
 import { command, getPianoState, native, subscribe } from './api';
 import type { PianoStatus, PianoSettings } from './types';
 import type { ViewProps } from './ui-state';
-import { Slider, Toggle } from './components';
+import { Modal, Slider, Toggle } from './components';
 import { pianoSounds } from './piano-sounds';
 import InstrumentEffects from './InstrumentEffects';
+import SoundLibrary from './SoundLibrary';
+import { soundName, libraryCommand } from './sounds';
 
 export default function Piano({
   state,
   saveSettings,
   toast,
 }: Pick<ViewProps, 'state' | 'saveSettings' | 'toast'>) {
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [, setLibraryRevision] = useState(0);
+  useEffect(() => {
+    void libraryCommand('state')
+      .then(() => setLibraryRevision((n) => n + 1))
+      .catch(() => {});
+  }, []);
   const [status, setStatus] = useState<PianoStatus>({
     state: 'off',
     device: '',
@@ -69,17 +78,13 @@ export default function Piano({
           <Power size={18} />
         </button>
         <div className="piano-name">
-          <select
-            aria-label="ピアノ音色"
-            value={p.sound}
-            onChange={(e) => update({ sound: e.target.value })}
+          <button
+            className="instrument-picker"
+            aria-label="音源を選ぶ"
+            onClick={() => setLibraryOpen(true)}
           >
-            {pianoSounds.map((sound) => (
-              <option key={sound.id} value={sound.id}>
-                {sound.name}
-              </option>
-            ))}
-          </select>
+            {soundName(p.sound)} <span>選ぶ</span>
+          </button>
           <small>{label}</small>
         </div>
         <div className="piano-volume">
@@ -195,10 +200,20 @@ export default function Piano({
             に譲るモードでは鍵盤入力も解放します。
           </p>
           <p className="piano-credit">
-            {pianoSounds.find((s) => s.id === p.sound)?.credit} · CC0 1.0 · 128音ポリフォニー
+            {p.sound.startsWith('generaluser:')
+              ? 'GeneralUser GS · License v2.0'
+              : p.sound.startsWith('user:')
+                ? '持ち込みSoundFont'
+                : `${pianoSounds.find((s) => s.id === p.sound)?.credit} · CC0 1.0`}{' '}
+            · 128音ポリフォニー
           </p>
         </div>
       </details>
+      {libraryOpen && (
+        <Modal title="音源を選ぶ" wide onClose={() => setLibraryOpen(false)}>
+          <SoundLibrary state={state} saveSettings={saveSettings} toast={toast} />
+        </Modal>
+      )}
     </section>
   );
 }

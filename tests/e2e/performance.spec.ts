@@ -45,7 +45,10 @@ test('piano preferences persist and screen keys release on focus loss', async ({
   await page.getByLabel('ピアノ音量', { exact: true }).fill('0.3');
   await page.getByText('音声と演奏の設定', { exact: true }).click();
   await page.getByLabel('音声バッファ', { exact: true }).selectOption('512');
-  await page.getByLabel('ピアノ音色', { exact: true }).selectOption('fm-piano');
+  await page.getByRole('button', { name: '音源を選ぶ', exact: true }).click();
+  await page.getByRole('button', { name: '使用可能', exact: true }).click();
+  await page.locator('.sound-select').filter({ hasText: 'FM Electric Piano' }).click();
+  await page.keyboard.press('Escape');
   await expect
     .poll(async () =>
       page.evaluate(() => JSON.parse(localStorage.getItem('keylume-preview-v1')!)?.settings.piano),
@@ -57,7 +60,9 @@ test('piano preferences persist and screen keys release on focus loss', async ({
     'true',
   );
   await expect(page.getByLabel('ピアノのオクターブ', { exact: true })).toHaveText('+1');
-  await expect(page.getByLabel('ピアノ音色', { exact: true })).toHaveValue('fm-piano');
+  await expect(page.getByRole('button', { name: '音源を選ぶ', exact: true })).toContainText(
+    'FM Electric Piano',
+  );
   const key = page.getByRole('button', { name: '鍵盤 60（ピアノ）', exact: true });
   await key.focus();
   await page.keyboard.down('Space');

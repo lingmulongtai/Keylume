@@ -1,7 +1,7 @@
 @import url('./theme.css');
 .instrument-effects {
   padding: 10px 12px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
 }
 .instrument-effects summary {
   cursor: pointer;
@@ -1849,4 +1849,150 @@ code,
   background: transparent;
   padding: 2px 20px 2px 0;
   font-weight: 600;
+}
+.instrument-picker {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  text-align: left;
+}
+.instrument-picker span {
+  margin-left: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.library-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.library-toolbar button,
+.library-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.library-search {
+  flex: 1;
+  min-width: 200px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+}
+.library-search input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+}
+.library-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 16px 0;
+}
+.library-categories button {
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.library-categories button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.library-description,
+.library-credit {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.library-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  font-size: 12px;
+}
+.library-progress progress {
+  flex: 1;
+  min-width: 50px;
+  accent-color: var(--accent);
+}
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.sound-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.sound-card.selected {
+  border-color: var(--accent);
+}
+.sound-select {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  gap: 6px;
+  padding: 0 14px 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.sound-select strong {
+  font-size: 13px;
+}
+.sound-select small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.sound-art {
+  width: 100%;
+  position: relative;
+  height: 75px;
+  color: hsl(var(--sound-hue) 26% 65%);
+}
+.sound-art svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: 0.65;
+}
+.sound-art span {
+  position: absolute;
+  left: 0;
+  top: 9px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.sound-favorite {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  padding: 5px;
+  border: 0;
+  background: var(--panel);
+  color: var(--muted);
+}
+.sound-favorite[aria-pressed='true'] {
+  color: var(--accent);
+}
+.sound-status {
+  margin-top: auto;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--muted);
+  padding-top: 5px;
+}
+.sound-card.selected .sound-status {
+  color: var(--accent);
 }

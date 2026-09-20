@@ -64,6 +64,16 @@ export const defaults: Settings = {
   checkForUpdates: true,
   includePrereleases: true,
   piano: {
+    favorites: [
+      'upright',
+      'bright',
+      'fm-piano',
+      'honky-tonk',
+      'generaluser:0:0',
+      'generaluser:0:81',
+      'generaluser:0:89',
+      'generaluser:0:48',
+    ],
     effects: { ...defaultInstrumentFx },
     enabled: false,
     sound: 'upright',
