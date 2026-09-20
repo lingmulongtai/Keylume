@@ -14,6 +14,7 @@ test('controller keeps independent mode bindings and records keyboard shortcuts'
   await page.locator('.controller-list button').filter({ hasText: 'Undo' }).click();
   await expect(page.getByLabel('割り当ての内容', { exact: true })).toHaveValue('Ctrl+Z');
   await page.getByRole('button', { name: 'キーを記録', exact: true }).click();
+  await expect(page.getByLabel('割り当ての内容', { exact: true })).toBeFocused();
   await page.keyboard.press('Control+Shift+KeyK');
   await expect(page.getByLabel('割り当ての内容', { exact: true })).toHaveValue('Ctrl+Shift+K');
   await page.getByRole('button', { name: '割り当てを保存', exact: true }).click();
