@@ -316,6 +316,7 @@ pub async fn stage_command(
                 .decorations(false)
                 .transparent(true)
                 .shadow(false)
+                .always_on_top(true)
                 .resizable(false)
                 .visible(false)
                 .build()
@@ -324,7 +325,6 @@ pub async fn stage_command(
                     .map_err(|e| e.to_string())?;
                 w.set_size(PhysicalSize::new(m.rect.width, m.rect.height))
                     .map_err(|e| e.to_string())?;
-                w.set_always_on_top(true).map_err(|e| e.to_string())?;
                 w.show().map_err(|e| e.to_string())?;
                 if !core
                     .performance
