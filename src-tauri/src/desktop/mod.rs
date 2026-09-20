@@ -1,4 +1,6 @@
 mod audio;
+mod controller_actions;
+mod desktop_actions;
 mod discovery;
 mod performance;
 mod piano;
@@ -131,6 +133,13 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
             .map_err(|_| "操作が混み合っています。もう一度お試しください".to_string())
     };
     match name {
+        "controller_learn" => {
+            core.controller_learning.store(
+                args["enabled"].as_bool().unwrap_or(false),
+                Ordering::Release,
+            );
+            return Ok(Value::Null);
+        }
         "list_presets" => return Ok(json!(c.presets)),
         "list_profiles" => return Ok(json!(c.profiles)),
         "get_layout" => return Ok(json!(c.layout)),
@@ -363,8 +372,10 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
                 return Err("鍵盤入力が不正です".into());
             }
             core.piano.bus.midi(true, &bytes);
-            core.performance
-                .input("screen", &bytes, core.piano.bus.octave());
+            if core.piano.bus.is_performing() {
+                core.performance
+                    .input("screen", &bytes, core.piano.bus.octave());
+            }
             action(Action::Input(MidiPacket {
                 source: "screen".into(),
                 bytes,

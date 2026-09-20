@@ -36,6 +36,7 @@ struct Shared {
     looper: Arc<Mutex<Looper>>,
     enabled: AtomicBool,
     blocked: AtomicBool,
+    performing: AtomicBool,
     volume: AtomicU32,
     octave: AtomicI8,
     peak: AtomicU32,
@@ -86,6 +87,14 @@ pub struct PianoBus {
     shared: Arc<Shared>,
 }
 impl PianoBus {
+    pub fn is_performing(&self) -> bool {
+        self.shared.performing.load(Ordering::Acquire)
+    }
+    pub fn set_performing(&self, performing: bool) {
+        if self.shared.performing.swap(performing, Ordering::AcqRel) != performing {
+            self.panic();
+        }
+    }
     pub fn octave(&self) -> i8 {
         self.shared.octave.load(Ordering::Acquire)
     }
@@ -93,6 +102,7 @@ impl PianoBus {
         if bytes.len() != 3
             || !self.shared.enabled.load(Ordering::Acquire)
             || self.shared.blocked.load(Ordering::Acquire)
+            || !self.is_performing()
         {
             return;
         }
@@ -115,6 +125,7 @@ impl PianoBus {
             || !self.shared.drums.load(Ordering::Acquire)
             || !self.shared.enabled.load(Ordering::Acquire)
             || self.shared.blocked.load(Ordering::Acquire)
+            || !self.is_performing()
         {
             return;
         }
@@ -133,6 +144,7 @@ impl PianoBus {
     pub fn loop_command(&self, command: LoopCommand) -> Result<(), String> {
         if !self.shared.enabled.load(Ordering::Acquire)
             || self.shared.blocked.load(Ordering::Acquire)
+            || !self.is_performing()
         {
             return Err("ピアノをオンにして音声出力が準備できてから操作してください".into());
         }
@@ -183,6 +195,7 @@ impl Piano {
             looper: Arc::new(Mutex::new(Looper::default())),
             enabled: AtomicBool::new(false),
             blocked: AtomicBool::new(false),
+            performing: AtomicBool::new(true),
             volume: AtomicU32::new(0.5f32.to_bits()),
             octave: AtomicI8::new(0),
             peak: AtomicU32::new(0),
@@ -408,7 +421,7 @@ impl Piano {
         let mut status = self.status.lock().unwrap().clone();
         status.peak = f32::from_bits(self.bus.shared.peak.load(Ordering::Relaxed));
         status.buffer_frames = self.bus.shared.frames.load(Ordering::Relaxed);
-        status.muted = self.bus.shared.blocked.load(Ordering::Acquire);
+        status.muted = self.bus.shared.blocked.load(Ordering::Acquire) || !self.bus.is_performing();
         status
     }
     pub fn stop(&self) {
@@ -545,7 +558,8 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 synth.set_patch((patch >> 8) as u16, patch as u8);
                 loop_synth.set_patch((patch >> 8) as u16, patch as u8);
                 let active = shared.enabled.load(Ordering::Acquire)
-                    && !shared.blocked.load(Ordering::Acquire);
+                    && !shared.blocked.load(Ordering::Acquire)
+                    && shared.performing.load(Ordering::Acquire);
                 for event in rx.try_iter().take(1024) {
                     if active && event.generation == generation {
                         if let Some(command) = event.command {
