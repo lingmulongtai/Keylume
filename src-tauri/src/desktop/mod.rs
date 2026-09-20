@@ -134,10 +134,9 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
     };
     match name {
         "controller_learn" => {
-            core.controller_learning.store(
+            action(Action::ControllerLearn(
                 args["enabled"].as_bool().unwrap_or(false),
-                Ordering::Release,
-            );
+            ))?;
             return Ok(Value::Null);
         }
         "list_presets" => return Ok(json!(c.presets)),

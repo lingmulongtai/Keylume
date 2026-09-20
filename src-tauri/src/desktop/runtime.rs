@@ -127,6 +127,7 @@ pub enum Action {
     MockDisconnect(bool),
     Tap,
     Panic,
+    ControllerLearn(bool),
 }
 impl Core {
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
@@ -333,13 +334,19 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         let now = start.elapsed().as_secs_f32();
         engine.advance_time(start.elapsed().as_secs_f64());
         desired.settings.piano.volume = core.piano.volume();
-        let changed = {
+        let (changed, piano, controller, brightness) = {
             let c = core.control.lock().unwrap();
-            if c.revision != desired.revision {
+            let changed = if c.revision != desired.revision {
                 Some(c.clone())
             } else {
                 None
-            }
+            };
+            (
+                changed,
+                c.settings.piano.clone(),
+                c.settings.controller.clone(),
+                c.settings.master_brightness,
+            )
         };
         if let Some(next) = changed {
             let a = &desired.settings;
@@ -398,12 +405,10 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             desired = next;
             last_full = -5.;
         }
-        {
-            let c = core.control.lock().unwrap();
-            desired.settings.piano = c.settings.piano.clone();
-            desired.settings.controller = c.settings.controller.clone();
-            desired.settings.master_brightness = c.settings.master_brightness;
-        }
+        // Live hardware values and the revision must belong to the same snapshot.
+        desired.settings.piano = piano;
+        desired.settings.controller = controller;
+        desired.settings.master_brightness = brightness;
         let performing = !desired.settings.controller.enabled
             || desired.settings.controller.mode == crate::controller::Mode::Performance;
         if core.piano.bus.is_performing() != performing {
@@ -415,6 +420,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         }
         for action in actions.try_iter().take(128) {
             match action {
+                Action::ControllerLearn(enabled) => {
+                    desktop.allowed(false);
+                    edges.clear();
+                    forward.release();
+                    core.controller_learning.store(enabled, Ordering::Release);
+                }
                 Action::Input(packet) => {
                     if packet.source == "keyboard" && core.piano.bus.is_performing() {
                         core.piano.bus.midi(false, &packet.bytes);
@@ -748,12 +759,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             .into();
             if stopping {
                 if volume_dirty {
-                    let settings = core.control.lock().unwrap().settings.clone();
+                    let control = core.control.lock().unwrap();
                     let _ = core
                         .storage
                         .lock()
                         .unwrap()
-                        .save("settings.json", &settings);
+                        .save("settings.json", &control.settings);
                 }
                 {
                     let settings = core.performance.engine.lock().unwrap().settings.clone();
@@ -1431,12 +1442,14 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             last_controls_emit = now;
         }
         if volume_dirty && now - last_volume_save >= 1. {
-            let settings = core.control.lock().unwrap().settings.clone();
+            // Match IPC's control -> storage lock order so an older hardware snapshot
+            // cannot overwrite a settings patch that has already been saved.
+            let control = core.control.lock().unwrap();
             if let Err(error) = core
                 .storage
                 .lock()
                 .unwrap()
-                .save("settings.json", &settings)
+                .save("settings.json", &control.settings)
             {
                 warn(&mut status, &error);
             }
