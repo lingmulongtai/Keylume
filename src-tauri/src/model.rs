@@ -435,6 +435,7 @@ pub struct Settings {
     pub check_for_updates: bool,
     pub include_prereleases: bool,
     pub piano: crate::piano::PianoSettings,
+    pub controller: crate::controller::ControllerSettings,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -485,12 +486,14 @@ impl Default for Settings {
             check_for_updates: true,
             include_prereleases: true,
             piano: Default::default(),
+            controller: Default::default(),
         }
     }
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), String> {
         self.piano.validate()?;
+        self.controller.validate()?;
         if self.schema != 1
             || ![15, 30, 60].contains(&self.fps)
             || !(0.0..=1.0).contains(&self.master_brightness)
