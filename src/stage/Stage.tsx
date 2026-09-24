@@ -111,6 +111,7 @@ export default function Stage(props: ViewProps) {
           選択した画面に表示
         </button>
         <button onClick={() => void run('close')}>表示を閉じる</button>
+        <button onClick={() => void run('toolbar', { visible: true })}>演奏操作を表示</button>
         <button onClick={() => void run('interaction', { editing: true })}>
           別画面の位置合わせを開く
         </button>
@@ -496,6 +497,13 @@ export function StageControls() {
           演出をクリック透過
         </label>
         <button onClick={() => run('close')}>演奏画面を閉じる</button>
+        <button
+          aria-label="操作パネルを隠す"
+          title="ホームの「演奏操作を表示」で戻せます"
+          onClick={() => run('toolbar', { visible: false })}
+        >
+          隠す
+        </button>
       </div>
       <StageTransport state={state} song={song} change={change} error={setError} />
       {error && <p role="alert">{error}</p>}

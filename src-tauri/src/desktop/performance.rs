@@ -12,7 +12,7 @@ use std::{
 };
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rect {
     pub x: i32,
@@ -20,7 +20,7 @@ pub struct Rect {
     pub width: u32,
     pub height: u32,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Monitor {
     pub id: usize,
@@ -212,6 +212,9 @@ pub fn interaction(app: &tauri::AppHandle, core: &Core, editing: bool) -> Result
         .click_through
         && !editing;
     for (label, window) in app.webview_windows() {
+        if label.starts_with("stage-controls-") && editing {
+            let _ = window.show();
+        }
         if label.starts_with("stage-") && !label.starts_with("stage-controls-") {
             window
                 .set_ignore_cursor_events(through)
@@ -227,7 +230,7 @@ pub fn interaction(app: &tauri::AppHandle, core: &Core, editing: bool) -> Result
 pub fn close_views(app: &tauri::AppHandle) {
     for (label, window) in app.webview_windows() {
         if label.starts_with("stage-") {
-            let _ = window.close();
+            let _ = window.destroy();
         }
     }
 }
@@ -240,6 +243,15 @@ pub async fn stage_command(
     window: tauri::WebviewWindow,
 ) -> Result<Value, String> {
     match name.as_str() {
+        "toolbar" => {
+            let visible = args["visible"].as_bool().unwrap_or(true);
+            for (label, w) in app.webview_windows() {
+                if label.starts_with("stage-controls-") {
+                    if visible { w.show() } else { w.hide() }.map_err(|e| e.to_string())?;
+                }
+            }
+            return Ok(Value::Null);
+        }
         "interaction" => {
             if let Some(editing) = args["editing"].as_bool() {
                 interaction(&app, &core, editing)?;
@@ -259,13 +271,25 @@ pub async fn stage_command(
             let _guard = core.performance.windows_op.lock().unwrap();
             let ids: Vec<usize> =
                 serde_json::from_value(args["ids"].clone()).map_err(|e| e.to_string())?;
+            let all = monitors(&app)?;
+            let selected: Vec<_> = all.into_iter().filter(|m| ids.contains(&m.id)).collect();
+            if selected.len() != ids.len() || selected.len() > 8 {
+                return Err("モニターを選び直してください".into());
+            }
+            let bounds = desktop(&selected)?;
             if args["reuse"].as_bool() == Some(true) {
                 let views = core.performance.views.lock().unwrap();
                 if !ids.is_empty()
                     && views.len() == ids.len()
                     && views.iter().all(|(label, view)| {
-                        ids.contains(&view.monitor.id) && app.get_webview_window(label).is_some()
+                        selected.contains(&view.monitor)
+                            && view.desktop == bounds
+                            && app.get_webview_window(label).is_some()
                     })
+                    && app
+                        .webview_windows()
+                        .keys()
+                        .any(|label| label.starts_with("stage-controls-"))
                 {
                     return Ok(Value::Null);
                 }
@@ -274,12 +298,6 @@ pub async fn stage_command(
                 .performance
                 .window_generation
                 .fetch_add(1, Ordering::AcqRel);
-            let all = monitors(&app)?;
-            let selected: Vec<_> = all.into_iter().filter(|m| ids.contains(&m.id)).collect();
-            if selected.len() != ids.len() || selected.len() > 8 {
-                return Err("モニターを選び直してください".into());
-            }
-            let bounds = desktop(&selected)?;
             let top = selected.iter().map(|m| m.rect.y).max().unwrap();
             let bottom = selected
                 .iter()
@@ -306,7 +324,7 @@ pub async fn stage_command(
             }
             for (label, w) in app.webview_windows() {
                 if label.starts_with("stage-") {
-                    w.close().map_err(|e| e.to_string())?;
+                    w.destroy().map_err(|e| e.to_string())?;
                 }
             }
             core.performance.views.lock().unwrap().clear();
@@ -366,6 +384,13 @@ pub async fn stage_command(
             .visible(false)
             .build()
             .map_err(|e| e.to_string())?;
+            let toolbar_handle = toolbar.clone();
+            toolbar.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = toolbar_handle.hide();
+                }
+            });
             toolbar
                 .set_position(PhysicalPosition::new(
                     toolbar_monitor.rect.x + 24,
@@ -380,7 +405,7 @@ pub async fn stage_command(
             let _guard = core.performance.windows_op.lock().unwrap();
             for (label, w) in app.webview_windows() {
                 if label.starts_with("stage-") {
-                    let _ = w.close();
+                    let _ = w.destroy();
                 }
             }
             return Ok(Value::Null);
