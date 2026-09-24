@@ -239,11 +239,18 @@ export default function Groove({
         <button disabled={!ready || (!loop.count && !active)} onClick={() => run('clear')}>
           ループを消去
         </button>
+        <button disabled={!ready} onClick={() => run('capture')}>
+          直前の演奏を取り込む
+        </button>
+        <button disabled={!ready || !loop.count} onClick={() => run('quantise')}>
+          16分音符に揃える
+        </button>
         <button disabled={!ready || !loop.canUndo} onClick={() => run('undo')}>
           元に戻す
         </button>
         <span>
-          4拍のカウント後に録音し、指定の小節で自動再生。Undoで録音・重ね録り・消去を8段階まで戻せます。
+          4拍のカウント後に録音し、指定の小節で自動再生。Capture
+          MIDIで直前の指定小節分を取り込み、Quantiseで16分音符に揃えます。Undoで8段階まで戻せます。
         </span>
       </div>
       {loop.full && (

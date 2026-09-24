@@ -29,6 +29,8 @@ pub fn perform(
     }
     let command = match action {
         "undo" => Some(LoopCommand::Undo),
+        "capture" => Some(LoopCommand::Capture),
+        "quantise" => Some(LoopCommand::Quantise),
         "loopPlay" => Some(LoopCommand::Play),
         "loopStop" => Some(LoopCommand::Stop),
         "loopOverdub" => Some(LoopCommand::Overdub),

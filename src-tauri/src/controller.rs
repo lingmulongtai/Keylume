@@ -68,6 +68,8 @@ impl Default for ControllerSettings {
             ("btn.trackNext", "lighting", "1"),
             ("btn.undo", "undo", ""),
             ("btn.metronome", "metronome", ""),
+            ("btn.capture", "capture", ""),
+            ("btn.quantise", "quantise", ""),
             ("btn.play", "loopPlay", ""),
             ("btn.stop", "loopStop", ""),
             ("btn.record", "loopRecord", ""),
@@ -111,9 +113,15 @@ impl Default for ControllerSettings {
 }
 impl ControllerSettings {
     pub fn upgrade_defaults(&mut self) {
-        self.performance
-            .entry("btn.metronome".into())
-            .or_insert_with(|| Binding::new("metronome", ""));
+        for (id, action) in [
+            ("btn.metronome", "metronome"),
+            ("btn.capture", "capture"),
+            ("btn.quantise", "quantise"),
+        ] {
+            self.performance
+                .entry(id.into())
+                .or_insert_with(|| Binding::new(action, ""));
+        }
     }
     pub fn bindings(&self) -> &BTreeMap<String, Binding> {
         if self.mode == Mode::Performance {
@@ -144,7 +152,7 @@ impl ControllerSettings {
             let valid = match b.action.as_str() {
                 "none" | "mode" | "undo" | "loopPlay" | "loopStop" | "loopRecord"
                 | "loopOverdub" | "loopClear" | "piano" | "panic" | "volume" | "brightness"
-                | "scroll" | "tempo" | "metronome" => true,
+                | "scroll" | "tempo" | "metronome" | "capture" | "quantise" => true,
                 "effect" => EFFECT_NAMES.contains(&b.value.as_str()),
                 "sound" | "kit" | "lighting" => ["-1", "1"].contains(&b.value.as_str()),
                 "favorite" => b.value.parse::<usize>().is_ok_and(|v| v < 128),

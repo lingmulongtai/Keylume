@@ -86,6 +86,8 @@ fn groove_command(
         "stop" => bus.loop_command(LoopCommand::Stop)?,
         "clear" => bus.loop_command(LoopCommand::Clear)?,
         "undo" => bus.loop_command(LoopCommand::Undo)?,
+        "capture" => bus.loop_command(LoopCommand::Capture)?,
+        "quantise" => bus.loop_command(LoopCommand::Quantise)?,
         _ => return Err("未対応のルーパー操作です".into()),
     }
     Ok(json!(bus.loop_status()))
