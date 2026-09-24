@@ -85,16 +85,23 @@ pub fn bitmap(bits: &[u8], target: u8) -> Result<Vec<u8>, String> {
     sysex(&data)
 }
 pub fn display_text(text: &str, target: u8) -> Result<Vec<Vec<u8>>, String> {
-    let ascii: Vec<u8> = text
-        .bytes()
-        .filter(|&b| (0x20..=0x7e).contains(&b) || (0x1b..=0x1e).contains(&b))
-        .take(32)
-        .collect();
-    let mut body = vec![6, target, 0];
-    body.extend(ascii);
+    display_lines(text, "", target)
+}
+pub fn display_lines(title: &str, value: &str, target: u8) -> Result<Vec<Vec<u8>>, String> {
+    let line = |text: &str, field| {
+        let ascii: Vec<u8> = text
+            .bytes()
+            .filter(|&b| (0x20..=0x7e).contains(&b) || (0x1b..=0x1e).contains(&b))
+            .take(32)
+            .collect();
+        let mut body = vec![6, target, field];
+        body.extend(ascii);
+        sysex(&body)
+    };
     Ok(vec![
         sysex(&[4, target, 1])?,
-        sysex(&body)?,
+        line(title, 0)?,
+        line(value, 1)?,
         sysex(&[4, target, 0x7f])?,
     ])
 }
@@ -141,6 +148,7 @@ mod tests {
     #[test]
     fn text_does_not_emit_utf8() {
         let messages = display_text("Aurora", 32).unwrap();
+        assert!(messages.contains(&sysex(&[6, 32, 1]).unwrap()));
         assert_eq!(
             messages.last().unwrap(),
             &vec![240, 0, 32, 41, 2, 20, 4, 32, 127, 247]

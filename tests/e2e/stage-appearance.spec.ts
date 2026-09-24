@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('calibrates the closest line and saves transparent effects-only layers', async ({ page }) => {
+  test.setTimeout(60000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');

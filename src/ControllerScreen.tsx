@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ControllerMap from './ControllerMap';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { ViewProps } from './ui-state';
 import { command, subscribe, native } from './api';
@@ -26,14 +27,12 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
       id: `fader-${i + 1}`,
       label: `フェーダー ${i + 1}`,
     })),
-    ...state.layout.leds
-      .filter((l) => l.id !== 'btn.shift')
-      .map((l) => ({
-        id: l.id,
-        label:
-          controlNames[l.id] ??
-          (l.id.startsWith('fbtn.') ? `フェーダー下 ${l.id.split('.')[1]}` : (l.label ?? l.id)),
-      })),
+    ...state.layout.leds.map((l) => ({
+      id: l.id,
+      label:
+        controlNames[l.id] ??
+        (l.id.startsWith('fbtn.') ? `フェーダー下 ${l.id.split('.')[1]}` : (l.label ?? l.id)),
+    })),
     ...['pitch-wheel', 'mod-wheel'].map((id) => ({ id, label: controlNames[id] })),
     ...Object.keys(c[mode])
       .filter((id) => id.startsWith('midi:'))
@@ -160,6 +159,54 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
           }
         />
       </Card>
+      <Card>
+        <h3>本体のOLED</h3>
+        <Toggle
+          label="操作名と現在の値を本体に表示"
+          checked={c.displayFeedback}
+          onChange={(displayFeedback) =>
+            saveSettings({ ...state.settings, controller: { ...c, displayFeedback } })
+          }
+        />
+        <Slider
+          label="操作後の表示時間"
+          min={1}
+          max={10}
+          step={0.5}
+          value={c.displaySeconds}
+          display={`${c.displaySeconds} 秒`}
+          onChange={(displaySeconds) =>
+            saveSettings({ ...state.settings, controller: { ...c, displaySeconds } })
+          }
+        />
+        <label className="field">
+          <span>操作していない間</span>
+          <select
+            aria-label="OLEDの待機表示"
+            value={c.displayIdle}
+            onChange={(e) =>
+              saveSettings({
+                ...state.settings,
+                controller: { ...c, displayIdle: e.target.value as 'blank' | 'preset' },
+              })
+            }
+          >
+            <option value="blank">何も表示しない</option>
+            <option value="preset">ライティングのOLED設定を表示</option>
+          </select>
+        </label>
+        <small>
+          ノブ・音量・切り替え結果を一時表示します。本体の文字仕様に合わせて英数字で表示します。
+        </small>
+      </Card>
+      <ControllerMap
+        layout={state.layout}
+        selected={selected}
+        bindings={c[mode]}
+        names={Object.fromEntries(controls.map((c) => [c.id, c.label]))}
+        select={select}
+        inform={toast}
+      />
       <div className="controller-editor">
         <Card>
           <div className="segmented">
@@ -344,7 +391,7 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
             ノブはエフェクト、ホイールはスクロール、ボタンはショートカットに適しています。アプリに割り当てた入力はDAWへ転送しません。デスクトップモードでは楽器とルーパーを停止します。
           </p>
           <p className="muted">
-            本体内部だけで動くOctave・Settings・Shiftなど、MIDI入力として届かない操作は割り当てできません。Customモードの入力はMIDI
+            Octave・Settingsや本体のモード切替など、MIDI入力として届かない操作は本体側で動作します。ShiftはDAWポートに通知が届く場合に割り当てられます。Customモードの入力はMIDI
             Learnで選べます。
           </p>
         </Card>

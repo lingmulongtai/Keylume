@@ -9,6 +9,11 @@ export const labelSize = (led: Led) =>
     : Math.min(3.8, led.size.w / ((led.label ?? buttonLabel(led.id)).length * 0.55));
 export const ledColor = (color: Color, gamma: number) =>
   `rgb(${color.map((v) => Math.round(Math.pow(v / 127, 1 / gamma) * 255)).join(',')})`;
+const arc = (x: number, y: number, radius: number, value: number) => {
+  const start = (135 * Math.PI) / 180,
+    sweep = (Math.max(0.001, value) * 270 * Math.PI) / 180;
+  return `M${x + Math.cos(start) * radius} ${y + Math.sin(start) * radius} A${radius} ${radius} 0 ${sweep > Math.PI ? 1 : 0} 1 ${x + Math.cos(start + sweep) * radius} ${y + Math.sin(start + sweep) * radius}`;
+};
 
 function HardwareFace({
   layout,
@@ -167,6 +172,35 @@ function HardwareFace({
             Fader {i + 1}: {input?.faders[i] ?? '未取得'}
           </title>
           <rect
+            x={fader.x - 11.5}
+            y={fader.y}
+            width="2.8"
+            height={fader.h}
+            rx="1.4"
+            fill="#484a50"
+          />
+          {input?.faders[i] != null && (
+            <rect
+              data-meter={`fader-${i + 1}`}
+              x={fader.x - 11.5}
+              y={fader.y + fader.h * (1 - input.faders[i]! / 127)}
+              width="2.8"
+              height={(fader.h * input.faders[i]!) / 127}
+              rx="1.4"
+              fill="#e8c48e"
+            />
+          )}
+          <text
+            x={fader.x}
+            y={fader.y + fader.h + 7}
+            textAnchor="middle"
+            fill="#f1d5ac"
+            fontSize="5.2"
+            fontFamily="Arial, sans-serif"
+          >
+            {input?.faders[i] == null ? '—' : `${Math.round((input.faders[i]! / 127) * 100)}%`}
+          </text>
+          <rect
             x={fader.x - 1.7}
             y={fader.y}
             width="3.4"
@@ -246,6 +280,37 @@ function HardwareFace({
                 : input.encoders[i]}
           </title>
           <circle cx={encoder.x} cy={encoder.y + 1.6} r={encoder.r + 0.6} fill="#0e0e11" />
+          <path
+            d={arc(encoder.x, encoder.y, encoder.r + 3, 1)}
+            fill="none"
+            stroke="#51545b"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          {input?.encoders[i] != null && (
+            <path
+              data-meter={`encoder-${i + 1}`}
+              d={arc(encoder.x, encoder.y, encoder.r + 3, input.encoders[i]! / 127)}
+              fill="none"
+              stroke="#e8c48e"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+          )}
+          <text
+            x={encoder.x}
+            y={encoder.y + encoder.r + 9}
+            textAnchor="middle"
+            fill="#f1d5ac"
+            fontSize="5.2"
+            fontFamily="Arial, sans-serif"
+          >
+            {input?.encoders[i] == null
+              ? '—'
+              : input.relative[i]
+                ? 'REL'
+                : `${Math.round((input.encoders[i]! / 127) * 100)}%`}
+          </text>
           <circle
             cx={encoder.x}
             cy={encoder.y}

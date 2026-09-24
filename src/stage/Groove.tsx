@@ -25,13 +25,13 @@ export default function Groove({
       beats: 8,
       count: 0,
       bpm: 100,
-      metronome: true,
+      metronome: false,
       full: false,
       canUndo: false,
     }),
     [bpm, setBpm] = useState(100),
     [bars, setBars] = useState(2),
-    [metronome, setMetronome] = useState(true),
+    [metronome, setMetronome] = useState(false),
     [hit, setHit] = useState(-1);
   const p = state.settings.piano;
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function Groove({
         const next = await invoke<LoopStatus>('groove_command', { name: 'state', args: {} });
         if (!dead) {
           setLoop(next);
-          if (next.mode !== 'stopped' || next.count > 0) {
+          {
             setBpm(next.bpm);
             setBars(next.beats / 4);
             setMetronome(next.metronome);
@@ -62,6 +62,8 @@ export default function Groove({
   }, [toast]);
   const run = (name: string, args: Record<string, unknown> = {}) =>
     void invoke('groove_command', { name, args }).catch((e) => toast(String(e)));
+  const configure = (patch: Partial<{ bpm: number; bars: number; metronome: boolean }>) =>
+    run('configure', { bpm, bars, metronome, ...patch });
   const active = loop.mode !== 'stopped',
     ready = native && p.enabled;
   return (
@@ -154,8 +156,12 @@ export default function Groove({
             min={40}
             max={240}
             value={bpm}
-            disabled={active || loop.count > 0}
-            onChange={(e) => setBpm(Number(e.target.value))}
+            disabled={!ready}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              setBpm(value);
+              if (value >= 40 && value <= 240) configure({ bpm: value });
+            }}
           />
         </label>
         <label>
@@ -164,7 +170,11 @@ export default function Groove({
             aria-label="ルーパーの小節数"
             value={bars}
             disabled={active || loop.count > 0}
-            onChange={(e) => setBars(Number(e.target.value))}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              setBars(value);
+              configure({ bars: value });
+            }}
           >
             {[1, 2, 4, 8].map((v) => (
               <option key={v} value={v}>
@@ -177,10 +187,13 @@ export default function Groove({
           <input
             type="checkbox"
             checked={metronome}
-            disabled={active || loop.count > 0}
-            onChange={(e) => setMetronome(e.target.checked)}
+            disabled={!ready}
+            onChange={(e) => {
+              setMetronome(e.target.checked);
+              configure({ metronome: e.target.checked });
+            }}
           />
-          クリック
+          メトロノーム
         </label>
         <output className={loop.mode === 'recording' || loop.mode === 'overdub' ? 'recording' : ''}>
           {
@@ -203,12 +216,12 @@ export default function Groove({
       </div>
       <progress aria-label="ループの進行" max={loop.beats} value={Math.max(0, loop.beat)} />
       <div className="stage-toolbar">
-        <button
-          className="record-button"
-          disabled={!ready || active || loop.count > 0}
-          onClick={() => run('record', { bpm, bars, metronome })}
-        >
-          ● 録音
+        <button className="record-button" disabled={!ready} onClick={() => run('recordToggle')}>
+          {['recording', 'countIn'].includes(loop.mode)
+            ? '■ 録音を終える'
+            : loop.count > 0
+              ? '● 重ね録り'
+              : '● 録音'}
         </button>
         <button disabled={!ready || !loop.count || active} onClick={() => run('play')}>
           ▶ 再生
@@ -220,17 +233,24 @@ export default function Groove({
         >
           {loop.mode === 'overdub' ? '重ね録りを終える' : '重ね録り'}
         </button>
-        <button disabled={!ready || !active} onClick={() => run('stop')}>
+        <button disabled={!ready || (!active && !metronome)} onClick={() => run('stop')}>
           ■ 停止
         </button>
         <button disabled={!ready || (!loop.count && !active)} onClick={() => run('clear')}>
           ループを消去
         </button>
+        <button disabled={!ready} onClick={() => run('capture')}>
+          直前の演奏を取り込む
+        </button>
+        <button disabled={!ready || !loop.count} onClick={() => run('quantise')}>
+          16分音符に揃える
+        </button>
         <button disabled={!ready || !loop.canUndo} onClick={() => run('undo')}>
           元に戻す
         </button>
         <span>
-          4拍のカウント後に録音し、指定の小節で自動再生。Undoで録音・重ね録り・消去を8段階まで戻せます。
+          4拍のカウント後に録音し、指定の小節で自動再生。Capture
+          MIDIで直前の指定小節分を取り込み、Quantiseで16分音符に揃えます。Undoで8段階まで戻せます。
         </span>
       </div>
       {loop.full && (
@@ -239,7 +259,7 @@ export default function Groove({
         </p>
       )}
       <p className="stage-hint">
-        ループは今回の起動中のみ保持します。ピアノOFFで消去されます。音色・出力先を手動変更すると停止しますが、録音内容は保持します。テンポ・小節数は新しい録音前に設定してください。物理パッドにはライティング優先でのDAW接続が必要です。
+        ループは今回の起動中のみ保持します。ピアノOFFで消去されます。音色・出力先を手動変更すると停止しますが、録音内容は保持します。テンポとクリックは演奏中も変更できます。小節数は新しい録音前に設定してください。物理パッドにはライティング優先でのDAW接続が必要です。
       </p>
     </section>
   );

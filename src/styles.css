@@ -2146,3 +2146,33 @@ code,
   color: var(--accent);
   border-color: var(--accent);
 }
+.controller-map {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 14px;
+  margin: 20px 0;
+  background: #18191b;
+}
+.controller-map > p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 0;
+}
+.controller-map svg {
+  width: 100%;
+  display: block;
+}
+.controller-map svg [role='button'] {
+  cursor: pointer;
+  outline: none;
+}
+.controller-map svg [role='button']:hover rect,
+.controller-map svg [role='button']:focus-visible rect {
+  stroke: #f1d5ac;
+  stroke-width: 1.5;
+}
+.controller-map > small {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+}

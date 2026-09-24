@@ -8,6 +8,9 @@ export interface ControllerSettings {
   performance: Record<string, Binding>;
   desktop: Record<string, Binding>;
   scrollSpeed: number;
+  displayFeedback: boolean;
+  displaySeconds: number;
+  displayIdle: 'blank' | 'preset';
 }
 export const effectNames = [
   'reverb',
@@ -42,6 +45,9 @@ export const defaultController = (): ControllerSettings => {
     ['btn.trackPrevious', 'lighting', '-1'],
     ['btn.trackNext', 'lighting', '1'],
     ['btn.undo', 'undo', ''],
+    ['btn.metronome', 'metronome', ''],
+    ['btn.capture', 'capture', ''],
+    ['btn.quantise', 'quantise', ''],
     ['btn.play', 'loopPlay', ''],
     ['btn.stop', 'loopStop', ''],
     ['btn.record', 'loopRecord', ''],
@@ -55,6 +61,9 @@ export const defaultController = (): ControllerSettings => {
     enabled: true,
     mode: 'performance',
     scrollSpeed: 1,
+    displayFeedback: true,
+    displaySeconds: 2.5,
+    displayIdle: 'blank',
     performance,
     desktop: Object.fromEntries(
       [
@@ -84,6 +93,10 @@ export const actionNames: Record<string, string> = {
   favorite: 'お気に入り音源',
   piano: '楽器のオン / オフ',
   undo: 'ルーパーを元に戻す',
+  metronome: 'メトロノームのオン / オフ',
+  tempo: 'テンポ（40–240 BPM）',
+  capture: '直前の演奏を取り込む',
+  quantise: 'ループを16分音符に揃える',
   loopPlay: 'ループ再生',
   loopStop: 'ループ停止',
   loopRecord: '録音 / 重ね録り',

@@ -39,6 +39,9 @@ pub struct ControllerSettings {
     pub performance: BTreeMap<String, Binding>,
     pub desktop: BTreeMap<String, Binding>,
     pub scroll_speed: f32,
+    pub display_feedback: bool,
+    pub display_seconds: f32,
+    pub display_idle: String,
 }
 pub const EFFECT_NAMES: [&str; 8] = [
     "reverb",
@@ -64,6 +67,9 @@ impl Default for ControllerSettings {
             ("btn.trackPrevious", "lighting", "-1"),
             ("btn.trackNext", "lighting", "1"),
             ("btn.undo", "undo", ""),
+            ("btn.metronome", "metronome", ""),
+            ("btn.capture", "capture", ""),
+            ("btn.quantise", "quantise", ""),
             ("btn.play", "loopPlay", ""),
             ("btn.stop", "loopStop", ""),
             ("btn.record", "loopRecord", ""),
@@ -99,10 +105,24 @@ impl Default for ControllerSettings {
             performance,
             desktop,
             scroll_speed: 1.,
+            display_feedback: true,
+            display_seconds: 2.5,
+            display_idle: "blank".into(),
         }
     }
 }
 impl ControllerSettings {
+    pub fn upgrade_defaults(&mut self) {
+        for (id, action) in [
+            ("btn.metronome", "metronome"),
+            ("btn.capture", "capture"),
+            ("btn.quantise", "quantise"),
+        ] {
+            self.performance
+                .entry(id.into())
+                .or_insert_with(|| Binding::new(action, ""));
+        }
+    }
     pub fn bindings(&self) -> &BTreeMap<String, Binding> {
         if self.mode == Mode::Performance {
             &self.performance
@@ -112,6 +132,8 @@ impl ControllerSettings {
     }
     pub fn validate(&self) -> Result<(), String> {
         if !(0.1..=4.).contains(&self.scroll_speed)
+            || !(1. ..=10.).contains(&self.display_seconds)
+            || !["blank", "preset"].contains(&self.display_idle.as_str())
             || self.performance.len() > 256
             || self.desktop.len() > 256
         {
@@ -130,7 +152,7 @@ impl ControllerSettings {
             let valid = match b.action.as_str() {
                 "none" | "mode" | "undo" | "loopPlay" | "loopStop" | "loopRecord"
                 | "loopOverdub" | "loopClear" | "piano" | "panic" | "volume" | "brightness"
-                | "scroll" => true,
+                | "scroll" | "tempo" | "metronome" | "capture" | "quantise" => true,
                 "effect" => EFFECT_NAMES.contains(&b.value.as_str()),
                 "sound" | "kit" | "lighting" => ["-1", "1"].contains(&b.value.as_str()),
                 "favorite" => b.value.parse::<usize>().is_ok_and(|v| v < 128),
@@ -221,6 +243,8 @@ pub struct ControlInput {
     pub delta: Option<f32>,
     pub down: bool,
     pub continuous: bool,
+    /// MIDI Start/Stop have no matching release packet.
+    pub pulse: bool,
 }
 pub fn decode(
     source: &str,
@@ -229,6 +253,17 @@ pub fn decode(
     encoder_mode: Option<u8>,
     fader_mode: Option<u8>,
 ) -> Option<ControlInput> {
+    if source == "keyboard" && matches!(b, [0xfa] | [0xfb] | [0xfc]) {
+        return Some(ControlInput {
+            id: if b[0] == 0xfc { "btn.stop" } else { "btn.play" }.into(),
+            raw: format!("midi:keyboard:{}:0", b[0]),
+            value: 1.,
+            delta: None,
+            down: true,
+            continuous: false,
+            pulse: true,
+        });
+    }
     if b.len() != 3 || b[1] > 127 || b[2] > 127 {
         return None;
     }
@@ -240,8 +275,9 @@ pub fn decode(
         delta: None,
         down: b[2] > 0,
         continuous: false,
+        pulse: false,
     };
-    if source == "keyboard" {
+    if source == "keyboard" && b[0] != 0xbf {
         if b[0] & 0xf0 == 0xe0 {
             input.id = "pitch-wheel".into();
             input.value = (b[1] as u16 + ((b[2] as u16) << 7)) as f32 / 16383.;
@@ -249,13 +285,19 @@ pub fn decode(
         } else if b[0] & 0xf0 == 0xb0 && b[1] == 1 {
             input.id = "mod-wheel".into();
             input.continuous = true;
+        } else if b[0] & 0xf0 == 0xb0 && b[1] < 120 && b[1] != 64 {
+            // Custom controls on the regular MIDI port are learnable by raw address.
         } else {
             return None;
         }
         return Some(input);
     }
-    if source != "daw" {
+    if source != "daw" && source != "keyboard" {
         return None;
+    }
+    if source == "daw" && b[0] == 0xb6 && b[1] == 63 {
+        input.id = "btn.shift".into();
+        return Some(input);
     }
     if b[0] == 0xbf {
         if (21..=28).contains(&b[1]) && encoder_mode.is_none_or(|m| [1, 2, 4].contains(&m)) {
@@ -304,7 +346,7 @@ pub struct Edges {
 }
 impl Edges {
     pub fn press(&mut self, input: &ControlInput) -> bool {
-        if input.continuous {
+        if input.continuous || input.pulse {
             return true;
         }
         if input.down {
@@ -330,6 +372,44 @@ pub fn scroll_rate(value: f32, speed: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn captured_standalone_buttons_and_realtime_transport_trigger_each_press() {
+        let l = DeviceLayout::default();
+        let mut edges = Edges::default();
+        for (cc, id) in [
+            (103, "btn.trackPrevious"),
+            (102, "btn.trackNext"),
+            (77, "btn.undo"),
+            (117, "btn.record"),
+            (76, "btn.metronome"),
+            (74, "btn.capture"),
+            (75, "btn.quantise"),
+        ] {
+            let down = decode("keyboard", &[0xbf, cc, 127], &l, None, None).unwrap();
+            assert_eq!(down.id, id);
+            assert!(edges.press(&down));
+            assert!(!edges.press(&down));
+            assert!(!edges.press(&decode("keyboard", &[0xbf, cc, 0], &l, None, None).unwrap()));
+        }
+        for (byte, id) in [(0xfa, "btn.play"), (0xfc, "btn.stop")] {
+            let input = decode("keyboard", &[byte], &l, None, None).unwrap();
+            assert_eq!(input.id, id);
+            assert!(edges.press(&input));
+            assert!(edges.press(&input));
+        }
+        assert_eq!(
+            decode("keyboard", &[0xb0, 77, 127], &l, None, None)
+                .unwrap()
+                .id,
+            "midi:keyboard:176:77"
+        );
+        assert_eq!(
+            decode("daw", &[0xb6, 63, 127], &l, None, None).unwrap().id,
+            "btn.shift"
+        );
+        assert!(decode("keyboard", &[0xb0, 64, 127], &l, None, None).is_none());
+        assert!(decode("keyboard", &[0xf8], &l, None, None).is_none());
+    }
     #[test]
     fn defaults_validate_and_shortcuts_reject_ambiguous_input() {
         assert!(ControllerSettings::default().validate().is_ok());

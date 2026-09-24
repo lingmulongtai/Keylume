@@ -75,3 +75,21 @@ test('releasing the DAW port preserves keyboard sustain and screen notes', () =>
   expect(input.state.sustain).toBeNull();
   expect(input.state.pressure).toBeNull();
 });
+
+test('shows real standalone button captures and gives Start/Stop a repeatable pulse', () => {
+  const input = new PreviewInput(),
+    l = layout as Layout;
+  for (const cc of [103, 102, 77, 117, 76, 74, 75]) {
+    input.receive('keyboard', [0xbf, cc, 127], l);
+    expect(input.state.held).toHaveLength(1);
+    input.receive('keyboard', [0xbf, cc, 0], l);
+    expect(input.state.held).toEqual([]);
+  }
+  input.receive('keyboard', [0xfa], l);
+  expect(input.state.pulse).toEqual(['btn.play', 1]);
+  input.receive('keyboard', [0xfa], l);
+  expect(input.state.pulse).toEqual(['btn.play', 2]);
+  input.receive('keyboard', [0xfc], l);
+  expect(input.state.pulse).toEqual(['btn.stop', 3]);
+  expect(input.state.held).toEqual([]);
+});

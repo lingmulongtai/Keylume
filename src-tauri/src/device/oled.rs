@@ -5,6 +5,7 @@ use crossbeam_channel::{Receiver, TryRecvError};
 pub enum Content {
     Off,
     Text(String),
+    Feedback(String, String),
     Bitmap(Vec<u8>),
 }
 impl Content {
@@ -14,6 +15,9 @@ impl Content {
         match self {
             Self::Off => result.push(protocol::sysex(&[4, 0x20, 0])?),
             Self::Text(text) => result.extend(protocol::display_text(text, 0x20)?),
+            Self::Feedback(title, value) => {
+                result.extend(protocol::display_lines(title, value, 0x20)?)
+            }
             Self::Bitmap(bits) => result.push(protocol::bitmap(bits, 0x20)?),
         }
         Ok(result)
@@ -103,9 +107,17 @@ impl DisplayQueue {
         if self.flight.is_none()
             && now >= self.retry_at
             && self.last.as_ref() != Some(&self.desired)
-            && (!matches!(self.desired, Content::Bitmap(_)) || self.awaiting_ack.is_none())
+            && (!matches!(self.desired, Content::Bitmap(_))
+                || self.awaiting_ack.is_none()
+                || matches!(self.last, Some(Content::Feedback(_, _))))
         {
-            let content = self.desired.clone();
+            // Expired operation feedback must clear even while a bitmap ACK is missing.
+            let content =
+                if matches!(self.desired, Content::Bitmap(_)) && self.awaiting_ack.is_some() {
+                    Content::Text(String::new())
+                } else {
+                    self.desired.clone()
+                };
             let messages = match content.messages() {
                 Ok(messages) => messages,
                 Err(error) => {
@@ -128,6 +140,32 @@ impl DisplayQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn expired_feedback_clears_before_a_missing_bitmap_ack_recovers() {
+        let mut q = DisplayQueue::default();
+        let mut out = Deferred::default();
+        q.request(image(0));
+        q.pump(0., &mut out, false);
+        out.replies[0].send(Ok(())).unwrap();
+        q.pump(0.1, &mut out, false);
+        q.request(Content::Feedback("Piano Volume".into(), "75%".into()));
+        q.pump(0.2, &mut out, false);
+        assert!(out.batches[1].contains(&protocol::sysex(&[6, 32, 1, b'7', b'5', b'%']).unwrap()));
+        out.replies[1].send(Ok(())).unwrap();
+        q.pump(0.3, &mut out, false);
+        q.request(image(1));
+        q.pump(3., &mut out, false);
+        assert_eq!(
+            out.batches[2],
+            Content::Text(String::new()).messages().unwrap()
+        );
+        out.replies[2].send(Ok(())).unwrap();
+        q.pump(3.1, &mut out, false);
+        assert_eq!(out.batches.len(), 3);
+        q.acknowledge();
+        q.pump(3.2, &mut out, false);
+        assert_eq!(out.batches[3], image(1).messages().unwrap());
+    }
     #[derive(Default)]
     struct Deferred {
         batches: Vec<Vec<Vec<u8>>>,

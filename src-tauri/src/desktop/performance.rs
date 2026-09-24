@@ -12,7 +12,7 @@ use std::{
 };
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rect {
     pub x: i32,
@@ -20,7 +20,7 @@ pub struct Rect {
     pub width: u32,
     pub height: u32,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Monitor {
     pub id: usize,
@@ -212,7 +212,10 @@ pub fn interaction(app: &tauri::AppHandle, core: &Core, editing: bool) -> Result
         .click_through
         && !editing;
     for (label, window) in app.webview_windows() {
-        if label.starts_with("stage-") {
+        if label.starts_with("stage-controls-") && editing {
+            let _ = window.show();
+        }
+        if label.starts_with("stage-") && !label.starts_with("stage-controls-") {
             window
                 .set_ignore_cursor_events(through)
                 .map_err(|e| e.to_string())?;
@@ -227,7 +230,7 @@ pub fn interaction(app: &tauri::AppHandle, core: &Core, editing: bool) -> Result
 pub fn close_views(app: &tauri::AppHandle) {
     for (label, window) in app.webview_windows() {
         if label.starts_with("stage-") {
-            let _ = window.close();
+            let _ = window.destroy();
         }
     }
 }
@@ -240,6 +243,15 @@ pub async fn stage_command(
     window: tauri::WebviewWindow,
 ) -> Result<Value, String> {
     match name.as_str() {
+        "toolbar" => {
+            let visible = args["visible"].as_bool().unwrap_or(true);
+            for (label, w) in app.webview_windows() {
+                if label.starts_with("stage-controls-") {
+                    if visible { w.show() } else { w.hide() }.map_err(|e| e.to_string())?;
+                }
+            }
+            return Ok(Value::Null);
+        }
         "interaction" => {
             if let Some(editing) = args["editing"].as_bool() {
                 interaction(&app, &core, editing)?;
@@ -257,10 +269,6 @@ pub async fn stage_command(
         }
         "open" => {
             let _guard = core.performance.windows_op.lock().unwrap();
-            let generation = core
-                .performance
-                .window_generation
-                .fetch_add(1, Ordering::AcqRel);
             let ids: Vec<usize> =
                 serde_json::from_value(args["ids"].clone()).map_err(|e| e.to_string())?;
             let all = monitors(&app)?;
@@ -269,6 +277,27 @@ pub async fn stage_command(
                 return Err("モニターを選び直してください".into());
             }
             let bounds = desktop(&selected)?;
+            if args["reuse"].as_bool() == Some(true) {
+                let views = core.performance.views.lock().unwrap();
+                if !ids.is_empty()
+                    && views.len() == ids.len()
+                    && views.iter().all(|(label, view)| {
+                        selected.contains(&view.monitor)
+                            && view.desktop == bounds
+                            && app.get_webview_window(label).is_some()
+                    })
+                    && app
+                        .webview_windows()
+                        .keys()
+                        .any(|label| label.starts_with("stage-controls-"))
+                {
+                    return Ok(Value::Null);
+                }
+            }
+            let generation = core
+                .performance
+                .window_generation
+                .fetch_add(1, Ordering::AcqRel);
             let top = selected.iter().map(|m| m.rect.y).max().unwrap();
             let bottom = selected
                 .iter()
@@ -286,6 +315,7 @@ pub async fn stage_command(
             }
             {
                 let mut e = core.performance.engine.lock().unwrap();
+                e.settings.monitor_ids = ids;
                 e.settings.line_y = e.settings.line_y.clamp(
                     (min / bounds.height as f64).clamp(0.25, 0.95),
                     (max / bounds.height as f64).clamp(0.25, 0.95),
@@ -294,10 +324,11 @@ pub async fn stage_command(
             }
             for (label, w) in app.webview_windows() {
                 if label.starts_with("stage-") {
-                    w.close().map_err(|e| e.to_string())?;
+                    w.destroy().map_err(|e| e.to_string())?;
                 }
             }
             core.performance.views.lock().unwrap().clear();
+            let toolbar_monitor = selected[0].clone();
             for m in selected {
                 let label = format!("stage-{generation}-{}", m.id);
                 core.performance.views.lock().unwrap().insert(
@@ -326,6 +357,9 @@ pub async fn stage_command(
                 w.set_size(PhysicalSize::new(m.rect.width, m.rect.height))
                     .map_err(|e| e.to_string())?;
                 w.show().map_err(|e| e.to_string())?;
+                // The stage needs per-pixel alpha, never a system Mica/Acrylic backdrop.
+                // Clear effects after showing, including those inherited from desktop theming.
+                w.set_effects(None).map_err(|e| e.to_string())?;
                 if !core
                     .performance
                     .engine
@@ -337,6 +371,33 @@ pub async fn stage_command(
                     let _ = w.set_focus();
                 }
             }
+            let toolbar = WebviewWindowBuilder::new(
+                &app,
+                format!("stage-controls-{generation}"),
+                WebviewUrl::App("index.html?view=stage-controls".into()),
+            )
+            .title("Keylume · 演奏操作")
+            .decorations(false)
+            .always_on_top(true)
+            .inner_size(960., 158.)
+            .resizable(false)
+            .visible(false)
+            .build()
+            .map_err(|e| e.to_string())?;
+            let toolbar_handle = toolbar.clone();
+            toolbar.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = toolbar_handle.hide();
+                }
+            });
+            toolbar
+                .set_position(PhysicalPosition::new(
+                    toolbar_monitor.rect.x + 24,
+                    toolbar_monitor.rect.y + 24,
+                ))
+                .map_err(|e| e.to_string())?;
+            toolbar.show().map_err(|e| e.to_string())?;
             interaction(&app, &core, false)?;
             return Ok(Value::Null);
         }
@@ -344,7 +405,7 @@ pub async fn stage_command(
             let _guard = core.performance.windows_op.lock().unwrap();
             for (label, w) in app.webview_windows() {
                 if label.starts_with("stage-") {
-                    let _ = w.close();
+                    let _ = w.destroy();
                 }
             }
             return Ok(Value::Null);

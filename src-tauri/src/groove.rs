@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SoundEvent {
     Piano(bool, [u8; 3]),
@@ -23,7 +24,7 @@ impl Default for LoopConfig {
         Self {
             bpm: 100.,
             bars: 2,
-            metronome: true,
+            metronome: false,
         }
     }
 }
@@ -39,6 +40,12 @@ impl LoopConfig {
 #[derive(Clone, Copy)]
 pub enum LoopCommand {
     Record(LoopConfig),
+    RecordToggle,
+    Capture,
+    Quantise,
+    Configure(LoopConfig),
+    Tempo(f64),
+    Metronome,
     Play,
     Overdub,
     Stop,
@@ -74,6 +81,9 @@ pub struct Looper {
     history: [Snapshot; 8],
     history_next: usize,
     history_len: usize,
+    click_beat: f64,
+    clock_beat: f64,
+    recent: VecDeque<Recorded>,
 }
 impl Default for Looper {
     fn default() -> Self {
@@ -93,6 +103,9 @@ impl Default for Looper {
             }),
             history_next: 0,
             history_len: 0,
+            click_beat: 0.,
+            clock_beat: 0.,
+            recent: VecDeque::with_capacity(8192),
         }
     }
 }
@@ -115,9 +128,101 @@ impl Looper {
     pub fn reset(&mut self) {
         self.command(LoopCommand::Clear);
         self.history_len = 0;
+        self.recent.clear();
+        self.clock_beat = 0.;
+        self.held = [[[None; 128]; 16]; 2];
+        self.config.metronome = false;
     }
     pub fn command(&mut self, c: LoopCommand) {
         match c {
+            LoopCommand::Capture => {
+                if self.recent.is_empty() {
+                    return;
+                }
+                self.checkpoint();
+                self.events.clear();
+                self.pending.clear();
+                let start = (self.clock_beat - self.config.bars as f64 * 4.).max(0.);
+                self.events.extend(
+                    self.recent
+                        .iter()
+                        .filter(|r| r.beat >= start)
+                        .enumerate()
+                        .map(|(order, r)| Recorded {
+                            beat: r.beat - start,
+                            event: r.event,
+                            order,
+                        }),
+                );
+                self.mode = 0;
+                self.beat = 0.;
+                self.full = false;
+            }
+            LoopCommand::Quantise => {
+                if self.count() == 0 {
+                    return;
+                }
+                self.checkpoint();
+                self.merge();
+                let length = self.config.bars as f64 * 4.;
+                let mut offsets = [[[0.; 128]; 16]; 2];
+                for r in &mut self.events {
+                    let snapped = (r.beat * 4.).round() / 4.;
+                    let next = match r.event {
+                        SoundEvent::Piano(screen, b) if b[0] & 0xf0 == 0x90 && b[2] > 0 => {
+                            let next = snapped.min(length - 0.01);
+                            offsets[usize::from(screen)][(b[0] & 15) as usize][b[1] as usize] =
+                                next - r.beat;
+                            next
+                        }
+                        SoundEvent::Piano(screen, b) if [0x80, 0x90].contains(&(b[0] & 0xf0)) => {
+                            r.beat
+                                + offsets[usize::from(screen)][(b[0] & 15) as usize][b[1] as usize]
+                        }
+                        _ => snapped,
+                    };
+                    r.beat = next.clamp(0., length - 0.001);
+                }
+                self.events
+                    .sort_unstable_by(|a, b| a.beat.total_cmp(&b.beat).then(a.order.cmp(&b.order)));
+                self.mode = 0;
+                self.beat = 0.;
+            }
+            LoopCommand::Configure(config) => {
+                if config.validate().is_ok() {
+                    self.config.bpm = config.bpm;
+                    self.config.metronome = config.metronome;
+                    if self.mode == 0 && self.count() == 0 {
+                        self.config.bars = config.bars;
+                    }
+                }
+                return;
+            }
+            LoopCommand::Tempo(bpm) => {
+                if (40. ..=240.).contains(&bpm) {
+                    self.config.bpm = bpm;
+                }
+                return;
+            }
+            LoopCommand::Metronome => {
+                self.config.metronome = !self.config.metronome;
+                self.last_click = i32::MIN;
+                self.click_beat = 0.;
+                return;
+            }
+            LoopCommand::RecordToggle => {
+                let next = match self.mode {
+                    1 | 2 => LoopCommand::Stop,
+                    3 | 4 => LoopCommand::Overdub,
+                    _ if self.count() > 0 => {
+                        self.command(LoopCommand::Play);
+                        LoopCommand::Overdub
+                    }
+                    _ => LoopCommand::Record(self.config),
+                };
+                self.command(next);
+                return;
+            }
             LoopCommand::Record(config) => {
                 self.checkpoint();
                 self.config = config;
@@ -146,6 +251,7 @@ impl Looper {
                 self.merge();
                 self.mode = 0;
                 self.beat = 0.;
+                self.config.metronome = false;
             }
             LoopCommand::Clear => {
                 if self.count() > 0 {
@@ -175,7 +281,6 @@ impl Looper {
         }
         self.cursor = 0;
         self.last_click = i32::MIN;
-        self.held = [[[None; 128]; 16]; 2];
     }
     fn merge(&mut self) {
         self.events.append(&mut self.pending);
@@ -184,7 +289,7 @@ impl Looper {
         self.cursor = self.events.partition_point(|e| e.beat < self.beat);
     }
     pub fn capture(&mut self, event: SoundEvent, octave: i8) {
-        if ![2, 4].contains(&self.mode) || event == SoundEvent::Release {
+        if event == SoundEvent::Release {
             return;
         }
         if event == SoundEvent::Piano(true, [0, 0, 0]) {
@@ -198,10 +303,6 @@ impl Looper {
                     }
                 }
             }
-            return;
-        }
-        if self.events.len() + self.pending.len() >= 8192 {
-            self.full = true;
             return;
         }
         let event = match event {
@@ -227,13 +328,33 @@ impl Looper {
                         };
                         b[1] = pitch;
                     }
-                    0xb0 | 0xe0 => {}
+                    0xb0 if [1, 7, 10, 11, 64, 120, 121, 123].contains(&b[1]) => {
+                        if [120, 123].contains(&b[1]) {
+                            self.held[source][ch] = [None; 128];
+                        }
+                    }
+                    0xe0 => {}
                     _ => return,
                 }
                 SoundEvent::Piano(screen, b)
             }
             e => e,
         };
+        if self.recent.len() >= 8192 {
+            self.recent.pop_front();
+        }
+        self.recent.push_back(Recorded {
+            beat: self.clock_beat,
+            event,
+            order: 0,
+        });
+        if ![2, 4].contains(&self.mode) {
+            return;
+        }
+        if self.events.len() + self.pending.len() >= 8192 {
+            self.full = true;
+            return;
+        }
         self.pending.push(Recorded {
             beat: self.beat.max(0.),
             event,
@@ -243,7 +364,24 @@ impl Looper {
     /// Returns true on a loop boundary, so playback voices can release before the next lap.
     pub fn advance(&mut self, seconds: f64, out: &mut Vec<SoundEvent>) -> bool {
         out.clear();
+        self.clock_beat += seconds * self.config.bpm / 60.;
+        let oldest = self.clock_beat - self.config.bars as f64 * 4.;
+        while self.recent.front().is_some_and(|r| r.beat < oldest) {
+            self.recent.pop_front();
+        }
         if self.mode == 0 {
+            if self.config.metronome {
+                let click = self.click_beat.floor() as i32;
+                if click != self.last_click {
+                    self.last_click = click;
+                    out.push(SoundEvent::Drum(
+                        16,
+                        if click.rem_euclid(4) == 0 { 80 } else { 45 },
+                    ));
+                }
+                self.click_beat += seconds * self.config.bpm / 60.;
+                self.click_beat %= 4.;
+            }
             return false;
         }
         let before = self.beat;
@@ -271,7 +409,6 @@ impl Looper {
                 self.mode = 3;
             }
             self.cursor = 0;
-            self.held = [[[None; 128]; 16]; 2];
             reset = true;
         }
         if self.mode >= 3 {
@@ -283,7 +420,7 @@ impl Looper {
             }
         }
         let click = self.beat.floor() as i32;
-        if self.config.metronome && click != self.last_click {
+        if (self.config.metronome || self.mode == 1) && click != self.last_click {
             self.last_click = click;
             out.push(SoundEvent::Drum(
                 16,
@@ -312,6 +449,101 @@ impl Looper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn capture_keeps_releases_across_transport_and_ignores_hardware_buttons() {
+        let mut l = Looper::default();
+        let mut out = Vec::new();
+        for cc in [74, 75, 76, 77, 102, 103, 117] {
+            l.capture(SoundEvent::Piano(false, [0xbf, cc, 127]), 0);
+        }
+        l.command(LoopCommand::Capture);
+        assert_eq!(l.count(), 0);
+        for transport in [LoopCommand::Capture, LoopCommand::Stop, LoopCommand::Play] {
+            l.reset();
+            l.capture(SoundEvent::Piano(false, [0x90, 60, 100]), 1);
+            l.command(transport);
+            l.advance(0.1, &mut out);
+            l.capture(SoundEvent::Piano(false, [0x80, 60, 0]), -1);
+            l.command(LoopCommand::Capture);
+            assert_eq!(l.count(), 2);
+            assert_eq!(l.events[1].event, SoundEvent::Piano(false, [0x80, 72, 0]));
+            assert!(l.events[1].beat > l.events[0].beat);
+        }
+        l.command(LoopCommand::Metronome);
+        l.reset();
+        l.advance(0.1, &mut out);
+        assert!(out.is_empty());
+    }
+    #[test]
+    fn retrospective_capture_and_quantise_preserve_duration_and_are_undoable() {
+        let mut l = Looper::default();
+        let mut out = Vec::new();
+        l.command(LoopCommand::Configure(LoopConfig {
+            bpm: 60.,
+            bars: 1,
+            metronome: false,
+        }));
+        l.advance(0.13, &mut out);
+        l.capture(SoundEvent::Piano(false, [0x90, 60, 100]), 1);
+        l.advance(0.41, &mut out);
+        l.capture(SoundEvent::Piano(false, [0x80, 60, 0]), 1);
+        assert_eq!(l.count(), 0);
+        l.command(LoopCommand::Capture);
+        assert_eq!(l.count(), 2);
+        assert_eq!(l.events[0].event, SoundEvent::Piano(false, [0x90, 72, 100]));
+        l.command(LoopCommand::Quantise);
+        assert_eq!(l.events[0].beat, 0.25);
+        assert!((l.events[1].beat - l.events[0].beat - 0.41).abs() < 1e-8);
+        l.command(LoopCommand::Undo);
+        assert!((l.events[0].beat - 0.13).abs() < 1e-8);
+        l.command(LoopCommand::Undo);
+        assert_eq!(l.count(), 0);
+        l.advance(5., &mut out);
+        l.command(LoopCommand::Capture);
+        assert_eq!(l.count(), 0);
+        for _ in 0..9000 {
+            l.capture(SoundEvent::Drum(8, 100), 0);
+        }
+        assert_eq!(l.recent.len(), 8192);
+        assert_eq!(l.recent.capacity(), 8192);
+        l.reset();
+        assert!(l.recent.is_empty());
+    }
+    #[test]
+    fn standalone_click_tempo_and_record_button_share_configuration() {
+        let mut l = Looper::default();
+        let mut out = Vec::new();
+        l.advance(0.1, &mut out);
+        assert!(out.is_empty());
+        l.command(LoopCommand::Configure(LoopConfig {
+            bpm: 120.,
+            bars: 1,
+            metronome: true,
+        }));
+        l.advance(0.25, &mut out);
+        assert_eq!(out, [SoundEvent::Drum(16, 80)]);
+        l.advance(0.25, &mut out);
+        assert!(out.is_empty());
+        l.advance(0.01, &mut out);
+        assert_eq!(out, [SoundEvent::Drum(16, 45)]);
+        assert_eq!(l.mode, 0);
+        l.command(LoopCommand::RecordToggle);
+        assert_eq!(l.beat, -4.);
+        assert_eq!(l.config.bpm, 120.);
+        l.advance(2., &mut out);
+        l.capture(SoundEvent::Drum(8, 100), 0);
+        l.command(LoopCommand::RecordToggle);
+        assert_eq!(l.mode, 0);
+        assert!(!l.config.metronome);
+        l.command(LoopCommand::RecordToggle);
+        assert_eq!(l.mode, 4);
+        assert_eq!(l.count(), 1);
+        l.command(LoopCommand::Tempo(180.));
+        assert_eq!(l.mode, 4);
+        assert_eq!(l.config.bpm, 180.);
+        l.command(LoopCommand::Tempo(f64::NAN));
+        assert_eq!(l.config.bpm, 180.);
+    }
     #[test]
     fn undo_restores_overdub_clear_and_new_recording_without_growing_buffers() {
         let mut l = Looper::default();

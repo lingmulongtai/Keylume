@@ -95,6 +95,7 @@ pub struct StageSettings {
     pub loop_start: f64,
     pub loop_end: f64,
     pub tracks: Vec<u16>,
+    pub monitor_ids: Vec<usize>,
 }
 impl Default for StageSettings {
     fn default() -> Self {
@@ -125,12 +126,15 @@ impl Default for StageSettings {
             loop_start: 0.,
             loop_end: 8.,
             tracks: vec![],
+            monitor_ids: vec![],
         }
     }
 }
 impl StageSettings {
     pub fn validate(&self) -> Result<(), String> {
-        if !["live", "practice"].contains(&self.mode.as_str())
+        if self.monitor_ids.len() > 8
+            || self.monitor_ids.iter().collect::<HashSet<_>>().len() != self.monitor_ids.len()
+            || !["live", "practice"].contains(&self.mode.as_str())
             || !["english", "solfege"].contains(&self.label_format.as_str())
             || !["timing", "wait"].contains(&self.practice_mode.as_str())
             || ![
