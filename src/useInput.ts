@@ -3,6 +3,15 @@ import { getInputState, subscribe } from './api';
 import { emptyInput, type InputState } from './input';
 export function useInput() {
   const [state, setState] = useState(emptyInput);
+  const [pulse, setPulse] = useState<string | null>(null);
+  const pulseId = state.pulse?.[0],
+    pulseSerial = state.pulse?.[1];
+  useEffect(() => {
+    if (!pulseId) return;
+    setPulse(pulseId);
+    const timer = setTimeout(() => setPulse(null), 180);
+    return () => clearTimeout(timer);
+  }, [pulseId, pulseSerial]);
   useEffect(() => {
     let dead = false,
       received = false;
@@ -26,5 +35,5 @@ export function useInput() {
       cleanup?.();
     };
   }, []);
-  return state;
+  return pulse ? { ...state, held: [...state.held, pulse] } : state;
 }

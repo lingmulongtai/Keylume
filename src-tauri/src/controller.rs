@@ -221,6 +221,8 @@ pub struct ControlInput {
     pub delta: Option<f32>,
     pub down: bool,
     pub continuous: bool,
+    /// MIDI Start/Stop have no matching release packet.
+    pub pulse: bool,
 }
 pub fn decode(
     source: &str,
@@ -229,6 +231,17 @@ pub fn decode(
     encoder_mode: Option<u8>,
     fader_mode: Option<u8>,
 ) -> Option<ControlInput> {
+    if source == "keyboard" && matches!(b, [0xfa] | [0xfb] | [0xfc]) {
+        return Some(ControlInput {
+            id: if b[0] == 0xfc { "btn.stop" } else { "btn.play" }.into(),
+            raw: format!("midi:keyboard:{}:0", b[0]),
+            value: 1.,
+            delta: None,
+            down: true,
+            continuous: false,
+            pulse: true,
+        });
+    }
     if b.len() != 3 || b[1] > 127 || b[2] > 127 {
         return None;
     }
@@ -240,8 +253,9 @@ pub fn decode(
         delta: None,
         down: b[2] > 0,
         continuous: false,
+        pulse: false,
     };
-    if source == "keyboard" {
+    if source == "keyboard" && b[0] != 0xbf {
         if b[0] & 0xf0 == 0xe0 {
             input.id = "pitch-wheel".into();
             input.value = (b[1] as u16 + ((b[2] as u16) << 7)) as f32 / 16383.;
@@ -254,7 +268,7 @@ pub fn decode(
         }
         return Some(input);
     }
-    if source != "daw" {
+    if source != "daw" && source != "keyboard" {
         return None;
     }
     if b[0] == 0xbf {
@@ -304,7 +318,7 @@ pub struct Edges {
 }
 impl Edges {
     pub fn press(&mut self, input: &ControlInput) -> bool {
-        if input.continuous {
+        if input.continuous || input.pulse {
             return true;
         }
         if input.down {
@@ -330,6 +344,34 @@ pub fn scroll_rate(value: f32, speed: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn captured_standalone_buttons_and_realtime_transport_trigger_each_press() {
+        let l = DeviceLayout::default();
+        let mut edges = Edges::default();
+        for (cc, id) in [
+            (103, "btn.trackPrevious"),
+            (102, "btn.trackNext"),
+            (77, "btn.undo"),
+            (117, "btn.record"),
+            (76, "btn.metronome"),
+            (74, "btn.capture"),
+            (75, "btn.quantise"),
+        ] {
+            let down = decode("keyboard", &[0xbf, cc, 127], &l, None, None).unwrap();
+            assert_eq!(down.id, id);
+            assert!(edges.press(&down));
+            assert!(!edges.press(&down));
+            assert!(!edges.press(&decode("keyboard", &[0xbf, cc, 0], &l, None, None).unwrap()));
+        }
+        for (byte, id) in [(0xfa, "btn.play"), (0xfc, "btn.stop")] {
+            let input = decode("keyboard", &[byte], &l, None, None).unwrap();
+            assert_eq!(input.id, id);
+            assert!(edges.press(&input));
+            assert!(edges.press(&input));
+        }
+        assert!(decode("keyboard", &[0xb0, 77, 127], &l, None, None).is_none());
+        assert!(decode("keyboard", &[0xf8], &l, None, None).is_none());
+    }
     #[test]
     fn defaults_validate_and_shortcuts_reject_ambiguous_input() {
         assert!(ControllerSettings::default().validate().is_ok());

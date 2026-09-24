@@ -20,6 +20,7 @@ pub struct InputState {
     pub fader_mode: Option<u8>,
     pub last_note: Option<[u8; 2]>,
     pub last_message: String,
+    pub pulse: Option<(String, u64)>,
     #[serde(skip)]
     presses: BTreeMap<(String, u8, u8), String>,
     #[serde(skip)]
@@ -51,6 +52,15 @@ impl InputState {
         }
     }
     pub fn receive(&mut self, source: &str, b: &[u8], layout: &DeviceLayout) {
+        if source == "keyboard" && matches!(b, [0xfa] | [0xfb] | [0xfc]) {
+            let serial = self.pulse.as_ref().map_or(1, |p| p.1.wrapping_add(1));
+            self.pulse = Some((
+                if b[0] == 0xfc { "btn.stop" } else { "btn.play" }.into(),
+                serial,
+            ));
+            self.last_message = format!("{source} · {:02X}", b[0]);
+            return;
+        }
         if b.len() < 2 || b[0] < 0x80 || b[0] >= 0xf0 || b[1..].iter().any(|v| *v > 127) {
             return;
         }
@@ -121,7 +131,7 @@ impl InputState {
                     self.presses.remove(&key);
                 }
             }
-        } else if keyboard {
+        } else if keyboard && b[0] != 0xbf {
             match kind {
                 0xe0 => self.pitch = Some(b[1] as u16 + ((v as u16) << 7)),
                 0xd0 => {
@@ -141,7 +151,7 @@ impl InputState {
                 },
                 _ => {}
             }
-        } else if source == "daw" && b[0] == 0xbf {
+        } else if (source == "daw" || source == "keyboard") && b[0] == 0xbf {
             match b[1] {
                 5..=13 => self.faders[(b[1] - 5) as usize] = Some(v),
                 21..=28 => {
@@ -215,6 +225,24 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn standalone_buttons_and_transport_are_visible_without_sticking() {
+        let mut s = InputState::default();
+        let l = DeviceLayout::default();
+        for cc in [103, 102, 77, 117, 76, 74, 75] {
+            s.receive("keyboard", &[0xbf, cc, 127], &l);
+            assert_eq!(s.held.len(), 1);
+            s.receive("keyboard", &[0xbf, cc, 0], &l);
+            assert!(s.held.is_empty());
+        }
+        s.receive("keyboard", &[0xfa], &l);
+        assert_eq!(s.pulse, Some(("btn.play".into(), 1)));
+        s.receive("keyboard", &[0xfa], &l);
+        assert_eq!(s.pulse, Some(("btn.play".into(), 2)));
+        s.receive("keyboard", &[0xfc], &l);
+        assert_eq!(s.pulse, Some(("btn.stop".into(), 3)));
+        assert!(s.held.is_empty());
+    }
     #[test]
     fn releasing_daw_preserves_ongoing_keyboard_and_screen_input() {
         let mut s = InputState::default();

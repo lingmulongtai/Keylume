@@ -14,6 +14,7 @@ export interface InputState {
   faderMode: number | null;
   lastNote: [number, number] | null;
   lastMessage: string;
+  pulse: [string, number] | null;
 }
 export const emptyInput = (): InputState => ({
   encoders: Array(8).fill(null),
@@ -30,6 +31,7 @@ export const emptyInput = (): InputState => ({
   faderMode: null,
   lastNote: null,
   lastMessage: '',
+  pulse: null,
 });
 // The two transport lamps are monochrome hardware; only their intensity changes.
 export function hardwareColor(id: string, color: Color): Color {
@@ -73,6 +75,14 @@ export class PreviewInput {
     }
   }
   receive(source: string, b: number[], layout: Layout) {
+    if (source === 'keyboard' && b.length === 1 && [0xfa, 0xfb, 0xfc].includes(b[0])) {
+      this.state.pulse = [
+        b[0] === 0xfc ? 'btn.stop' : 'btn.play',
+        (this.state.pulse?.[1] ?? 0) + 1,
+      ];
+      this.state.lastMessage = `${source} · ${b[0].toString(16).toUpperCase()}`;
+      return;
+    }
     const s = this.state,
       kind = b[0] & 0xf0,
       ch = b[0] & 15,
@@ -120,7 +130,7 @@ export class PreviewInput {
         if (v) this.presses.set(key, id);
         else this.presses.delete(key);
       }
-    } else if (keyboard) {
+    } else if (keyboard && b[0] !== 0xbf) {
       if (kind === 0xe0) s.pitch = b[1] + (v << 7);
       if (kind === 0xd0) {
         s.pressure = b[1];
@@ -139,7 +149,7 @@ export class PreviewInput {
           s.modulation = 0;
         }
       }
-    } else if (source === 'daw' && b[0] === 0xbf) {
+    } else if (['daw', 'keyboard'].includes(source) && b[0] === 0xbf) {
       if (b[1] >= 5 && b[1] <= 13) s.faders[b[1] - 5] = v;
       else if (b[1] >= 21 && b[1] <= 28) {
         s.encoders[b[1] - 21] = v;
