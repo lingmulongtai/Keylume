@@ -130,6 +130,8 @@ impl Looper {
         self.history_len = 0;
         self.recent.clear();
         self.clock_beat = 0.;
+        self.held = [[[None; 128]; 16]; 2];
+        self.config.metronome = false;
     }
     pub fn command(&mut self, c: LoopCommand) {
         match c {
@@ -279,7 +281,6 @@ impl Looper {
         }
         self.cursor = 0;
         self.last_click = i32::MIN;
-        self.held = [[[None; 128]; 16]; 2];
     }
     fn merge(&mut self) {
         self.events.append(&mut self.pending);
@@ -327,7 +328,12 @@ impl Looper {
                         };
                         b[1] = pitch;
                     }
-                    0xb0 | 0xe0 => {}
+                    0xb0 if [1, 7, 10, 11, 64, 120, 121, 123].contains(&b[1]) => {
+                        if [120, 123].contains(&b[1]) {
+                            self.held[source][ch] = [None; 128];
+                        }
+                    }
+                    0xe0 => {}
                     _ => return,
                 }
                 SoundEvent::Piano(screen, b)
@@ -403,7 +409,6 @@ impl Looper {
                 self.mode = 3;
             }
             self.cursor = 0;
-            self.held = [[[None; 128]; 16]; 2];
             reset = true;
         }
         if self.mode >= 3 {
@@ -444,6 +449,31 @@ impl Looper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn capture_keeps_releases_across_transport_and_ignores_hardware_buttons() {
+        let mut l = Looper::default();
+        let mut out = Vec::new();
+        for cc in [74, 75, 76, 77, 102, 103, 117] {
+            l.capture(SoundEvent::Piano(false, [0xbf, cc, 127]), 0);
+        }
+        l.command(LoopCommand::Capture);
+        assert_eq!(l.count(), 0);
+        for transport in [LoopCommand::Capture, LoopCommand::Stop, LoopCommand::Play] {
+            l.reset();
+            l.capture(SoundEvent::Piano(false, [0x90, 60, 100]), 1);
+            l.command(transport);
+            l.advance(0.1, &mut out);
+            l.capture(SoundEvent::Piano(false, [0x80, 60, 0]), -1);
+            l.command(LoopCommand::Capture);
+            assert_eq!(l.count(), 2);
+            assert_eq!(l.events[1].event, SoundEvent::Piano(false, [0x80, 72, 0]));
+            assert!(l.events[1].beat > l.events[0].beat);
+        }
+        l.command(LoopCommand::Metronome);
+        l.reset();
+        l.advance(0.1, &mut out);
+        assert!(out.is_empty());
+    }
     #[test]
     fn retrospective_capture_and_quantise_preserve_duration_and_are_undoable() {
         let mut l = Looper::default();
