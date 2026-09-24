@@ -322,3 +322,45 @@ html[data-surface='stage'] #root {
   gap: 16px;
   padding: 16px 0;
 }
+
+html[data-surface='stage-controls'],
+html[data-surface='stage-controls'] body,
+html[data-surface='stage-controls'] #root {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.stage-controls {
+  padding: 10px 16px;
+  background: #202123;
+}
+.stage-controls-heading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.stage-controls-heading > strong {
+  color: #e8c48e;
+  margin-right: auto;
+}
+.stage-controls .stage-toolbar {
+  margin: 0 0 4px;
+  gap: 12px;
+}
+.stage-controls .stage-toolbar strong {
+  max-width: 350px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage-controls .stage-transport {
+  margin: 0;
+  padding: 0;
+}
+.stage-controls [role='alert'] {
+  color: #f1a0a0;
+  margin: 3px 0;
+  font-size: 11px;
+}

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Music2, Upload, Play, Pause, Square, Monitor, Maximize2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Monitor, Maximize2 } from 'lucide-react';
 import type { ViewProps } from '../ui-state';
 import Piano from '../Piano';
 import Groove from './Groove';
@@ -7,22 +7,16 @@ import StageCanvas from './Canvas';
 import { stageCommand, subscribeInteraction } from './api';
 import { useStage } from './useStage';
 import { useStageChange } from './useStageChange';
-import { demoSong } from './midi';
-import { importMidi } from './import-midi';
+import StageTransport from './Transport';
+import { native } from '../api';
 import { union } from './geometry';
 import type { StageSettings, StageMonitor, StageView } from './types';
 import './stage.css';
-const seconds = (s: number) =>
-  `${Math.floor(Math.max(0, s) / 60)}:${Math.floor(Math.max(0, s) % 60)
-    .toString()
-    .padStart(2, '0')}`;
 export default function Stage(props: ViewProps) {
   const { state, song, frame, optimistic, settled } = useStage(props.toast),
     [monitors, setMonitors] = useState<StageMonitor[]>([]),
     [selected, setSelected] = useState<number[]>([]),
-    [calibrate, setCalibrate] = useState(false),
-    [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+    [calibrate, setCalibrate] = useState(false);
   const run = (name: string, args: Record<string, unknown> = {}) =>
     stageCommand(name, args).catch((e) => {
       props.toast(String(e));
@@ -30,10 +24,11 @@ export default function Stage(props: ViewProps) {
     });
   const change = useStageChange(props.toast, optimistic, settled);
   const refresh = useCallback(() => {
-    void stageCommand<StageMonitor[]>('monitors')
-      .then((ms) => {
+    void Promise.all([stageCommand<StageMonitor[]>('monitors'), stageCommand('state')])
+      .then(([ms, current]) => {
         setMonitors(ms);
-        setSelected(ms.map((m) => m.id));
+        const saved = current.settings.monitorIds.filter((id) => ms.some((m) => m.id === id));
+        setSelected(saved.length ? saved : ms.map((m) => m.id));
       })
       .catch((e) => props.toast(String(e)));
   }, [props.toast]);
@@ -41,16 +36,6 @@ export default function Stage(props: ViewProps) {
   const settings = state.settings,
     desktop = union(monitors.filter((m) => selected.includes(m.id))),
     view = { desktop, monitor: { ...desktop, id: -1, name: 'Preview', scale: 1 } };
-  const load = async (file: File) => {
-    setBusy(true);
-    try {
-      await stageCommand('load', { song: await importMidi(file) });
-    } catch (e) {
-      props.toast(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
   const range = (
     label: string,
     key: 'left' | 'right' | 'lineY' | 'lookAhead' | 'trail' | 'particles',
@@ -135,71 +120,15 @@ export default function Stage(props: ViewProps) {
       </div>
       {settings.mode === 'practice' && (
         <section className="stage-practice">
-          <div className="stage-toolbar">
-            <Music2 size={19} />
-            <strong>{state.title || 'MIDIファイルを選ぶ'}</strong>
-            <span>
-              {song
-                ? `${song.notes.length.toLocaleString()}音 · ${seconds(song.duration)}`
-                : 'テンポ変更・和音に対応'}
-            </span>
-            <input
-              hidden
-              ref={input}
-              type="file"
-              accept=".mid,.midi"
-              aria-label="MIDIファイル"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void load(file);
-                e.target.value = '';
-              }}
-            />
-            <button disabled={busy} onClick={() => input.current?.click()}>
-              <Upload size={15} />
-              {busy ? '読み込み中…' : 'MIDIを読み込む'}
-            </button>
-            <button onClick={() => void run('load', { song: demoSong() })}>お試し曲</button>
-          </div>
-          <div className="stage-transport">
-            <button
-              className="primary"
-              disabled={!song}
-              aria-label={state.running ? '練習を一時停止' : '練習を開始'}
-              onClick={() => void run(state.running ? 'pause' : 'play')}
-            >
-              {state.running ? <Pause size={18} /> : <Play size={18} />}
-            </button>
-            <button disabled={!song} aria-label="練習を停止" onClick={() => void run('stop')}>
-              <Square size={16} />
-            </button>
-            <output>
-              {seconds(state.position)} / {seconds(state.duration)}
-            </output>
-            <input
-              aria-label="練習の再生位置"
-              type="range"
-              min={0}
-              max={Math.max(0.1, state.duration)}
-              step={0.1}
-              value={Math.max(0, state.position)}
-              onChange={(e) => void run('seek', { position: Number(e.target.value) })}
-            />
-            <label>
-              速度{' '}
-              <select
-                aria-label="練習速度"
-                value={settings.speed}
-                onChange={(e) => change({ speed: Number(e.target.value) })}
-              >
-                {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2].map((v) => (
-                  <option key={v} value={v}>
-                    {v}×
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <StageTransport
+            state={state}
+            song={song}
+            change={change}
+            error={props.toast}
+            present={
+              native ? () => stageCommand('open', { ids: selected, reuse: true }) : undefined
+            }
+          />
           <div className="stage-scores" aria-label="タイミング採点">
             <strong>
               {state.score.points}
@@ -314,11 +243,13 @@ export default function Stage(props: ViewProps) {
               <input
                 type="checkbox"
                 checked={selected.includes(m.id)}
-                onChange={(e) =>
-                  setSelected(
-                    e.target.checked ? [...selected, m.id] : selected.filter((id) => id !== m.id),
-                  )
-                }
+                onChange={(e) => {
+                  const ids = e.target.checked
+                    ? [...selected, m.id]
+                    : selected.filter((id) => id !== m.id);
+                  setSelected(ids);
+                  change({ monitorIds: ids });
+                }}
               />
               <span>
                 画面 {m.id + 1} · {m.width} × {m.height}
@@ -477,7 +408,7 @@ export default function Stage(props: ViewProps) {
 }
 export function StageWindow() {
   const [error, setError] = useState(''),
-    { state, song, frame, optimistic, settled } = useStage(setError),
+    { song, frame, optimistic, settled } = useStage(setError),
     [view, setView] = useState<StageView | null>(null),
     [calibrate, setCalibrate] = useState(false);
   const change = useStageChange(setError, optimistic, settled);
@@ -513,16 +444,61 @@ export function StageWindow() {
       {view && (
         <StageCanvas frame={frame} song={song} view={view} calibrate={calibrate} change={change} />
       )}
-      {(!state.settings.clickThrough || calibrate) && (
-        <div className="stage-exit">
-          <button onClick={() => void stageCommand('interaction', { editing: !calibrate })}>
-            {calibrate ? '位置を固定' : 'C · 位置合わせ'}
-          </button>
-          <button onClick={() => void stageCommand('close')}>Esc · 閉じる</button>
-          {state.waiting.length > 0 && <span>正しい音を待っています</span>}
-          {error && <span role="alert">{error}</span>}
+      {error && (
+        <div className="stage-exit" role="alert">
+          {error}
         </div>
       )}
+    </main>
+  );
+}
+
+export function StageControls() {
+  const [error, setError] = useState(''),
+    [editing, setEditing] = useState(false);
+  const { state, song, optimistic, settled } = useStage(setError);
+  const change = useStageChange(setError, optimistic, settled);
+  useEffect(() => {
+    let dead = false,
+      off: (() => void) | undefined;
+    void subscribeInteraction(setEditing).then((fn) => {
+      if (dead) fn();
+      else off = fn;
+    });
+    return () => {
+      dead = true;
+      off?.();
+    };
+  }, []);
+  const run = (name: string, args: Record<string, unknown> = {}) =>
+    void stageCommand(name, args).catch((e) => setError(String(e)));
+  return (
+    <main className="stage-controls">
+      <div className="stage-controls-heading">
+        <strong data-tauri-drag-region>KEYLUME · 演奏操作</strong>
+        <button aria-pressed={editing} onClick={() => run('interaction', { editing: !editing })}>
+          {editing ? '位置を固定' : '鍵盤の位置合わせ'}
+        </button>
+        <label>
+          <input
+            type="checkbox"
+            checked={state.settings.transparent}
+            onChange={(e) => change({ transparent: e.target.checked })}
+          />
+          背景を透明に
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={state.settings.clickThrough}
+            onChange={(e) => change({ clickThrough: e.target.checked })}
+          />
+          演出をクリック透過
+        </label>
+        <button onClick={() => run('close')}>演奏画面を閉じる</button>
+      </div>
+      <StageTransport state={state} song={song} change={change} error={setError} />
+      {error && <p role="alert">{error}</p>}
     </main>
   );
 }

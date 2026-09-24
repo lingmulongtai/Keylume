@@ -56,6 +56,7 @@ export interface StageSettings {
   loopStart: number;
   loopEnd: number;
   tracks: number[];
+  monitorIds: number[];
 }
 export const defaultStageSettings: StageSettings = {
   mode: 'live',
@@ -84,6 +85,7 @@ export const defaultStageSettings: StageSettings = {
   loopStart: 0,
   loopEnd: 8,
   tracks: [],
+  monitorIds: [],
 };
 export interface LiveNote {
   id: number;
