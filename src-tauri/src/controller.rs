@@ -277,6 +277,8 @@ pub fn decode(
         } else if b[0] & 0xf0 == 0xb0 && b[1] == 1 {
             input.id = "mod-wheel".into();
             input.continuous = true;
+        } else if b[0] & 0xf0 == 0xb0 && b[1] < 120 && b[1] != 64 {
+            // Custom controls on the regular MIDI port are learnable by raw address.
         } else {
             return None;
         }
@@ -284,6 +286,10 @@ pub fn decode(
     }
     if source != "daw" && source != "keyboard" {
         return None;
+    }
+    if source == "daw" && b[0] == 0xb6 && b[1] == 63 {
+        input.id = "btn.shift".into();
+        return Some(input);
     }
     if b[0] == 0xbf {
         if (21..=28).contains(&b[1]) && encoder_mode.is_none_or(|m| [1, 2, 4].contains(&m)) {
@@ -383,7 +389,17 @@ mod tests {
             assert!(edges.press(&input));
             assert!(edges.press(&input));
         }
-        assert!(decode("keyboard", &[0xb0, 77, 127], &l, None, None).is_none());
+        assert_eq!(
+            decode("keyboard", &[0xb0, 77, 127], &l, None, None)
+                .unwrap()
+                .id,
+            "midi:keyboard:176:77"
+        );
+        assert_eq!(
+            decode("daw", &[0xb6, 63, 127], &l, None, None).unwrap().id,
+            "btn.shift"
+        );
+        assert!(decode("keyboard", &[0xb0, 64, 127], &l, None, None).is_none());
         assert!(decode("keyboard", &[0xf8], &l, None, None).is_none());
     }
     #[test]
