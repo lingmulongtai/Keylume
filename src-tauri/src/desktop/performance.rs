@@ -326,6 +326,9 @@ pub async fn stage_command(
                 w.set_size(PhysicalSize::new(m.rect.width, m.rect.height))
                     .map_err(|e| e.to_string())?;
                 w.show().map_err(|e| e.to_string())?;
+                // The stage needs per-pixel alpha, never a system Mica/Acrylic backdrop.
+                // Clear effects after showing, including those inherited from desktop theming.
+                w.set_effects(None).map_err(|e| e.to_string())?;
                 if !core
                     .performance
                     .engine
