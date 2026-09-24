@@ -23,7 +23,7 @@ impl Default for LoopConfig {
         Self {
             bpm: 100.,
             bars: 2,
-            metronome: true,
+            metronome: false,
         }
     }
 }
@@ -39,6 +39,10 @@ impl LoopConfig {
 #[derive(Clone, Copy)]
 pub enum LoopCommand {
     Record(LoopConfig),
+    RecordToggle,
+    Configure(LoopConfig),
+    Tempo(f64),
+    Metronome,
     Play,
     Overdub,
     Stop,
@@ -74,6 +78,7 @@ pub struct Looper {
     history: [Snapshot; 8],
     history_next: usize,
     history_len: usize,
+    click_beat: f64,
 }
 impl Default for Looper {
     fn default() -> Self {
@@ -93,6 +98,7 @@ impl Default for Looper {
             }),
             history_next: 0,
             history_len: 0,
+            click_beat: 0.,
         }
     }
 }
@@ -118,6 +124,41 @@ impl Looper {
     }
     pub fn command(&mut self, c: LoopCommand) {
         match c {
+            LoopCommand::Configure(config) => {
+                if config.validate().is_ok() {
+                    self.config.bpm = config.bpm;
+                    self.config.metronome = config.metronome;
+                    if self.mode == 0 && self.count() == 0 {
+                        self.config.bars = config.bars;
+                    }
+                }
+                return;
+            }
+            LoopCommand::Tempo(bpm) => {
+                if (40. ..=240.).contains(&bpm) {
+                    self.config.bpm = bpm;
+                }
+                return;
+            }
+            LoopCommand::Metronome => {
+                self.config.metronome = !self.config.metronome;
+                self.last_click = i32::MIN;
+                self.click_beat = 0.;
+                return;
+            }
+            LoopCommand::RecordToggle => {
+                let next = match self.mode {
+                    1 | 2 => LoopCommand::Stop,
+                    3 | 4 => LoopCommand::Overdub,
+                    _ if self.count() > 0 => {
+                        self.command(LoopCommand::Play);
+                        LoopCommand::Overdub
+                    }
+                    _ => LoopCommand::Record(self.config),
+                };
+                self.command(next);
+                return;
+            }
             LoopCommand::Record(config) => {
                 self.checkpoint();
                 self.config = config;
@@ -146,6 +187,7 @@ impl Looper {
                 self.merge();
                 self.mode = 0;
                 self.beat = 0.;
+                self.config.metronome = false;
             }
             LoopCommand::Clear => {
                 if self.count() > 0 {
@@ -244,6 +286,18 @@ impl Looper {
     pub fn advance(&mut self, seconds: f64, out: &mut Vec<SoundEvent>) -> bool {
         out.clear();
         if self.mode == 0 {
+            if self.config.metronome {
+                let click = self.click_beat.floor() as i32;
+                if click != self.last_click {
+                    self.last_click = click;
+                    out.push(SoundEvent::Drum(
+                        16,
+                        if click.rem_euclid(4) == 0 { 80 } else { 45 },
+                    ));
+                }
+                self.click_beat += seconds * self.config.bpm / 60.;
+                self.click_beat %= 4.;
+            }
             return false;
         }
         let before = self.beat;
@@ -283,7 +337,7 @@ impl Looper {
             }
         }
         let click = self.beat.floor() as i32;
-        if self.config.metronome && click != self.last_click {
+        if (self.config.metronome || self.mode == 1) && click != self.last_click {
             self.last_click = click;
             out.push(SoundEvent::Drum(
                 16,
@@ -312,6 +366,41 @@ impl Looper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn standalone_click_tempo_and_record_button_share_configuration() {
+        let mut l = Looper::default();
+        let mut out = Vec::new();
+        l.advance(0.1, &mut out);
+        assert!(out.is_empty());
+        l.command(LoopCommand::Configure(LoopConfig {
+            bpm: 120.,
+            bars: 1,
+            metronome: true,
+        }));
+        l.advance(0.25, &mut out);
+        assert_eq!(out, [SoundEvent::Drum(16, 80)]);
+        l.advance(0.25, &mut out);
+        assert!(out.is_empty());
+        l.advance(0.01, &mut out);
+        assert_eq!(out, [SoundEvent::Drum(16, 45)]);
+        assert_eq!(l.mode, 0);
+        l.command(LoopCommand::RecordToggle);
+        assert_eq!(l.beat, -4.);
+        assert_eq!(l.config.bpm, 120.);
+        l.advance(2., &mut out);
+        l.capture(SoundEvent::Drum(8, 100), 0);
+        l.command(LoopCommand::RecordToggle);
+        assert_eq!(l.mode, 0);
+        assert!(!l.config.metronome);
+        l.command(LoopCommand::RecordToggle);
+        assert_eq!(l.mode, 4);
+        assert_eq!(l.count(), 1);
+        l.command(LoopCommand::Tempo(180.));
+        assert_eq!(l.mode, 4);
+        assert_eq!(l.config.bpm, 180.);
+        l.command(LoopCommand::Tempo(f64::NAN));
+        assert_eq!(l.config.bpm, 180.);
+    }
     #[test]
     fn undo_restores_overdub_clear_and_new_recording_without_growing_buffers() {
         let mut l = Looper::default();

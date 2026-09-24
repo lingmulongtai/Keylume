@@ -1,7 +1,7 @@
 use super::{desktop_actions::DesktopActions, runtime::Core};
 use crate::{
     controller::{Binding, ControlInput, Mode, EFFECT_NAMES},
-    groove::{LoopCommand, LoopConfig},
+    groove::LoopCommand,
     instrument_fx::InstrumentFx,
 };
 
@@ -33,19 +33,14 @@ pub fn perform(
         "loopStop" => Some(LoopCommand::Stop),
         "loopOverdub" => Some(LoopCommand::Overdub),
         "loopClear" => Some(LoopCommand::Clear),
-        "loopRecord" => {
+        "loopRecord" => Some(LoopCommand::RecordToggle),
+        "metronome" => Some(LoopCommand::Metronome),
+        "tempo" => {
             let status = core.piano.bus.loop_status();
-            Some(if status.mode == "playing" || status.mode == "overdub" {
-                LoopCommand::Overdub
-            } else if status.mode == "recording" || status.mode == "countIn" {
-                LoopCommand::Stop
-            } else {
-                LoopCommand::Record(LoopConfig {
-                    bpm: status.bpm,
-                    bars: (status.beats / 4.) as u8,
-                    metronome: status.metronome,
-                })
-            })
+            let bpm = input.delta.map_or(40. + input.value as f64 * 200., |d| {
+                status.bpm + d as f64 * 200.
+            });
+            Some(LoopCommand::Tempo(bpm.round().clamp(40., 240.)))
         }
         _ => None,
     };

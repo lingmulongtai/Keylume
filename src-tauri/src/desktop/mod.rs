@@ -74,6 +74,13 @@ fn groove_command(
             config.validate()?;
             bus.loop_command(LoopCommand::Record(config))?;
         }
+        "configure" => {
+            let config: LoopConfig = serde_json::from_value(args).map_err(|e| e.to_string())?;
+            config.validate()?;
+            bus.loop_command(LoopCommand::Configure(config))?;
+        }
+        "recordToggle" => bus.loop_command(LoopCommand::RecordToggle)?,
+        "metronome" => bus.loop_command(LoopCommand::Metronome)?,
         "play" => bus.loop_command(LoopCommand::Play)?,
         "overdub" => bus.loop_command(LoopCommand::Overdub)?,
         "stop" => bus.loop_command(LoopCommand::Stop)?,

@@ -217,7 +217,7 @@ impl Piano {
             loop_bars: AtomicU32::new(2),
             loop_bpm: AtomicU64::new(100f64.to_bits()),
             loop_full: AtomicBool::new(false),
-            loop_metronome: AtomicBool::new(true),
+            loop_metronome: AtomicBool::new(false),
             loop_undo: AtomicBool::new(false),
         });
         let bus = PianoBus { tx, shared };
@@ -564,7 +564,13 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     if active && event.generation == generation {
                         if let Some(command) = event.command {
                             looper.command(command);
-                            if !matches!(command, LoopCommand::Overdub) {
+                            if !matches!(
+                                command,
+                                LoopCommand::Overdub
+                                    | LoopCommand::Configure(_)
+                                    | LoopCommand::Tempo(_)
+                                    | LoopCommand::Metronome
+                            ) {
                                 loop_synth.panic();
                                 loop_drums.panic();
                             }

@@ -131,7 +131,8 @@ pub enum Action {
 }
 impl Core {
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
-        let settings = storage.settings();
+        let mut settings = storage.settings();
+        settings.controller.upgrade_defaults();
         let performance_settings = storage
             .load(
                 "performance.json",
@@ -952,8 +953,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         };
                         if let Some(binding) = binding.filter(|b| b.action != "none") {
                             consumed = true;
-                            input.continuous = ["effect", "volume", "brightness", "scroll"]
-                                .contains(&binding.action.as_str());
+                            input.continuous =
+                                ["effect", "volume", "brightness", "scroll", "tempo"]
+                                    .contains(&binding.action.as_str());
                             if edges.press(&input) {
                                 match super::controller_actions::perform(
                                     &core, &desktop, &binding, &input,
