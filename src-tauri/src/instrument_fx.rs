@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::f32::consts::TAU;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Normalized controls, ordered to match the eight factory encoder bindings.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -128,6 +129,7 @@ impl Effects {
     }
     pub fn reset(&mut self) {
         self.filters = [[0.; 2]; 2];
+        self.phase = 0.;
         for d in self
             .echoes
             .iter_mut()
@@ -137,8 +139,40 @@ impl Effects {
             d.reset();
         }
     }
-    /// No allocation or lock on the audio thread; parameters slew to avoid zipper noise.
-    pub fn process(&mut self, left: &mut [f32], right: &mut [f32], settings: InstrumentFx) {
+    /// Keep DSP faults inside the audio callback's locks. A failed block plays
+    /// its dry input and clears effect history, without stopping notes or loops.
+    /// Returns false if any block recovered; normal processing allocates nothing.
+    pub fn process(&mut self, left: &mut [f32], right: &mut [f32], settings: InstrumentFx) -> bool {
+        let mut healthy = true;
+        let mut dry_left = [0.; 64];
+        let mut dry_right = [0.; 64];
+        for (left, right) in left.chunks_mut(64).zip(right.chunks_mut(64)) {
+            dry_left[..left.len()].copy_from_slice(left);
+            dry_right[..right.len()].copy_from_slice(right);
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                self.process_block(left, right, settings)
+            }));
+            if result.is_err() || left.iter().chain(right.iter()).any(|v| !v.is_finite()) {
+                healthy = false;
+                for (out, dry) in left
+                    .iter_mut()
+                    .zip(dry_left)
+                    .chain(right.iter_mut().zip(dry_right))
+                {
+                    *out = if dry.is_finite() { dry } else { 0. };
+                }
+                self.reset();
+                self.current = if settings.values().iter().all(|v| (0.0..=1.).contains(v)) {
+                    settings.values()
+                } else {
+                    InstrumentFx::default().values()
+                };
+            }
+        }
+        healthy
+    }
+    /// No allocation or lock; parameters slew to avoid zipper noise.
+    fn process_block(&mut self, left: &mut [f32], right: &mut [f32], settings: InstrumentFx) {
         let target = settings.values();
         let smooth = 1. - (-1. / (self.rate * 0.012)).exp();
         for (left, right) in left.iter_mut().zip(right) {
@@ -224,7 +258,10 @@ mod tests {
                     left[i] = phase.sin() * 0.3;
                     right[i] = (phase * 1.013).sin() * 0.3;
                 }
-                fx.process(&mut left, &mut right, settings);
+                assert!(
+                    fx.process(&mut left, &mut right, settings),
+                    "DSP recovered at rate={rate}, block={block}"
+                );
                 assert!(
                     left.iter()
                         .chain(&right)
@@ -232,6 +269,70 @@ mod tests {
                     "rate={rate}, block={block}, settings={settings:?}"
                 );
             }
+        }
+    }
+    #[test]
+    fn effect_panic_preserves_dry_audio_and_the_locked_recording() {
+        use crate::groove::{LoopCommand, LoopConfig, Looper, SoundEvent};
+        use std::sync::Mutex;
+
+        let session = Mutex::new(Looper::default());
+        let settings = InstrumentFx {
+            reverb: 0.8,
+            chorus: 0.5,
+            ..InstrumentFx::default()
+        };
+        let mut fx = Effects::new(48000, settings);
+        // Inject a fault after the left channel has already been modified.
+        fx.chorus[1].index = fx.chorus[1].data.len();
+        let mut left = [0.3; 64];
+        let mut right = [-0.2; 64];
+        {
+            let mut looper = session.lock().unwrap();
+            looper.command(LoopCommand::Record(LoopConfig {
+                bpm: 120.,
+                bars: 1,
+                metronome: false,
+            }));
+            looper.advance(2., &mut Vec::new());
+            looper.capture(SoundEvent::Piano(false, [0x90, 60, 100]), 0);
+            assert!(!fx.process(&mut left, &mut right, settings));
+            assert_eq!(left, [0.3; 64]);
+            assert_eq!(right, [-0.2; 64]);
+            assert_eq!(looper.count(), 1);
+            assert_eq!(looper.mode, 2);
+        }
+        assert!(!session.is_poisoned());
+        assert_eq!(session.lock().unwrap().count(), 1);
+        // Subsequent wet blocks work again without rebuilding the audio stream.
+        let mut left = vec![0.3; 4800];
+        let mut right = vec![-0.2; 4800];
+        assert!(fx.process(&mut left, &mut right, settings));
+        assert!(left.iter().any(|v| (*v - 0.3).abs() > 0.01));
+    }
+    #[test]
+    fn non_finite_effect_history_recovers_without_poisoning_later_blocks() {
+        let settings = InstrumentFx {
+            cutoff: 0.6,
+            reverb: 0.7,
+            ..InstrumentFx::default()
+        };
+        let mut fx = Effects::new(48000, settings);
+        fx.filters[0][0] = f32::NAN;
+        fx.phase = f32::INFINITY;
+        let mut left = [0.25; 64];
+        let mut right = [-0.1; 64];
+        left[0] = f32::NAN;
+        right[0] = f32::INFINITY;
+        assert!(!fx.process(&mut left, &mut right, settings));
+        assert_eq!(left[0], 0.);
+        assert_eq!(right[0], 0.);
+        assert_eq!(left[1..], [0.25; 63]);
+        assert_eq!(right[1..], [-0.1; 63]);
+        for _ in 0..1000 {
+            left.fill(0.25);
+            right.fill(-0.1);
+            assert!(fx.process(&mut left, &mut right, settings));
         }
     }
     #[test]
