@@ -74,7 +74,9 @@ impl Delay {
     }
     fn read(&self, delay: f32) -> f32 {
         let p = (self.index as f32 - delay).rem_euclid(self.data.len() as f32);
-        let i = p.floor() as usize;
+        // A tiny negative remainder can round to len in f32. Wrap the integer
+        // index too, so interpolation across the buffer seam stays in bounds.
+        let i = p.floor() as usize % self.data.len();
         let f = p - p.floor();
         self.data[i] * (1. - f) + self.data[(i + 1) % self.data.len()] * f
     }
@@ -187,6 +189,51 @@ impl Effects {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fractional_delay_wrap_cannot_index_past_the_buffer() {
+        let mut line = Delay::new(1920);
+        line.index = 818;
+        line.data[0] = 0.5;
+        line.data[1919] = -0.5;
+        // The next representable delay crosses zero by less than half an ULP
+        // at the far end of this ring, so rem_euclid rounds to exactly 1920.
+        let delay = f32::from_bits(818f32.to_bits() + 1);
+        assert_eq!((818. - delay).rem_euclid(1920.), 1920.);
+        assert!((line.read(delay) - 0.5).abs() < 0.0001);
+        assert_eq!(line.read(818.25), 0.25);
+        assert_eq!(line.read(819.), -0.5);
+        assert_eq!(line.read(818.), 0.5);
+    }
+    #[test]
+    fn rapid_knob_changes_stay_finite_over_long_playback() {
+        let mut seed = 42u32;
+        for rate in [22050, 44100, 48000, 96000] {
+            let mut fx = Effects::new(rate, InstrumentFx::default());
+            let mut settings = InstrumentFx::default();
+            let mut left = [0.; 128];
+            let mut right = [0.; 128];
+            for block in 0..(rate * 120 / 128) {
+                if block % 8 == 0 {
+                    settings = InstrumentFx::from_values(std::array::from_fn(|_| {
+                        seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                        (seed % 128) as f32 / 127.
+                    }));
+                }
+                for i in 0..128 {
+                    let phase = (block as f32 * 128. + i as f32) * TAU * 220. / rate as f32;
+                    left[i] = phase.sin() * 0.3;
+                    right[i] = (phase * 1.013).sin() * 0.3;
+                }
+                fx.process(&mut left, &mut right, settings);
+                assert!(
+                    left.iter()
+                        .chain(&right)
+                        .all(|x| x.is_finite() && x.abs() < 20.),
+                    "rate={rate}, block={block}, settings={settings:?}"
+                );
+            }
+        }
+    }
     #[test]
     fn dry_signal_stays_unchanged_and_wet_impulses_leave_a_tail() {
         let dry = InstrumentFx::default();
