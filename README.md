@@ -6,14 +6,16 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 起動
 
-[GitHub Releases — v0.5.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.5.0) からダウンロードできます。
+[GitHub Releases — v0.5.1 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.5.1) からダウンロードできます。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.5.0/Keylume_0.5.0_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.5.0/Keylume_0.5.0_windows-x64.zip)
+v0.5.0のエフェクト使用中に突然無音になり、出力先を変更しても復帰しない問題を修正しました。v0.5.0をご利用の方は更新してください。
+
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.5.1/Keylume_0.5.1_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.5.1/Keylume_0.5.1_windows-x64.zip)
 
 ![画面を離れずに選べるライティング](docs/images/v050-lighting.png)
 
-インストーラーはダウンロードした `Keylume_0.5.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.5.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.5.1_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.5.1_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「設定 → デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
@@ -69,7 +71,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 更新
 
-**v0.1.0からはv0.5.0を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
+**v0.1.0からはv0.5.1を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
 
 プリセットと設定はそのまま保持します。旧既定レイアウトは61鍵モデルの配置へ移行し、LEDアドレス・種類・検証状態を保持します。座標を編集したカスタムレイアウトは維持します。[本体図と移行仕様](docs/device-layout.md)
 
@@ -99,7 +101,7 @@ npm run package      # Windows NSIS インストーラー
 
 ## 検証
 
-今回のチェック・確認範囲・アトミックコミット一覧は [v0.5.0検証記録](docs/verification-v0.5.0.md)、以前の記録は [検証記録](docs/verification.md) にまとめています。掲載画像は現在のUIのブラウザープレビューです。
+今回の無音修正・確認範囲・アトミックコミット一覧は [v0.5.1検証記録](docs/verification-v0.5.1.md)、機能全体の記録は [v0.5.0検証記録](docs/verification-v0.5.0.md)、以前の記録は [検証記録](docs/verification.md) にまとめています。掲載画像はv0.5.0のUIのブラウザープレビューです。
 
 GitHub Actions は PR と `main` で Windows のテスト・インストーラー生成・ネイティブ自己テストを実行します。`main` に含まれる `v*` タグから同じ検証を行い、成功した成果物だけを Preview Release に公開します。Release には SHA-256、ビルド元コミット、Mock 検証結果を添付します。
 
