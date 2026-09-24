@@ -508,6 +508,27 @@ fn start(
         device,
     ))
 }
+fn loop_command(
+    looper: &mut Looper,
+    synth: &mut PianoSynth,
+    drums: &mut DrumSynth,
+    command: LoopCommand,
+) {
+    let preserve = matches!(
+        command,
+        LoopCommand::Overdub
+            | LoopCommand::Configure(_)
+            | LoopCommand::Tempo(_)
+            | LoopCommand::Metronome
+    ) || matches!(command, LoopCommand::RecordToggle)
+        && matches!(looper.mode, 3 | 4);
+    looper.command(command);
+    if !preserve {
+        synth.panic();
+        drums.panic();
+    }
+}
+
 fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
@@ -563,17 +584,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 for event in rx.try_iter().take(1024) {
                     if active && event.generation == generation {
                         if let Some(command) = event.command {
-                            looper.command(command);
-                            if !matches!(
-                                command,
-                                LoopCommand::Overdub
-                                    | LoopCommand::Configure(_)
-                                    | LoopCommand::Tempo(_)
-                                    | LoopCommand::Metronome
-                            ) {
-                                loop_synth.panic();
-                                loop_drums.panic();
-                            }
+                            loop_command(&mut looper, &mut loop_synth, &mut loop_drums, command);
                         }
                         if let Some(sound) = event.sound {
                             looper.capture(sound, shared.octave.load(Ordering::Acquire));
@@ -689,5 +700,43 @@ fn same_endpoint(a: Option<&cpal::Device>, b: Option<&cpal::Device>) -> bool {
             }
         }
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn record_button_keeps_a_sustained_loop_voice_when_toggling_overdub() {
+        let font = crate::piano::sound_font().unwrap();
+        let mut synth = PianoSynth::new(&font, 48000).unwrap();
+        let mut drums = DrumSynth::new(48000);
+        let mut looper = Looper::default();
+        let mut events = Vec::new();
+        looper.capture(SoundEvent::Piano(false, [0x90, 60, 100]), 0);
+        looper.command(LoopCommand::Capture);
+        loop_command(&mut looper, &mut synth, &mut drums, LoopCommand::Play);
+        looper.advance(0.01, &mut events);
+        for event in events {
+            if let SoundEvent::Piano(screen, bytes) = event {
+                synth.midi(screen, bytes);
+            }
+        }
+        let mut left = [0.; 2048];
+        let mut right = [0.; 2048];
+        for expected_mode in [4, 3, 4, 3] {
+            loop_command(
+                &mut looper,
+                &mut synth,
+                &mut drums,
+                LoopCommand::RecordToggle,
+            );
+            assert_eq!(looper.mode, expected_mode);
+            synth.render(&mut left, &mut right);
+            assert!(left.iter().map(|x| x.abs()).sum::<f32>() > 0.01);
+        }
+        loop_command(&mut looper, &mut synth, &mut drums, LoopCommand::Stop);
+        synth.render(&mut left, &mut right);
+        assert!(left.iter().all(|x| *x == 0.));
     }
 }
