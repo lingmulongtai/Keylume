@@ -45,7 +45,23 @@ pub fn perform(
         _ => None,
     };
     if let Some(c) = command {
+        let status = core.piano.bus.loop_status();
         core.piano.bus.loop_command(c)?;
+        match c {
+            LoopCommand::Tempo(bpm) => core.show_feedback("Tempo", format!("{bpm:.0} BPM")),
+            LoopCommand::Metronome => {
+                core.show_feedback("Metronome", if status.metronome { "Off" } else { "On" })
+            }
+            LoopCommand::Undo => core.show_feedback(
+                "Undo",
+                if status.can_undo {
+                    "Restored"
+                } else {
+                    "Nothing to undo"
+                },
+            ),
+            _ => core.show_feedback("Looper", ""),
+        }
         return Ok(false);
     }
     if action == "panic" {
@@ -145,6 +161,81 @@ pub fn perform(
             }
         }
         _ => return Ok(false),
+    }
+    let p = &control.settings.piano;
+    let percent = |v: f32| format!("{:.0}%", v * 100.);
+    match action {
+        "effect" => {
+            let i = EFFECT_NAMES
+                .iter()
+                .position(|name| *name == binding.value)
+                .unwrap();
+            core.show_feedback(
+                [
+                    "Reverb",
+                    "Delay",
+                    "Filter",
+                    "Resonance",
+                    "Chorus",
+                    "Drive",
+                    "Stereo Width",
+                    "Tremolo",
+                ][i],
+                percent(p.effects.values()[i]),
+            );
+        }
+        "volume" => core.show_feedback("Piano Volume", percent(p.volume)),
+        "brightness" => core.show_feedback(
+            "Lighting Level",
+            percent(control.settings.master_brightness),
+        ),
+        "kit" => core.show_feedback(
+            "Drum Kit",
+            [
+                "Studio",
+                "Sub 808",
+                "Punch 909",
+                "Lo-fi",
+                "Glass",
+                "Percussion",
+            ][p.drum_kit.kit as usize],
+        ),
+        "sound" | "favorite" => {
+            if let Some(entry) = core
+                .library
+                .entries()
+                .iter()
+                .find(|e| e.entry.id == p.sound)
+            {
+                let name = &entry.entry.name;
+                core.show_feedback(
+                    "Sound",
+                    if name.is_ascii() {
+                        name.clone()
+                    } else {
+                        format!("User B{} P{}", entry.entry.bank, entry.entry.program)
+                    },
+                );
+            }
+        }
+        "lighting" => core.show_feedback(
+            "Lighting",
+            if control.draft.name.is_ascii() {
+                &control.draft.name
+            } else {
+                &control.draft.id
+            },
+        ),
+        "mode" => core.show_feedback(
+            "Mode",
+            if control.settings.controller.mode == Mode::Performance {
+                "Performance"
+            } else {
+                "Desktop"
+            },
+        ),
+        "piano" => core.show_feedback("Instrument", if p.enabled { "On" } else { "Off" }),
+        _ => {}
     }
     core.piano.configure(&control.settings.piano);
     Ok(true)

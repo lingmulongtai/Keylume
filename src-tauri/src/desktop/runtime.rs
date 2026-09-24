@@ -110,6 +110,7 @@ pub struct Core {
     pub storage: Mutex<Storage>,
     pub action: Sender<Action>,
     pub input: Mutex<InputState>,
+    pub feedback: Mutex<Option<(String, String, Instant)>>,
     pub piano: Piano,
     pub library: Arc<super::sound_library::Library>,
     pub controller_learning: AtomicBool,
@@ -130,6 +131,9 @@ pub enum Action {
     ControllerLearn(bool),
 }
 impl Core {
+    pub fn show_feedback(&self, title: impl Into<String>, value: impl Into<String>) {
+        *self.feedback.lock().unwrap() = Some((title.into(), value.into(), Instant::now()));
+    }
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
         let mut settings = storage.settings();
         settings.controller.upgrade_defaults();
@@ -170,6 +174,7 @@ impl Core {
                 storage: Mutex::new(storage),
                 action: tx,
                 input: Mutex::new(InputState::default()),
+                feedback: Mutex::new(None),
                 piano: Piano::new(library.clone()),
                 library,
                 controller_learning: AtomicBool::new(false),
@@ -996,6 +1001,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 core.piano.set_volume(volume);
                 core.control.lock().unwrap().settings.piano.volume = volume;
                 volume_dirty = true;
+                core.show_feedback("Piano Volume", format!("{:.0}%", volume * 100.));
                 let _ = app.emit("piano_volume", volume);
             }
             if !inactive
@@ -1382,6 +1388,25 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         Content::Text(local.format("%H:%M:%S").to_string())
                     }
                     Some(_) => Content::Text(active_preset.id.clone()),
+                };
+                let feedback = core.feedback.lock().unwrap();
+                let content = if let Some((title, value, at)) =
+                    feedback.as_ref().filter(|(_, _, at)| {
+                        settings.controller.display_feedback
+                            && at.elapsed().as_secs_f32() < settings.controller.display_seconds
+                    }) {
+                    let _ = at;
+                    let value = if title == "Looper" {
+                        let status = core.piano.bus.loop_status();
+                        format!("{} / {} events", status.mode, status.count)
+                    } else {
+                        value.clone()
+                    };
+                    Content::Feedback(title.clone(), value)
+                } else if settings.controller.display_idle == "blank" {
+                    Content::Text(String::new())
+                } else {
+                    content
                 };
                 display_queue.request(content);
             }

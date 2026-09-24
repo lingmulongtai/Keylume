@@ -39,6 +39,9 @@ pub struct ControllerSettings {
     pub performance: BTreeMap<String, Binding>,
     pub desktop: BTreeMap<String, Binding>,
     pub scroll_speed: f32,
+    pub display_feedback: bool,
+    pub display_seconds: f32,
+    pub display_idle: String,
 }
 pub const EFFECT_NAMES: [&str; 8] = [
     "reverb",
@@ -100,6 +103,9 @@ impl Default for ControllerSettings {
             performance,
             desktop,
             scroll_speed: 1.,
+            display_feedback: true,
+            display_seconds: 2.5,
+            display_idle: "blank".into(),
         }
     }
 }
@@ -118,6 +124,8 @@ impl ControllerSettings {
     }
     pub fn validate(&self) -> Result<(), String> {
         if !(0.1..=4.).contains(&self.scroll_speed)
+            || !(1. ..=10.).contains(&self.display_seconds)
+            || !["blank", "preset"].contains(&self.display_idle.as_str())
             || self.performance.len() > 256
             || self.desktop.len() > 256
         {

@@ -8,6 +8,9 @@ export interface ControllerSettings {
   performance: Record<string, Binding>;
   desktop: Record<string, Binding>;
   scrollSpeed: number;
+  displayFeedback: boolean;
+  displaySeconds: number;
+  displayIdle: 'blank' | 'preset';
 }
 export const effectNames = [
   'reverb',
@@ -56,6 +59,9 @@ export const defaultController = (): ControllerSettings => {
     enabled: true,
     mode: 'performance',
     scrollSpeed: 1,
+    displayFeedback: true,
+    displaySeconds: 2.5,
+    displayIdle: 'blank',
     performance,
     desktop: Object.fromEntries(
       [

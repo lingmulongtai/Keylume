@@ -160,6 +160,46 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
           }
         />
       </Card>
+      <Card>
+        <h3>本体のOLED</h3>
+        <Toggle
+          label="操作名と現在の値を本体に表示"
+          checked={c.displayFeedback}
+          onChange={(displayFeedback) =>
+            saveSettings({ ...state.settings, controller: { ...c, displayFeedback } })
+          }
+        />
+        <Slider
+          label="操作後の表示時間"
+          min={1}
+          max={10}
+          step={0.5}
+          value={c.displaySeconds}
+          display={`${c.displaySeconds} 秒`}
+          onChange={(displaySeconds) =>
+            saveSettings({ ...state.settings, controller: { ...c, displaySeconds } })
+          }
+        />
+        <label className="field">
+          <span>操作していない間</span>
+          <select
+            aria-label="OLEDの待機表示"
+            value={c.displayIdle}
+            onChange={(e) =>
+              saveSettings({
+                ...state.settings,
+                controller: { ...c, displayIdle: e.target.value as 'blank' | 'preset' },
+              })
+            }
+          >
+            <option value="blank">何も表示しない</option>
+            <option value="preset">ライティングのOLED設定を表示</option>
+          </select>
+        </label>
+        <small>
+          ノブ・音量・切り替え結果を一時表示します。本体の文字仕様に合わせて英数字で表示します。
+        </small>
+      </Card>
       <div className="controller-editor">
         <Card>
           <div className="segmented">
