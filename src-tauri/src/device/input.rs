@@ -182,6 +182,8 @@ impl InputState {
                     if let Some(id) = id {
                         let key = (source.into(), ch, b[1]);
                         if v > 0 {
+                            let serial = self.pulse.as_ref().map_or(1, |p| p.1.wrapping_add(1));
+                            self.pulse = Some((id.clone(), serial));
                             self.presses.insert(key, id);
                         } else {
                             self.presses.remove(&key);
@@ -229,18 +231,20 @@ mod tests {
     fn standalone_buttons_and_transport_are_visible_without_sticking() {
         let mut s = InputState::default();
         let l = DeviceLayout::default();
-        for cc in [103, 102, 77, 117, 76, 74, 75] {
+        for (i, cc) in [103, 102, 77, 117, 76, 74, 75].into_iter().enumerate() {
             s.receive("keyboard", &[0xbf, cc, 127], &l);
             assert_eq!(s.held.len(), 1);
+            let id = s.held[0].clone();
             s.receive("keyboard", &[0xbf, cc, 0], &l);
             assert!(s.held.is_empty());
+            assert_eq!(s.pulse, Some((id, i as u64 + 1)));
         }
         s.receive("keyboard", &[0xfa], &l);
-        assert_eq!(s.pulse, Some(("btn.play".into(), 1)));
+        assert_eq!(s.pulse, Some(("btn.play".into(), 8)));
         s.receive("keyboard", &[0xfa], &l);
-        assert_eq!(s.pulse, Some(("btn.play".into(), 2)));
+        assert_eq!(s.pulse, Some(("btn.play".into(), 9)));
         s.receive("keyboard", &[0xfc], &l);
-        assert_eq!(s.pulse, Some(("btn.stop".into(), 3)));
+        assert_eq!(s.pulse, Some(("btn.stop".into(), 10)));
         assert!(s.held.is_empty());
     }
     #[test]
