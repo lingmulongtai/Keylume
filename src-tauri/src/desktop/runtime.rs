@@ -649,11 +649,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         was_suspended = suspended;
         let stopping = core.quitting.load(Ordering::SeqCst);
         let handoff = active_mode == CoexistMode::Handoff && (daw || now < resume_at);
-        let controls_blocked = suspended
-            || handoff
-            || stopping
-            || mock_disconnected
-            || now < resume_at;
+        let controls_blocked =
+            suspended || handoff || stopping || mock_disconnected || now < resume_at;
         let inactive = desired.paused || controls_blocked;
         let learning = core.controller_learning.load(Ordering::Acquire);
         if learning != was_learning {
@@ -1395,14 +1392,13 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         settings.controller.display_feedback
                             && at.elapsed().as_secs_f32() < settings.controller.display_seconds
                     }) {
-                    let _ = at;
                     let value = if title == "Looper" {
                         let status = core.piano.bus.loop_status();
                         format!("{} / {} events", status.mode, status.count)
                     } else {
                         value.clone()
                     };
-                    Content::Feedback(title.clone(), value)
+                    Content::Feedback(title.clone(), value, *at)
                 } else if settings.controller.display_idle == "blank" {
                     Content::Text(String::new())
                 } else {
@@ -1410,6 +1406,8 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 };
                 display_queue.request(content);
             }
+            display_queue
+                .ownership(settings.controller.enabled && settings.controller.display_feedback);
             let progress =
                 display_queue.pump(start.elapsed().as_secs_f64(), &mut **t, settings.mock);
             for message in progress.sent {
@@ -1574,6 +1572,9 @@ fn release(
                     let _ = send(&mut **t, &msg, status, monitor, settings.midi_log);
                 }
             }
+        }
+        for b in protocol::analogue_displays(false) {
+            let _ = send(&mut **t, &b, status, monitor, settings.midi_log);
         }
         for b in [[0x9f, 0x0b, 0], [0xb6, DAW_DRUM, 0], DAW_OFF] {
             let _ = send(&mut **t, &b, status, monitor, settings.midi_log);

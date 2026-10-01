@@ -10,6 +10,14 @@ pub fn instrument_controls() -> [[u8; 3]; 5] {
         [0xb6, 31, 1],
     ]
 }
+/// Keep native analogue popups from covering Keylume's operation feedback.
+/// Restore the documented numeric layout and Change/Touch flags on handoff.
+pub fn analogue_displays(owned: bool) -> Vec<Vec<u8>> {
+    (5..=13)
+        .chain(21..=28)
+        .map(|target| sysex(&[4, target, if owned { 4 } else { 0x64 }]).unwrap())
+        .collect()
+}
 pub fn sysex(body: &[u8]) -> Result<Vec<u8>, String> {
     if body.iter().any(|&b| b > 127) {
         return Err("SysEx data must be 7-bit".into());
