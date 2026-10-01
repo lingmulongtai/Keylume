@@ -161,7 +161,7 @@ export default function StageCanvas({
               false,
               dark,
               noteHand(n, a) === 'left' ? a.leftColor : a.rightColor,
-              !practiced(n, a),
+              a.practiceMode !== 'listen' && !practiced(n, a),
             );
           }
         } else
