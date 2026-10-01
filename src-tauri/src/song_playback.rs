@@ -27,6 +27,8 @@ pub struct SongPlayback {
     active: HashMap<u32, Active>,
     counts: [u16; 128],
     attacks: [f64; 128],
+    last_position: f64,
+    stationary_since: f64,
 }
 impl Default for SongPlayback {
     fn default() -> Self {
@@ -39,6 +41,8 @@ impl Default for SongPlayback {
             active: HashMap::new(),
             counts: [0; 128],
             attacks: [f64::NEG_INFINITY; 128],
+            last_position: f64::NEG_INFINITY,
+            stationary_since: 0.,
         }
     }
 }
@@ -132,9 +136,21 @@ impl SongPlayback {
         }
         let (now, position, running) = engine.playback_cursor();
         // Offset is wall-clock milliseconds, even when practicing at a different speed.
-        let at = position - settings.audio_offset_ms / 1000. * settings.speed;
         let reset =
             self.epoch != Some(engine.playback_epoch) || !running && !self.active.is_empty();
+        if reset || (position - self.last_position).abs() > 0.000001 {
+            self.stationary_since = now;
+            self.last_position = position;
+        }
+        // A delayed onset already reached by the visual clock must still arrive while
+        // the player is waiting. Do not advance into notes beyond that wait target.
+        let offset = settings.audio_offset_ms / 1000.;
+        let waiting_delay = if settings.practice_mode == "wait" && offset > 0. {
+            (now - self.stationary_since).min(offset)
+        } else {
+            0.
+        };
+        let at = position - (offset - waiting_delay) * settings.speed;
         let mut out = PlaybackBatch {
             reset,
             ..Default::default()
@@ -183,6 +199,38 @@ impl SongPlayback {
 mod tests {
     use super::*;
     use crate::performance::Song;
+    #[test]
+    fn offsets_preserve_opening_notes_and_delayed_accompaniment_at_a_wait() {
+        let mut e = engine("listen");
+        let mut song = e.song.clone().unwrap();
+        song.notes[0].start = 0.;
+        song.notes[0].end = 0.2;
+        e.load(song).unwrap();
+        let mut s = e.settings.clone();
+        s.audio_offset_ms = -500.;
+        e.configure(s).unwrap();
+        e.play().unwrap();
+        let mut player = SongPlayback::default();
+        assert!(player.update(&e).messages.contains(&[0x90, 48, 90]));
+        e.tick(0.21);
+        assert!(player.update(&e).messages.contains(&[0x80, 48, 0]));
+
+        let mut e = engine("wait");
+        let mut s = e.settings.clone();
+        s.audio_offset_ms = 100.;
+        e.configure(s).unwrap();
+        e.play().unwrap();
+        let mut player = SongPlayback::default();
+        player.update(&e);
+        e.tick(0.5);
+        assert!(player.update(&e).messages.is_empty());
+        assert_eq!(e.snapshot().waiting, vec![72]);
+        e.tick(0.61);
+        assert_eq!(player.update(&e).messages, vec![[0x90, 48, 90]]);
+        e.tick(1.12);
+        assert_eq!(player.update(&e).messages, vec![[0x80, 48, 0]]);
+        assert_eq!(e.snapshot().waiting, vec![72]);
+    }
     fn engine(mode: &str) -> PerformanceEngine {
         let mut e = PerformanceEngine::new(StageSettings::default());
         let song: Song = serde_json::from_value(serde_json::json!({

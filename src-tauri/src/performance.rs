@@ -448,8 +448,16 @@ impl PerformanceEngine {
         if self.position >= end || self.position < begin {
             self.reset_attempt(begin);
         }
-        if (self.position - begin).abs() < 0.001 && self.settings.practice_mode != "listen" {
-            self.position = begin - self.settings.look_ahead.min(3.);
+        if (self.position - begin).abs() < 0.001 {
+            let preroll = if self.settings.practice_mode == "listen" {
+                (-self.settings.audio_offset_ms / 1000.).max(0.) * self.settings.speed
+            } else {
+                self.settings
+                    .look_ahead
+                    .min(3.)
+                    .max((-self.settings.audio_offset_ms / 1000.).max(0.) * self.settings.speed)
+            };
+            self.position = begin - preroll;
         }
         self.running = true;
         self.playback_epoch += 1;
@@ -529,7 +537,14 @@ impl PerformanceEngine {
                 {
                     if self.settings.loop_enabled {
                         self.playback_epoch += 1;
-                        self.position = self.settings.loop_start - 1.;
+                        let lead =
+                            (-self.settings.audio_offset_ms / 1000.).max(0.) * self.settings.speed;
+                        self.position = self.settings.loop_start
+                            - if self.settings.practice_mode == "listen" {
+                                lead
+                            } else {
+                                lead.max(1.)
+                            };
                         self.loop_count += 1;
                         self.rebuild_targets(self.settings.loop_start);
                     } else {
