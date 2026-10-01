@@ -409,6 +409,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
             if reconnect {
                 core.input.lock().unwrap().clear_port("daw");
+                restore_features(&mut feature_controls, &mut transport, now);
                 release(
                     &mut transport,
                     &desired.layout,
@@ -485,6 +486,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     core.piano.bus.panic();
                     core.performance.pause();
                     core.input.lock().unwrap().clear_port("daw");
+                    restore_features(&mut feature_controls, &mut transport, now);
                     release(
                         &mut transport,
                         &desired.layout,
@@ -585,6 +587,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 && !status.ports.outputs.contains(&status.device_name)
             {
                 core.input.lock().unwrap().clear_port("daw");
+                restore_features(&mut feature_controls, &mut transport, now);
                 release(
                     &mut transport,
                     &desired.layout,
@@ -774,6 +777,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         {
             if transport.is_some() {
                 core.input.lock().unwrap().clear_port("daw");
+                restore_features(&mut feature_controls, &mut transport, now);
                 release(
                     &mut transport,
                     &desired.layout,
@@ -1513,6 +1517,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         }
         if errors >= 3 {
             core.input.lock().unwrap().clear_port("daw");
+            restore_features(&mut feature_controls, &mut transport, now);
             release(
                 &mut transport,
                 &desired.layout,
@@ -1618,6 +1623,18 @@ fn send(
     }
     Ok(())
 }
+fn restore_features(
+    features: &mut crate::device::feature_controls::FeatureControls,
+    transport: &mut Option<Box<dyn LedTransport>>,
+    now: f32,
+) {
+    let update = features.synchronize(None, now);
+    if let Some(t) = transport {
+        for message in update.messages {
+            let _ = t.send_raw(&message);
+        }
+    }
+}
 fn release(
     transport: &mut Option<Box<dyn LedTransport>>,
     layout: &DeviceLayout,
@@ -1682,6 +1699,32 @@ mod tests {
             self.0.lock().unwrap().push(b.to_vec());
             Ok(())
         }
+    }
+    #[test]
+    fn releasing_claims_restores_original_features_before_daw_exit() {
+        let mut features = crate::device::feature_controls::FeatureControls::default();
+        let bindings = std::collections::BTreeMap::from([(
+            "scale".into(),
+            crate::controller::Binding::new("lighting", "1"),
+        )]);
+        features.synchronize(Some(&bindings), 0.);
+        features.receive("daw", &[0xb6, 74, 127], 0.1);
+        features.receive("daw", &[0xb6, 74, 0], 0.2);
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let mut transport: Option<Box<dyn LedTransport>> = Some(Box::new(Record(log.clone())));
+        restore_features(&mut features, &mut transport, 0.3);
+        release(
+            &mut transport,
+            &DeviceLayout::default(),
+            &[],
+            &Settings::default(),
+            &mut Status::default(),
+            &mut VecDeque::new(),
+            false,
+        );
+        assert_eq!(log.lock().unwrap()[0], vec![0xb6, 74, 127]);
+        assert_eq!(log.lock().unwrap().last().unwrap(), &DAW_OFF);
+        assert!(!features.owns(74));
     }
     #[test]
     fn release_fades_full_brightness_without_overflow_and_exits_daw_mode() {
