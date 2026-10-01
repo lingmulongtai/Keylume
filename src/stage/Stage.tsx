@@ -8,6 +8,8 @@ import { stageCommand, subscribeInteraction } from './api';
 import { useStage } from './useStage';
 import { useStageChange } from './useStageChange';
 import StageTransport from './Transport';
+import HandControls from './HandControls';
+import PlaybackControls from './PlaybackControls';
 import { native } from '../api';
 import { union } from './geometry';
 import type { StageSettings, StageMonitor, StageView } from './types';
@@ -147,19 +149,8 @@ export default function Stage(props: ViewProps) {
             </span>
           </div>
           <div className="stage-options">
-            <label className="stage-field">
-              <span>練習の進め方</span>
-              <select
-                aria-label="練習の進め方"
-                value={settings.practiceMode}
-                onChange={(e) =>
-                  change({ practiceMode: e.target.value as StageSettings['practiceMode'] })
-                }
-              >
-                <option value="timing">曲のテンポで進む・タイミング採点</option>
-                <option value="wait">正しい音まで待つ</option>
-              </select>
-            </label>
+            <HandControls settings={settings} change={change} />
+            <PlaybackControls settings={settings} change={change} />
             <label className="stage-field">
               <span>入力遅延の補正（ms）</span>
               <input
@@ -226,13 +217,29 @@ export default function Stage(props: ViewProps) {
                   />
                   {t.name}
                   {t.percussion ? '（ドラム）' : ''}
+                  <select
+                    aria-label={`${t.name} の手`}
+                    value={settings.trackHands[String(t.id)] ?? 'auto'}
+                    onChange={(e) =>
+                      change({
+                        trackHands: {
+                          ...settings.trackHands,
+                          [t.id]: e.target.value as 'auto' | 'left' | 'right',
+                        },
+                      })
+                    }
+                  >
+                    <option value="auto">自動</option>
+                    <option value="left">左手</option>
+                    <option value="right">右手</option>
+                  </select>
                 </label>
               ))}
             </div>
           )}
           <p className="stage-hint">
             鍵盤を弾くと内蔵音源が鳴ります。PERFECT ±80ms / GOOD ±160ms / LATE
-            ±250ms。範囲外の音はWRONG、弾かなかった音はMISS。画面外の音も採点対象です。ブラウザープレビューでは発音・採点は行いません。
+            ±250ms。試聴では採点しません。MIDIは選択中の楽器で鳴り、再生音量は楽器音量から独立しています。音のタイミングはプラスで遅く、マイナスで早くなります。ブラウザープレビューでは発音・採点は行いません。
           </p>
         </section>
       )}
@@ -308,16 +315,8 @@ export default function Stage(props: ViewProps) {
             />
             背景を透明にする
           </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.clickThrough}
-              onChange={(e) => change({ clickThrough: e.target.checked })}
-            />
-            固定中はクリックを下のアプリへ通す
-          </label>
           <p className="stage-hint">
-            操作解除は上の「別画面の位置合わせを開く」かトレイから。クリック透過中は演奏画面へキー入力を取り込みません。
+            固定中は常にクリックを下のアプリへ通します。位置合わせは操作パネルかトレイから開けます。操作パネルはクリックできます。
           </p>
           <label className="stage-field">
             <span>スタイル</span>
@@ -466,6 +465,9 @@ export function StageControls() {
       if (dead) fn();
       else off = fn;
     });
+    void stageCommand<boolean>('interaction')
+      .then(setEditing)
+      .catch((e) => setError(String(e)));
     return () => {
       dead = true;
       off?.();
@@ -488,14 +490,7 @@ export function StageControls() {
           />
           背景を透明に
         </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={state.settings.clickThrough}
-            onChange={(e) => change({ clickThrough: e.target.checked })}
-          />
-          演出をクリック透過
-        </label>
+        <span>固定中はクリック透過</span>
         <button onClick={() => run('close')}>演奏画面を閉じる</button>
         <button
           aria-label="操作パネルを隠す"
@@ -506,6 +501,8 @@ export function StageControls() {
         </button>
       </div>
       <StageTransport state={state} song={song} change={change} error={setError} />
+      <HandControls settings={state.settings} change={change} compact />
+      <PlaybackControls settings={state.settings} change={change} />
       {error && <p role="alert">{error}</p>}
     </main>
   );

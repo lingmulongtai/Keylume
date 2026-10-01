@@ -32,7 +32,7 @@ import { appVersion } from './version';
 import { useUpdates, UpdateBanner } from './Updates';
 type Page = 'stage' | 'lighting' | 'controller' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
-  { id: 'lighting', name: 'ライティング', icon: SlidersHorizontal },
+  { id: 'lighting', name: 'ホーム', icon: SlidersHorizontal },
   { id: 'stage', name: '演奏', icon: Play },
   { id: 'controller', name: 'コントローラー', icon: Keyboard },
   { id: 'settings', name: '設定', icon: Settings2 },

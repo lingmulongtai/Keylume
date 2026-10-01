@@ -82,18 +82,28 @@ export default function ControllerMap({
             key={c.id}
             role="button"
             tabIndex={0}
-            aria-label={`本体設定: ${c.label}`}
+            aria-label={`${['scale', 'arp', 'chordMap'].includes(c.id) ? '割り当て' : '本体設定'}: ${c.label}`}
             onClick={() =>
-              inform(
-                `${c.label} は本体側の機能です。信号を送る設定では「本体を操作して選択」で割り当てられます。`,
-              )
+              ['scale', 'arp', 'chordMap'].includes(c.id)
+                ? select(c.id)
+                : inform(
+                    `${c.label} は本体側の機能です。信号を送る設定では「本体を操作して選択」で割り当てられます。`,
+                  )
             }
             onKeyDown={(e) => {
-              if (e.key === 'Enter')
-                inform(`${c.label} は本体側の機能です。MIDI Learnで受信を確認できます。`);
+              if (['Enter', ' '].includes(e.key)) {
+                e.preventDefault();
+                if (['scale', 'arp', 'chordMap'].includes(c.id)) select(c.id);
+                else inform(`${c.label} は本体側の機能です。MIDI Learnで受信を確認できます。`);
+              }
             }}
           >
-            <title>{c.label} · 本体の機能</title>
+            <title>
+              {c.label} ·{' '}
+              {['scale', 'arp', 'chordMap'].includes(c.id)
+                ? bindingName(bindings[c.id])
+                : '本体の機能'}
+            </title>
             <rect x={c.pos.x} y={c.pos.y} width={c.size.w} height={c.size.h} fill="transparent" />
           </g>
         ))}

@@ -42,7 +42,31 @@ pub fn start(core: Arc<Core>, report: PathBuf) {
             if !wait("paused", 5) {
                 return Err("Pause/release failed".into());
             }
-            checks.push("pause_release");
+            let preset = core.control.lock().unwrap().settings.active_preset.clone();
+            dispatch(
+                &core,
+                "simulate_input",
+                json!({"source":"keyboard", "bytes":[191,103,127]}),
+            )?;
+            dispatch(
+                &core,
+                "simulate_input",
+                json!({"source":"keyboard", "bytes":[191,103,0]}),
+            )?;
+            let until = Instant::now() + Duration::from_secs(3);
+            while core.control.lock().unwrap().settings.active_preset == preset
+                && Instant::now() < until
+            {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            let control = core.control.lock().unwrap();
+            if control.settings.active_preset == preset || !control.settings.manual_lock {
+                return Err(
+                    "Paused lighting blocked hardware navigation or its manual priority".into(),
+                );
+            }
+            drop(control);
+            checks.push("pause_keeps_controller_available");
             dispatch(&core, "set_paused", json!({"paused":false}))?;
             if !wait("preview", 5) {
                 return Err("Resume failed".into());

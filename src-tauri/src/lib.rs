@@ -10,6 +10,7 @@ pub mod storage;
 pub mod updates;
 
 pub mod performance;
+pub mod song_playback;
 
 pub mod controller;
 pub mod drums;

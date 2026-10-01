@@ -2173,7 +2173,7 @@ dependencies = [
 
 [[package]]
 name = "keylume"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "cpal",
@@ -2193,6 +2193,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "windows 0.61.3",
  "windows-sys 0.61.2",
 ]
 

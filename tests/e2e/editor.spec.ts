@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'ライティング', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ホーム', exact: true })).toBeVisible();
 });
 test('edits, saves, reloads, exports and deletes a preset', async ({ page }) => {
   await page.getByRole('button', { name: 'レイヤーを追加', exact: true }).click();
@@ -102,7 +102,7 @@ test('all screens load without browser errors at the minimum window size', async
     '一般',
     'コントローラー',
     '演奏',
-    'ライティング',
+    'ホーム',
   ]) {
     await page.getByRole('button', { name, exact: true }).click();
     await expect(page.locator('main')).not.toBeEmpty();

@@ -1,9 +1,20 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Hand {
+    #[default]
+    Auto,
+    Left,
+    Right,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SongNote {
+    #[serde(default)]
+    pub hand: Hand,
     pub id: u32,
     pub pitch: u8,
     pub start: f64,
@@ -71,6 +82,15 @@ impl Song {
 pub struct StageSettings {
     pub mode: String,
     pub practice_mode: String,
+    pub practice_hand: String,
+    pub hand_strategy: String,
+    pub split_pitch: u8,
+    pub track_hands: BTreeMap<u16, Hand>,
+    pub left_color: String,
+    pub right_color: String,
+    pub playback_mode: String,
+    pub playback_volume: f32,
+    pub audio_offset_ms: f64,
     pub speed: f64,
     pub look_ahead: f64,
     pub trail: f64,
@@ -102,6 +122,15 @@ impl Default for StageSettings {
         Self {
             mode: "live".into(),
             practice_mode: "timing".into(),
+            practice_hand: "both".into(),
+            hand_strategy: "auto".into(),
+            split_pitch: 60,
+            track_hands: BTreeMap::new(),
+            left_color: "#eeac75".into(),
+            right_color: "#75c8fa".into(),
+            playback_mode: "accompaniment".into(),
+            playback_volume: 0.6,
+            audio_offset_ms: 0.,
             speed: 1.,
             look_ahead: 4.,
             trail: 6.,
@@ -118,7 +147,7 @@ impl Default for StageSettings {
             show_keyboard: true,
             show_hud: true,
             transparent: false,
-            click_through: false,
+            click_through: true,
             guides: false,
             particles: 0.6,
             latency_ms: 0.,
@@ -136,7 +165,19 @@ impl StageSettings {
             || self.monitor_ids.iter().collect::<HashSet<_>>().len() != self.monitor_ids.len()
             || !["live", "practice"].contains(&self.mode.as_str())
             || !["english", "solfege"].contains(&self.label_format.as_str())
-            || !["timing", "wait"].contains(&self.practice_mode.as_str())
+            || !["timing", "wait", "listen"].contains(&self.practice_mode.as_str())
+            || !["off", "accompaniment", "full"].contains(&self.playback_mode.as_str())
+            || !(0. ..=1.).contains(&self.playback_volume)
+            || !(-1000. ..=1000.).contains(&self.audio_offset_ms)
+            || !["both", "left", "right"].contains(&self.practice_hand.as_str())
+            || !["auto", "split"].contains(&self.hand_strategy.as_str())
+            || self.split_pitch > 127
+            || self.track_hands.len() > 256
+            || [&self.left_color, &self.right_color].iter().any(|c| {
+                c.len() != 7
+                    || !c.starts_with('#')
+                    || !c[1..].bytes().all(|b| b.is_ascii_hexdigit())
+            })
             || ![
                 "clean",
                 "glow",
@@ -172,6 +213,33 @@ impl StageSettings {
             return Err("演奏画面の設定値が範囲外です".into());
         }
         Ok(())
+    }
+    pub fn hand(&self, note: &SongNote) -> Hand {
+        match self
+            .track_hands
+            .get(&note.track)
+            .copied()
+            .unwrap_or_default()
+        {
+            Hand::Left => Hand::Left,
+            Hand::Right => Hand::Right,
+            Hand::Auto if self.hand_strategy == "auto" && note.hand != Hand::Auto => note.hand,
+            Hand::Auto => {
+                if note.pitch < self.split_pitch {
+                    Hand::Left
+                } else {
+                    Hand::Right
+                }
+            }
+        }
+    }
+    pub fn practiced(&self, note: &SongNote) -> bool {
+        self.practice_hand == "both"
+            || match self.hand(note) {
+                Hand::Left => self.practice_hand == "left",
+                Hand::Right => self.practice_hand == "right",
+                Hand::Auto => false,
+            }
     }
 }
 #[derive(Clone, Serialize)]
@@ -228,6 +296,7 @@ struct Target {
     status: u8,
 }
 pub struct PerformanceEngine {
+    pub playback_epoch: u64,
     pub settings: StageSettings,
     pub song: Option<Song>,
     pub song_revision: u64,
@@ -248,6 +317,7 @@ pub struct PerformanceEngine {
 impl PerformanceEngine {
     pub fn new(settings: StageSettings) -> Self {
         Self {
+            playback_epoch: 0,
             settings,
             song: None,
             song_revision: 0,
@@ -276,6 +346,7 @@ impl PerformanceEngine {
             .filter(|t| !t.percussion)
             .map(|t| t.id)
             .collect();
+        self.settings.track_hands.clear();
         self.settings.loop_enabled = false;
         self.settings.loop_start = 0.;
         self.settings.loop_end = song.duration.max(0.1);
@@ -288,11 +359,21 @@ impl PerformanceEngine {
     pub fn configure(&mut self, settings: StageSettings) -> Result<(), String> {
         settings.validate()?;
         let restart = self.settings.tracks != settings.tracks
+            || self.settings.practice_hand != settings.practice_hand
+            || self.settings.hand_strategy != settings.hand_strategy
+            || self.settings.split_pitch != settings.split_pitch
+            || self.settings.track_hands != settings.track_hands
             || self.settings.practice_mode != settings.practice_mode
             || self.settings.loop_enabled != settings.loop_enabled
             || self.settings.loop_start != settings.loop_start
             || self.settings.loop_end != settings.loop_end;
         let mode_changed = self.settings.mode != settings.mode;
+        if self.settings.playback_mode != settings.playback_mode
+            || self.settings.audio_offset_ms != settings.audio_offset_ms
+            || self.settings.speed != settings.speed
+        {
+            self.playback_epoch += 1;
+        }
         self.settings = settings;
         if restart {
             self.reset_attempt(self.position.max(0.));
@@ -305,9 +386,14 @@ impl PerformanceEngine {
     fn rebuild_targets(&mut self, from: f64) {
         self.targets.clear();
         let mut seen = HashSet::new();
-        if let Some(song) = &self.song {
+        if let Some(song) = self
+            .song
+            .as_ref()
+            .filter(|_| self.settings.practice_mode != "listen")
+        {
             for n in &song.notes {
                 if !self.settings.tracks.contains(&n.track)
+                    || !self.settings.practiced(n)
                     || (self.settings.loop_enabled
                         && (n.start < self.settings.loop_start
                             || n.start >= self.settings.loop_end))
@@ -326,6 +412,7 @@ impl PerformanceEngine {
         self.next_miss = self.targets.partition_point(|n| n.status != 0);
     }
     fn reset_attempt(&mut self, position: f64) {
+        self.playback_epoch += 1;
         self.running = false;
         self.position = position;
         self.score = Score::default();
@@ -346,7 +433,7 @@ impl PerformanceEngine {
         Ok(())
     }
     pub fn play(&mut self) -> Result<(), String> {
-        if self.song.is_none() || self.targets.is_empty() {
+        if self.song.is_none() || self.settings.tracks.is_empty() {
             return Err("演奏するMIDIトラックを選択してください".into());
         }
         if self.settings.mode != "practice" {
@@ -362,13 +449,23 @@ impl PerformanceEngine {
             self.reset_attempt(begin);
         }
         if (self.position - begin).abs() < 0.001 {
-            self.position = begin - self.settings.look_ahead.min(3.);
+            let preroll = if self.settings.practice_mode == "listen" {
+                (-self.settings.audio_offset_ms / 1000.).max(0.) * self.settings.speed
+            } else {
+                self.settings
+                    .look_ahead
+                    .min(3.)
+                    .max((-self.settings.audio_offset_ms / 1000.).max(0.) * self.settings.speed)
+            };
+            self.position = begin - preroll;
         }
         self.running = true;
+        self.playback_epoch += 1;
         Ok(())
     }
     pub fn pause(&mut self) {
         self.running = false;
+        self.playback_epoch += 1;
     }
     pub fn stop(&mut self) {
         let begin = if self.settings.loop_enabled {
@@ -427,6 +524,11 @@ impl PerformanceEngine {
                 }
                 if self.position
                     >= self.end()
+                        + if self.settings.playback_mode != "off" {
+                            self.settings.audio_offset_ms.max(0.) / 1000. * self.settings.speed
+                        } else {
+                            0.
+                        }
                         + if self.settings.practice_mode == "timing" {
                             0.25 * self.settings.speed
                         } else {
@@ -434,7 +536,15 @@ impl PerformanceEngine {
                         }
                 {
                     if self.settings.loop_enabled {
-                        self.position = self.settings.loop_start - 1.;
+                        self.playback_epoch += 1;
+                        let lead =
+                            (-self.settings.audio_offset_ms / 1000.).max(0.) * self.settings.speed;
+                        self.position = self.settings.loop_start
+                            - if self.settings.practice_mode == "listen" {
+                                lead
+                            } else {
+                                lead.max(1.)
+                            };
                         self.loop_count += 1;
                         self.rebuild_targets(self.settings.loop_start);
                     } else {
@@ -485,7 +595,10 @@ impl PerformanceEngine {
         });
     }
     fn hit(&mut self, pitch: u8) {
-        if !self.running || self.settings.mode != "practice" {
+        if !self.running
+            || self.settings.mode != "practice"
+            || self.settings.practice_mode == "listen"
+        {
             return;
         }
         let at = self.position
@@ -665,10 +778,42 @@ impl PerformanceEngine {
             target_count: self.targets.len(),
         }
     }
+    pub fn playback_cursor(&self) -> (f64, f64, bool) {
+        (
+            self.clock,
+            self.position,
+            self.running && self.settings.mode == "practice",
+        )
+    }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hand_targets_wait_only_for_the_selected_hand_and_allow_track_overrides() {
+        let mut s = song();
+        s.notes[0].hand = Hand::Left;
+        s.notes[1].hand = Hand::Right;
+        s.notes[2].hand = Hand::Right;
+        let mut e = PerformanceEngine::new(StageSettings::default());
+        e.load(s).unwrap();
+        let mut settings = e.settings.clone();
+        settings.practice_hand = "right".into();
+        settings.practice_mode = "wait".into();
+        e.configure(settings).unwrap();
+        assert_eq!(e.snapshot().target_count, 2);
+        e.seek(0.5).unwrap();
+        e.play().unwrap();
+        advance(&mut e, 0.8);
+        assert_eq!(e.snapshot().waiting, vec![64]);
+        e.input("keyboard", &[0x90, 64, 100], 0);
+        advance(&mut e, 1.3);
+        assert!(e.snapshot().position > 1.);
+        let mut settings = e.settings.clone();
+        settings.track_hands.insert(0, Hand::Left);
+        e.configure(settings).unwrap();
+        assert_eq!(e.snapshot().target_count, 0);
+    }
     fn song() -> Song {
         Song {
             title: "test".into(),
@@ -681,6 +826,7 @@ mod tests {
             }],
             notes: vec![
                 SongNote {
+                    hand: Hand::Auto,
                     id: 0,
                     pitch: 60,
                     start: 1.,
@@ -689,6 +835,7 @@ mod tests {
                     track: 0,
                 },
                 SongNote {
+                    hand: Hand::Auto,
                     id: 1,
                     pitch: 64,
                     start: 1.,
@@ -697,6 +844,7 @@ mod tests {
                     track: 0,
                 },
                 SongNote {
+                    hand: Hand::Auto,
                     id: 2,
                     pitch: 67,
                     start: 2.,
@@ -792,6 +940,7 @@ mod tests {
     fn final_short_note_keeps_its_late_hit_window_and_counts_misses() {
         let mut s = song();
         s.notes = vec![SongNote {
+            hand: Hand::Auto,
             id: 0,
             pitch: 60,
             start: 0.,

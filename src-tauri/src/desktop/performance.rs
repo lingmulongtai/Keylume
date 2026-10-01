@@ -97,6 +97,8 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<Core>) {
     std::thread::spawn(move || {
         let mut next = Instant::now();
         let mut saved = Instant::now();
+        let mut playback = crate::song_playback::SongPlayback::default();
+        let mut audio_epoch = core.piano.bus.audio_epoch();
         while !core.quitting.load(Ordering::Acquire) {
             let snapshot = {
                 let mut e = core.performance.engine.lock().unwrap();
@@ -119,6 +121,16 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<Core>) {
                     e.input(&source, &bytes, octave);
                 }
                 e.tick(core.performance.epoch.elapsed().as_secs_f64());
+                let next_audio_epoch = core.piano.bus.audio_epoch();
+                if next_audio_epoch != audio_epoch {
+                    playback.invalidate();
+                    audio_epoch = next_audio_epoch;
+                }
+                let batch = playback.update(&e);
+                if !core.piano.bus.playback(batch, e.settings.playback_volume) {
+                    e.pause();
+                    let _ = app.emit("notice", "MIDI再生が混み合ったため停止しました");
+                }
                 if Instant::now() >= next {
                     next = Instant::now() + Duration::from_millis(33);
                     Some(e.snapshot())
@@ -203,25 +215,25 @@ pub fn interaction(app: &tauri::AppHandle, core: &Core, editing: bool) -> Result
     core.performance
         .calibrating
         .store(editing, Ordering::Release);
-    let through = core
-        .performance
-        .engine
-        .lock()
-        .unwrap()
-        .settings
-        .click_through
-        && !editing;
+    let through = !editing;
     for (label, window) in app.webview_windows() {
-        if label.starts_with("stage-controls-") && editing {
-            let _ = window.show();
-        }
         if label.starts_with("stage-") && !label.starts_with("stage-controls-") {
             window
                 .set_ignore_cursor_events(through)
                 .map_err(|e| e.to_string())?;
+        }
+    }
+    // Raise the independent interactive panel after changing the full-screen overlays.
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("stage-controls-") {
+            window
+                .set_ignore_cursor_events(false)
+                .map_err(|e| e.to_string())?;
             if editing {
-                let _ = window.set_focus();
+                window.show().map_err(|e| e.to_string())?;
             }
+            window.set_always_on_top(false).map_err(|e| e.to_string())?;
+            window.set_always_on_top(true).map_err(|e| e.to_string())?;
         }
     }
     let _ = app.emit("stage_interaction", editing);
@@ -348,6 +360,7 @@ pub async fn stage_command(
                 .transparent(true)
                 .shadow(false)
                 .always_on_top(true)
+                .focusable(false)
                 .resizable(false)
                 .visible(false)
                 .build()
@@ -360,16 +373,6 @@ pub async fn stage_command(
                 // The stage needs per-pixel alpha, never a system Mica/Acrylic backdrop.
                 // Clear effects after showing, including those inherited from desktop theming.
                 w.set_effects(None).map_err(|e| e.to_string())?;
-                if !core
-                    .performance
-                    .engine
-                    .lock()
-                    .unwrap()
-                    .settings
-                    .click_through
-                {
-                    let _ = w.set_focus();
-                }
             }
             let toolbar = WebviewWindowBuilder::new(
                 &app,
@@ -379,7 +382,7 @@ pub async fn stage_command(
             .title("Keylume · 演奏操作")
             .decorations(false)
             .always_on_top(true)
-            .inner_size(960., 158.)
+            .inner_size(1060., 250.)
             .resizable(false)
             .visible(false)
             .build()

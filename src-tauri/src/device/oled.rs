@@ -1,11 +1,12 @@
 use super::{protocol, transport::LedTransport};
 use crossbeam_channel::{Receiver, TryRecvError};
+use std::time::Instant;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Content {
     Off,
     Text(String),
-    Feedback(String, String),
+    Feedback(String, String, Instant),
     Bitmap(Vec<u8>),
 }
 impl Content {
@@ -15,8 +16,8 @@ impl Content {
         match self {
             Self::Off => result.push(protocol::sysex(&[4, 0x20, 0])?),
             Self::Text(text) => result.extend(protocol::display_text(text, 0x20)?),
-            Self::Feedback(title, value) => {
-                result.extend(protocol::display_lines(title, value, 0x20)?)
+            Self::Feedback(title, value, _) => {
+                result.extend(protocol::display_lines(title, value, 0x21)?)
             }
             Self::Bitmap(bits) => result.push(protocol::bitmap(bits, 0x20)?),
         }
@@ -24,6 +25,7 @@ impl Content {
     }
 }
 struct Flight {
+    owned: bool,
     content: Content,
     messages: Vec<Vec<u8>>,
     completion: Receiver<Result<(), String>>,
@@ -35,26 +37,35 @@ pub struct Progress {
     pub warning: Option<String>,
 }
 pub struct DisplayQueue {
+    owned: bool,
+    applied_owned: Option<bool>,
     desired: Content,
     last: Option<Content>,
     flight: Option<Flight>,
     awaiting_ack: Option<f64>,
     warned: bool,
     retry_at: f64,
+    sent_at: f64,
 }
 impl Default for DisplayQueue {
     fn default() -> Self {
         Self {
+            owned: false,
+            applied_owned: None,
             desired: Content::Off,
             last: None,
             flight: None,
             awaiting_ack: None,
             warned: false,
             retry_at: 0.,
+            sent_at: f64::NEG_INFINITY,
         }
     }
 }
 impl DisplayQueue {
+    pub fn ownership(&mut self, owned: bool) {
+        self.owned = owned;
+    }
     pub fn request(&mut self, content: Content) {
         self.desired = content;
     }
@@ -87,6 +98,8 @@ impl DisplayQueue {
             let flight = self.flight.take().unwrap();
             match result {
                 Ok(()) => {
+                    self.sent_at = now;
+                    self.applied_owned = Some(flight.owned);
                     if matches!(flight.content, Content::Bitmap(_)) && !flight.early_ack && !mock {
                         self.awaiting_ack = Some(now);
                         self.warned = false;
@@ -106,10 +119,13 @@ impl DisplayQueue {
         }
         if self.flight.is_none()
             && now >= self.retry_at
-            && self.last.as_ref() != Some(&self.desired)
+            && (self.last.as_ref() != Some(&self.desired)
+                || self.applied_owned != Some(self.owned)
+                || matches!(self.desired, Content::Feedback(_, _, _)) && now - self.sent_at > 0.5)
             && (!matches!(self.desired, Content::Bitmap(_))
+                || self.applied_owned != Some(self.owned)
                 || self.awaiting_ack.is_none()
-                || matches!(self.last, Some(Content::Feedback(_, _))))
+                || matches!(self.last, Some(Content::Feedback(_, _, _))))
         {
             // Expired operation feedback must clear even while a bitmap ACK is missing.
             let content =
@@ -118,7 +134,7 @@ impl DisplayQueue {
                 } else {
                     self.desired.clone()
                 };
-            let messages = match content.messages() {
+            let mut messages = match content.messages() {
                 Ok(messages) => messages,
                 Err(error) => {
                     progress.warning = Some(error);
@@ -126,8 +142,14 @@ impl DisplayQueue {
                     return progress;
                 }
             };
+            if self.applied_owned != Some(self.owned) {
+                let mut configuration = protocol::analogue_displays(self.owned);
+                configuration.extend(messages);
+                messages = configuration;
+            }
             let completion = output.submit(messages.clone());
             self.flight = Some(Flight {
+                owned: self.owned,
                 content,
                 messages,
                 completion,
@@ -141,6 +163,80 @@ impl DisplayQueue {
 mod tests {
     use super::*;
     #[test]
+    fn ownership_is_restored_even_when_a_bitmap_ack_is_missing() {
+        let mut q = DisplayQueue::default();
+        let mut out = Deferred::default();
+        q.ownership(true);
+        q.request(image(0));
+        q.pump(0., &mut out, false);
+        out.replies[0].send(Ok(())).unwrap();
+        q.pump(0.1, &mut out, false);
+        q.ownership(false);
+        q.pump(0.2, &mut out, false);
+        assert!(protocol::analogue_displays(false)
+            .iter()
+            .all(|m| out.batches[1].contains(m)));
+        assert!(out.batches[1].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
+        assert!(!out.batches[1].iter().any(|m| m.get(6) == Some(&0x0a)));
+    }
+    #[test]
+    fn operation_feedback_stays_visible_until_the_app_expires_it() {
+        let mut q = DisplayQueue::default();
+        let mut out = Deferred::default();
+        q.request(Content::Feedback(
+            "Piano Volume".into(),
+            "53%".into(),
+            Instant::now(),
+        ));
+        q.pump(0., &mut out, false);
+        out.replies[0].send(Ok(())).unwrap();
+        q.pump(0.1, &mut out, false);
+        q.pump(0.5, &mut out, false);
+        assert_eq!(out.batches.len(), 1);
+        q.pump(0.7, &mut out, false);
+        assert_eq!(out.batches[1], q.desired.messages().unwrap());
+        out.replies[1].send(Ok(())).unwrap();
+        q.pump(0.8, &mut out, false);
+        q.request(Content::Off);
+        q.pump(2.5, &mut out, false);
+        assert!(out.batches[2].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
+        out.replies[2].send(Ok(())).unwrap();
+        q.pump(2.6, &mut out, false);
+        q.pump(3.5, &mut out, false);
+        assert_eq!(out.batches.len(), 3);
+    }
+    #[test]
+    fn repeated_operations_retrigger_feedback_and_restore_native_popups() {
+        let mut q = DisplayQueue::default();
+        let mut out = Deferred::default();
+        q.ownership(true);
+        let at = Instant::now();
+        q.request(Content::Feedback("Piano Volume".into(), "53%".into(), at));
+        q.pump(0., &mut out, false);
+        assert!(protocol::analogue_displays(true)
+            .iter()
+            .all(|m| out.batches[0].contains(m)));
+        assert!(out.batches[0].contains(&protocol::sysex(&[6, 33, 1, b'5', b'3', b'%']).unwrap()));
+        out.replies[0].send(Ok(())).unwrap();
+        q.pump(0.1, &mut out, false);
+        q.request(Content::Feedback(
+            "Piano Volume".into(),
+            "53%".into(),
+            at + std::time::Duration::from_millis(1),
+        ));
+        q.pump(0.2, &mut out, false);
+        assert_eq!(out.batches.len(), 2);
+        out.replies[1].send(Ok(())).unwrap();
+        q.pump(0.3, &mut out, false);
+        q.ownership(false);
+        q.request(Content::Text(String::new()));
+        q.pump(3., &mut out, false);
+        assert!(protocol::analogue_displays(false)
+            .iter()
+            .all(|m| out.batches[2].contains(m)));
+        assert!(out.batches[2].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
+    }
+    #[test]
     fn expired_feedback_clears_before_a_missing_bitmap_ack_recovers() {
         let mut q = DisplayQueue::default();
         let mut out = Deferred::default();
@@ -148,9 +244,13 @@ mod tests {
         q.pump(0., &mut out, false);
         out.replies[0].send(Ok(())).unwrap();
         q.pump(0.1, &mut out, false);
-        q.request(Content::Feedback("Piano Volume".into(), "75%".into()));
+        q.request(Content::Feedback(
+            "Piano Volume".into(),
+            "75%".into(),
+            Instant::now(),
+        ));
         q.pump(0.2, &mut out, false);
-        assert!(out.batches[1].contains(&protocol::sysex(&[6, 32, 1, b'7', b'5', b'%']).unwrap()));
+        assert!(out.batches[1].contains(&protocol::sysex(&[6, 33, 1, b'7', b'5', b'%']).unwrap()));
         out.replies[1].send(Ok(())).unwrap();
         q.pump(0.3, &mut out, false);
         q.request(image(1));

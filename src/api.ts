@@ -354,6 +354,13 @@ export function frameNow(): Color[] {
   }
   return f;
 }
+function reservePianoFader(settings: Settings, previous: number) {
+  const fader = settings.piano.volumeFader;
+  if (fader && fader !== previous) {
+    delete settings.controller.performance[`fader-${fader}`];
+    delete settings.controller.desktop[`fader-${fader}`];
+  }
+}
 export async function command<T = unknown>(
   name: string,
   args: Record<string, unknown> = {},
@@ -422,6 +429,7 @@ export async function command<T = unknown>(
       break;
     case 'patch_settings': {
       const settings = mergeSettings(mock.settings, args.patch);
+      reservePianoFader(settings, mock.settings.piano.volumeFader);
       if (!settings.mock) throw Error('実機接続はデスクトップ版で利用できます');
       mock.settings = settings;
       mock.status.effectiveMode = mock.settings.coexistMode;
@@ -430,7 +438,9 @@ export async function command<T = unknown>(
     case 'save_settings': {
       const settings = args.settings as Settings;
       if (!settings.mock) throw Error('実機接続はデスクトップ版で利用できます');
+      const previousPianoFader = mock.settings.piano.volumeFader;
       mock.settings = structuredClone(settings);
+      reservePianoFader(mock.settings, previousPianoFader);
       mock.status.effectiveMode = mock.settings.coexistMode;
       break;
     }

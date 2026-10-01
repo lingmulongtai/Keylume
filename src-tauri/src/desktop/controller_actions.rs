@@ -13,6 +13,14 @@ pub fn perform(
     input: &ControlInput,
 ) -> Result<bool, String> {
     let action = binding.action.as_str();
+    if action == "systemVolume" {
+        if !core.control.lock().unwrap().settings.mock {
+            desktop.volume(input.value, input.delta);
+        } else {
+            core.show_feedback("Windows Volume", "Preview");
+        }
+        return Ok(false);
+    }
     if action == "shortcut" || action == "open" {
         if !core.control.lock().unwrap().settings.mock {
             desktop.run(binding.clone())?;
@@ -82,7 +90,9 @@ pub fn perform(
             } else {
                 Mode::Performance
             };
-            core.piano.bus.set_performing(*mode == Mode::Performance);
+            let performing =
+                *mode == Mode::Performance || control.settings.controller.desktop_piano;
+            core.piano.bus.set_performing(performing);
             core.performance.pause();
             desktop.allowed(false);
         }
@@ -158,6 +168,8 @@ pub fn perform(
                     [(i as isize + direction).rem_euclid(control.presets.len() as isize) as usize]
                     .clone();
                 control.settings.active_preset = next.id.clone();
+                // A physical preset selection has the same priority as a manual UI choice.
+                control.settings.manual_lock = true;
                 control.draft = next;
                 control.revision += 1;
             }

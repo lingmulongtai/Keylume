@@ -6,6 +6,34 @@ import { hardwareColor } from './input';
 import { useInput } from './useInput';
 import HardwareFace, { labelSize } from './HardwareFace';
 import { buttonLabel, keybed } from './layout';
+import { bindingName, controlNames } from './controller';
+function layoutAreas(state: AppState) {
+  const d = state.layout.decor;
+  return [
+    ...d.encoders.map((k, i) => ({
+      id: `encoder-${i + 1}`,
+      name: `ノブ ${i + 1}`,
+      x: k.x - k.r - 4,
+      y: k.y - k.r - 4,
+      w: (k.r + 4) * 2,
+      h: (k.r + 4) * 2 + 8,
+    })),
+    ...d.faders.map((f, i) => ({
+      id: `fader-${i + 1}`,
+      name: `フェーダー ${i + 1}`,
+      x: f.x - 12,
+      y: f.y,
+      w: 24,
+      h: f.h + 8,
+    })),
+    ...d.wheels.map((k, i) => ({
+      ...k,
+      id: i ? 'mod-wheel' : 'pitch-wheel',
+      name: controlNames[i ? 'mod-wheel' : 'pitch-wheel'],
+    })),
+    ...(d.controls ?? []).map((c) => ({ id: c.id, name: c.label, ...c.pos, ...c.size })),
+  ];
+}
 interface Props {
   state: AppState;
   selected: string[];
@@ -45,6 +73,16 @@ export default function DeviceCanvas({
   }, []);
   const input = useInput();
   const held = new Set(input.held);
+  const c = state.settings.controller;
+  const assignment = (id: string) => {
+    const binding = c.enabled ? c[c.mode][id] : undefined;
+    return binding && binding.action !== 'none'
+      ? bindingName(binding)
+      : id === `fader-${state.settings.piano.volumeFader}`
+        ? '楽器の音量'
+        : '割り当てなし';
+  };
+  const hoverAreas = [...layoutAreas(state)];
   const [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   data.current = state;
   useEffect(() => {
@@ -214,6 +252,13 @@ export default function DeviceCanvas({
             setRect(null);
           }}
         >
+          {hoverAreas.map((a) => (
+            <rect key={a.id} x={a.x} y={a.y} width={a.w} height={a.h} fill="transparent">
+              <title>
+                {a.name} · {assignment(a.id)}
+              </title>
+            </rect>
+          ))}
           {layout.decor.keys
             .filter((k) => !k.black)
             .concat(layout.decor.keys.filter((k) => k.black))
@@ -286,7 +331,7 @@ export default function DeviceCanvas({
                 }}
               >
                 <title>
-                  {l.label ?? l.id} · {l.kind} · 0x
+                  {assignment(l.id)} · {l.label ?? l.id} · {l.kind} · 0x
                   {(l.address.sysexId ?? l.address.cc ?? 0).toString(16).toUpperCase()} ·{' '}
                   {l.verified ? '検証済み' : '実機未検証'}
                 </title>

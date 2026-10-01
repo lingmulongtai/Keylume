@@ -81,6 +81,9 @@ export async function stageCommand<T = StageSnapshot>(
     state.settings = {
       ...state.settings,
       mode: 'practice',
+      trackHands: {},
+      loopEnabled: false,
+      loopStart: 0,
       tracks: song.tracks.filter((t) => !t.percussion).map((t) => t.id),
       loopEnd: Math.max(0.1, song.duration),
     };
@@ -93,7 +96,7 @@ export async function stageCommand<T = StageSnapshot>(
   if (name === 'play') {
     if (!song) throw Error('MIDIを読み込んでください');
     if (state.position >= state.duration) state.position = 0;
-    if (state.position === 0) state.position = -3;
+    if (state.position === 0 && state.settings.practiceMode !== 'listen') state.position = -3;
     state.running = true;
   }
   if (name === 'pause') state.running = false;

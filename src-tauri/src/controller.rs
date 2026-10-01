@@ -35,6 +35,7 @@ impl Binding {
 #[serde(default, rename_all = "camelCase")]
 pub struct ControllerSettings {
     pub enabled: bool,
+    pub desktop_piano: bool,
     pub mode: Mode,
     pub performance: BTreeMap<String, Binding>,
     pub desktop: BTreeMap<String, Binding>,
@@ -60,6 +61,10 @@ impl Default for ControllerSettings {
             performance.insert(format!("encoder-{}", i + 1), Binding::new("effect", effect));
         }
         for (control, action, value) in [
+            ("scale", "lighting", "1"),
+            ("chordMap", "sound", "1"),
+            ("arp", "metronome", ""),
+            ("fader-8", "systemVolume", ""),
             ("btn.encoderUp", "sound", "-1"),
             ("btn.encoderDown", "sound", "1"),
             ("btn.padUp", "kit", "-1"),
@@ -85,6 +90,7 @@ impl Default for ControllerSettings {
             );
         }
         let desktop = [
+            ("fader-8", "systemVolume", ""),
             ("fbtn.9", "mode", ""),
             ("btn.undo", "shortcut", "Ctrl+Z"),
             ("btn.play", "shortcut", "MediaPlayPause"),
@@ -101,6 +107,7 @@ impl Default for ControllerSettings {
         .collect();
         Self {
             enabled: true,
+            desktop_piano: true,
             mode: Mode::Performance,
             performance,
             desktop,
@@ -121,6 +128,15 @@ impl ControllerSettings {
             self.performance
                 .entry(id.into())
                 .or_insert_with(|| Binding::new(action, ""));
+        }
+        for (id, action, value) in [
+            ("scale", "lighting", "1"),
+            ("chordMap", "sound", "1"),
+            ("arp", "metronome", ""),
+        ] {
+            self.performance
+                .entry(id.into())
+                .or_insert_with(|| Binding::new(action, value));
         }
     }
     pub fn bindings(&self) -> &BTreeMap<String, Binding> {
@@ -152,7 +168,9 @@ impl ControllerSettings {
             let valid = match b.action.as_str() {
                 "none" | "mode" | "undo" | "loopPlay" | "loopStop" | "loopRecord"
                 | "loopOverdub" | "loopClear" | "piano" | "panic" | "volume" | "brightness"
-                | "scroll" | "tempo" | "metronome" | "capture" | "quantise" => true,
+                | "systemVolume" | "scroll" | "tempo" | "metronome" | "capture" | "quantise" => {
+                    true
+                }
                 "effect" => EFFECT_NAMES.contains(&b.value.as_str()),
                 "sound" | "kit" | "lighting" => ["-1", "1"].contains(&b.value.as_str()),
                 "favorite" => b.value.parse::<usize>().is_ok_and(|v| v < 128),

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { drawNoteEffects } from './visual-effects';
 import { calibrationHandle, keys, noteColor, noteName } from './geometry';
+import { noteHand, practiced } from './hands';
 import type { Song, StageSnapshot, StageView, StageSettings } from './types';
 type Frame = { state: StageSnapshot; received: number };
 export default function StageCanvas({
@@ -101,6 +102,8 @@ export default function StageCanvas({
         velocity: number,
         live: boolean,
         dark: boolean,
+        base = a.color,
+        inactive = false,
       ) {
         if (!a.showBars) return;
         const k = map.get(pitch);
@@ -118,7 +121,7 @@ export default function StageCanvas({
         if (bottom < 0 || top > line) return;
         top = Math.max(-4, top);
         bottom = Math.min(line, bottom);
-        const color = noteColor(pitch, a.color, a.style === 'rainbow');
+        const color = noteColor(pitch, inactive ? '#89909c' : base, live && a.style === 'rainbow');
         ctx.globalAlpha = 0.55 + (velocity / 127) * 0.45;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
@@ -127,7 +130,7 @@ export default function StageCanvas({
         ctx.roundRect(x, top, bw, Math.max(3, bottom - top), Math.min(6, bw / 3));
         ctx.fill();
         if (k.black) {
-          ctx.strokeStyle = a.color;
+          ctx.strokeStyle = inactive ? '#89909c' : base;
           ctx.lineWidth = 1;
           ctx.stroke();
         }
@@ -150,7 +153,16 @@ export default function StageCanvas({
           for (const n of song.notes) {
             if (n.start > position + a.lookAhead) break;
             if (n.end < position || !a.tracks.includes(n.track)) continue;
-            bar(n.pitch, n.start, n.end, n.velocity, false, dark);
+            bar(
+              n.pitch,
+              n.start,
+              n.end,
+              n.velocity,
+              false,
+              dark,
+              noteHand(n, a) === 'left' ? a.leftColor : a.rightColor,
+              a.practiceMode !== 'listen' && !practiced(n, a),
+            );
           }
         } else
           for (const n of s.live) bar(n.pitch, n.start, n.end ?? clock, n.velocity, true, dark);
