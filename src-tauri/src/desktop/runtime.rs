@@ -680,8 +680,11 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             suspended || handoff || stopping || mock_disconnected || now < resume_at;
         let inactive = desired.paused || controls_blocked;
         let update = feature_controls.synchronize(
-            (settings.controller.enabled && !controls_blocked && transport.is_some())
-                .then(|| settings.controller.bindings()),
+            (!settings.mock
+                && settings.controller.enabled
+                && !controls_blocked
+                && transport.is_some())
+            .then(|| settings.controller.bindings()),
             now,
         );
         if update.warning {
