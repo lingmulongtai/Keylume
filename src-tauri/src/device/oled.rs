@@ -123,6 +123,7 @@ impl DisplayQueue {
                 || self.applied_owned != Some(self.owned)
                 || matches!(self.desired, Content::Feedback(_, _, _)) && now - self.sent_at > 0.5)
             && (!matches!(self.desired, Content::Bitmap(_))
+                || self.applied_owned != Some(self.owned)
                 || self.awaiting_ack.is_none()
                 || matches!(self.last, Some(Content::Feedback(_, _, _))))
         {
@@ -161,6 +162,23 @@ impl DisplayQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ownership_is_restored_even_when_a_bitmap_ack_is_missing() {
+        let mut q = DisplayQueue::default();
+        let mut out = Deferred::default();
+        q.ownership(true);
+        q.request(image(0));
+        q.pump(0., &mut out, false);
+        out.replies[0].send(Ok(())).unwrap();
+        q.pump(0.1, &mut out, false);
+        q.ownership(false);
+        q.pump(0.2, &mut out, false);
+        assert!(protocol::analogue_displays(false)
+            .iter()
+            .all(|m| out.batches[1].contains(m)));
+        assert!(out.batches[1].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
+        assert!(!out.batches[1].iter().any(|m| m.get(6) == Some(&0x0a)));
+    }
     #[test]
     fn operation_feedback_stays_visible_until_the_app_expires_it() {
         let mut q = DisplayQueue::default();
