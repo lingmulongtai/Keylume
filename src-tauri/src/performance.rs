@@ -118,7 +118,7 @@ impl Default for StageSettings {
             show_keyboard: true,
             show_hud: true,
             transparent: false,
-            click_through: false,
+            click_through: true,
             guides: false,
             particles: 0.6,
             latency_ms: 0.,

@@ -77,7 +77,7 @@ export const defaultStageSettings: StageSettings = {
   showKeyboard: true,
   showHud: true,
   transparent: false,
-  clickThrough: false,
+  clickThrough: true,
   guides: false,
   particles: 0.6,
   latencyMs: 0,

@@ -203,25 +203,25 @@ pub fn interaction(app: &tauri::AppHandle, core: &Core, editing: bool) -> Result
     core.performance
         .calibrating
         .store(editing, Ordering::Release);
-    let through = core
-        .performance
-        .engine
-        .lock()
-        .unwrap()
-        .settings
-        .click_through
-        && !editing;
+    let through = !editing;
     for (label, window) in app.webview_windows() {
-        if label.starts_with("stage-controls-") && editing {
-            let _ = window.show();
-        }
         if label.starts_with("stage-") && !label.starts_with("stage-controls-") {
             window
                 .set_ignore_cursor_events(through)
                 .map_err(|e| e.to_string())?;
+        }
+    }
+    // Raise the independent interactive panel after changing the full-screen overlays.
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("stage-controls-") {
+            window
+                .set_ignore_cursor_events(false)
+                .map_err(|e| e.to_string())?;
             if editing {
-                let _ = window.set_focus();
+                window.show().map_err(|e| e.to_string())?;
             }
+            window.set_always_on_top(false).map_err(|e| e.to_string())?;
+            window.set_always_on_top(true).map_err(|e| e.to_string())?;
         }
     }
     let _ = app.emit("stage_interaction", editing);
@@ -348,6 +348,7 @@ pub async fn stage_command(
                 .transparent(true)
                 .shadow(false)
                 .always_on_top(true)
+                .focusable(false)
                 .resizable(false)
                 .visible(false)
                 .build()
@@ -360,16 +361,6 @@ pub async fn stage_command(
                 // The stage needs per-pixel alpha, never a system Mica/Acrylic backdrop.
                 // Clear effects after showing, including those inherited from desktop theming.
                 w.set_effects(None).map_err(|e| e.to_string())?;
-                if !core
-                    .performance
-                    .engine
-                    .lock()
-                    .unwrap()
-                    .settings
-                    .click_through
-                {
-                    let _ = w.set_focus();
-                }
             }
             let toolbar = WebviewWindowBuilder::new(
                 &app,

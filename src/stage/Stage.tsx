@@ -308,16 +308,8 @@ export default function Stage(props: ViewProps) {
             />
             背景を透明にする
           </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.clickThrough}
-              onChange={(e) => change({ clickThrough: e.target.checked })}
-            />
-            固定中はクリックを下のアプリへ通す
-          </label>
           <p className="stage-hint">
-            操作解除は上の「別画面の位置合わせを開く」かトレイから。クリック透過中は演奏画面へキー入力を取り込みません。
+            固定中は常にクリックを下のアプリへ通します。位置合わせは操作パネルかトレイから開けます。操作パネルはクリックできます。
           </p>
           <label className="stage-field">
             <span>スタイル</span>
@@ -466,6 +458,7 @@ export function StageControls() {
       if (dead) fn();
       else off = fn;
     });
+    void stageCommand<boolean>('interaction').then(setEditing).catch((e) => setError(String(e)));
     return () => {
       dead = true;
       off?.();
@@ -488,14 +481,7 @@ export function StageControls() {
           />
           背景を透明に
         </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={state.settings.clickThrough}
-            onChange={(e) => change({ clickThrough: e.target.checked })}
-          />
-          演出をクリック透過
-        </label>
+        <span>固定中はクリック透過</span>
         <button onClick={() => run('close')}>演奏画面を閉じる</button>
         <button
           aria-label="操作パネルを隠す"
