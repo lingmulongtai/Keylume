@@ -11,7 +11,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = ["desktop"]
-desktop = ["dep:reqwest", "dep:tauri", "dep:tauri-plugin-autostart", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-dialog", "dep:tauri-plugin-opener", "dep:midir", "dep:sysinfo", "dep:cpal", "dep:rustfft", "dep:windows-sys"]
+desktop = ["dep:reqwest", "dep:tauri", "dep:tauri-plugin-autostart", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-dialog", "dep:tauri-plugin-opener", "dep:midir", "dep:sysinfo", "dep:cpal", "dep:rustfft", "dep:windows-sys", "dep:windows"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -36,4 +36,5 @@ sha2 = "0.10"
 reqwest = { version = "=0.13.5", default-features = false, features = ["blocking", "native-tls-no-alpn"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", optional = true, features = ["Win32_System_Com", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints"] }
 windows-sys = { version = "0.61", optional = true, features = ["Win32_Networking_WinHttp", "Win32_Foundation", "Win32_System_Services", "Win32_System_SystemInformation", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_RemoteDesktop", "Win32_System_Power"] }

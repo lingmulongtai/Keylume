@@ -137,6 +137,16 @@ impl Core {
     pub fn create(mut storage: Storage) -> (Arc<Self>, Receiver<Action>) {
         let mut settings = storage.settings();
         settings.controller.upgrade_defaults();
+        if settings.piano.volume_fader != 8 {
+            for bindings in [
+                &mut settings.controller.performance,
+                &mut settings.controller.desktop,
+            ] {
+                bindings
+                    .entry("fader-8".into())
+                    .or_insert_with(|| crate::controller::Binding::new("systemVolume", ""));
+            }
+        }
         let performance_settings = storage
             .load(
                 "performance.json",
@@ -416,6 +426,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         desired.settings.controller = controller;
         desired.settings.master_brightness = brightness;
         let performing = !desired.settings.controller.enabled
+            || desired.settings.controller.desktop_piano
             || desired.settings.controller.mode == crate::controller::Mode::Performance;
         if core.piano.bus.is_performing() != performing {
             core.piano.bus.set_performing(performing);
@@ -955,9 +966,15 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         };
                         if let Some(binding) = binding.filter(|b| b.action != "none") {
                             consumed = true;
-                            input.continuous =
-                                ["effect", "volume", "brightness", "scroll", "tempo"]
-                                    .contains(&binding.action.as_str());
+                            input.continuous = [
+                                "effect",
+                                "volume",
+                                "systemVolume",
+                                "brightness",
+                                "scroll",
+                                "tempo",
+                            ]
+                            .contains(&binding.action.as_str());
                             if edges.press(&input) {
                                 match super::controller_actions::perform(
                                     &core, &desktop, &binding, &input,

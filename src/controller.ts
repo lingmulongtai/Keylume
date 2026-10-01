@@ -4,6 +4,7 @@ export interface Binding {
 }
 export interface ControllerSettings {
   enabled: boolean;
+  desktopPiano: boolean;
   mode: 'performance' | 'desktop';
   performance: Record<string, Binding>;
   desktop: Record<string, Binding>;
@@ -38,6 +39,7 @@ export const defaultController = (): ControllerSettings => {
     (name, i) => (performance[`encoder-${i + 1}`] = { action: 'effect', value: name }),
   );
   for (const [id, action, value] of [
+    ['fader-8', 'systemVolume', ''],
     ['btn.encoderUp', 'sound', '-1'],
     ['btn.encoderDown', 'sound', '1'],
     ['btn.padUp', 'kit', '-1'],
@@ -59,6 +61,7 @@ export const defaultController = (): ControllerSettings => {
     performance[`fbtn.${i}`] = { action: 'favorite', value: String(i - 1) };
   return {
     enabled: true,
+    desktopPiano: true,
     mode: 'performance',
     scrollSpeed: 1,
     displayFeedback: true,
@@ -67,6 +70,7 @@ export const defaultController = (): ControllerSettings => {
     performance,
     desktop: Object.fromEntries(
       [
+        ['fader-8', 'systemVolume', ''],
         ['fbtn.9', 'mode', ''],
         ['btn.undo', 'shortcut', 'Ctrl+Z'],
         ['btn.play', 'shortcut', 'MediaPlayPause'],
@@ -86,6 +90,7 @@ export const actionNames: Record<string, string> = {
   mode: '演奏 / デスクトップ切替',
   effect: '音源エフェクト',
   volume: '楽器の音量',
+  systemVolume: 'Windowsの音量（既定の出力）',
   brightness: 'ライティングの明るさ',
   sound: '音源を切替',
   kit: 'ドラムキットを切替',

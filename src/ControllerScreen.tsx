@@ -147,6 +147,13 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
           </button>
           <small>標準: フェーダー下9で切替</small>
         </div>
+        <Toggle
+          label="デスクトップモードでも鍵盤を演奏できる"
+          checked={c.desktopPiano}
+          onChange={(desktopPiano) =>
+            saveSettings({ ...state.settings, controller: { ...c, desktopPiano } })
+          }
+        />
         <Slider
           label="ホイールのスクロール速度"
           min={0.1}

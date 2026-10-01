@@ -13,6 +13,13 @@ pub fn perform(
     input: &ControlInput,
 ) -> Result<bool, String> {
     let action = binding.action.as_str();
+    if action == "systemVolume" {
+        if !core.control.lock().unwrap().settings.mock {
+            desktop.volume(input.value, input.delta);
+        }
+        core.show_feedback("Windows Volume", format!("{:.0}%", input.value * 100.));
+        return Ok(false);
+    }
     if action == "shortcut" || action == "open" {
         if !core.control.lock().unwrap().settings.mock {
             desktop.run(binding.clone())?;
@@ -82,7 +89,9 @@ pub fn perform(
             } else {
                 Mode::Performance
             };
-            core.piano.bus.set_performing(*mode == Mode::Performance);
+            let performing =
+                *mode == Mode::Performance || control.settings.controller.desktop_piano;
+            core.piano.bus.set_performing(performing);
             core.performance.pause();
             desktop.allowed(false);
         }

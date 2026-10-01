@@ -10,6 +10,7 @@ use std::{
 use tauri::Emitter;
 
 struct Shared {
+    volume: AtomicU64,
     allowed: AtomicBool,
     epoch: AtomicU64,
     rate: AtomicU32,
@@ -22,6 +23,7 @@ pub struct DesktopActions {
 impl DesktopActions {
     pub fn new(app: tauri::AppHandle) -> Self {
         let shared = Arc::new(Shared {
+            volume: AtomicU64::new(u64::MAX),
             allowed: AtomicBool::new(false),
             epoch: AtomicU64::new(0),
             rate: AtomicU32::new(0),
@@ -41,7 +43,16 @@ impl DesktopActions {
                     || super::system::SUSPENDED.load(Ordering::Acquire)
                 {
                     remainder = 0.;
+                    state.volume.store(u64::MAX, Ordering::Release);
                     continue;
+                }
+                let volume = state.volume.swap(u64::MAX, Ordering::AcqRel);
+                if volume != u64::MAX {
+                    let value = f32::from_bits(volume as u32);
+                    let delta = f32::from_bits((volume >> 32) as u32);
+                    if let Err(error) = system_volume(value, delta.is_finite().then_some(delta)) {
+                        let _ = app.emit("notice", error);
+                    }
                 }
                 if let Some((epoch, binding)) =
                     job.filter(|(e, _)| *e == state.epoch.load(Ordering::Acquire))
@@ -92,9 +103,49 @@ impl DesktopActions {
     pub fn scroll(&self, rate: f32) {
         self.shared.rate.store(rate.to_bits(), Ordering::Release);
     }
+    pub fn volume(&self, value: f32, delta: Option<f32>) {
+        self.shared.volume.store(
+            value.to_bits() as u64 | ((delta.unwrap_or(f32::NAN).to_bits() as u64) << 32),
+            Ordering::Release,
+        );
+    }
     pub fn stop_scroll(&self) {
         self.shared.rate.store(0, Ordering::Release);
     }
+}
+#[cfg(windows)]
+fn system_volume(value: f32, delta: Option<f32>) -> Result<(), String> {
+    use windows::Win32::{
+        Media::Audio::{
+            eMultimedia, eRender, Endpoints::IAudioEndpointVolume, IMMDeviceEnumerator,
+            MMDeviceEnumerator,
+        },
+        System::Com::*,
+    };
+    unsafe {
+        CoInitializeEx(None, COINIT_MULTITHREADED)
+            .ok()
+            .map_err(|e| e.to_string())?;
+        let result = (|| -> windows::core::Result<()> {
+            let enumerator: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            // Resolve each time so the fader follows Windows' default output device.
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
+            let endpoint: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
+            let value = if let Some(delta) = delta {
+                endpoint.GetMasterVolumeLevelScalar()? + delta
+            } else {
+                value
+            };
+            endpoint.SetMasterVolumeLevelScalar(value.clamp(0., 1.), std::ptr::null())
+        })();
+        CoUninitialize();
+        result.map_err(|e| format!("Windows音量を変更できませんでした: {e}"))
+    }
+}
+#[cfg(not(windows))]
+fn system_volume(_: f32, _: Option<f32>) -> Result<(), String> {
+    Err("Windowsで利用できます".into())
 }
 impl Drop for DesktopActions {
     fn drop(&mut self) {
