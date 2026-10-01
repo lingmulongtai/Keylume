@@ -1,9 +1,20 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Hand {
+    #[default]
+    Auto,
+    Left,
+    Right,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SongNote {
+    #[serde(default)]
+    pub hand: Hand,
     pub id: u32,
     pub pitch: u8,
     pub start: f64,
@@ -71,6 +82,12 @@ impl Song {
 pub struct StageSettings {
     pub mode: String,
     pub practice_mode: String,
+    pub practice_hand: String,
+    pub hand_strategy: String,
+    pub split_pitch: u8,
+    pub track_hands: BTreeMap<u16, Hand>,
+    pub left_color: String,
+    pub right_color: String,
     pub speed: f64,
     pub look_ahead: f64,
     pub trail: f64,
@@ -102,6 +119,12 @@ impl Default for StageSettings {
         Self {
             mode: "live".into(),
             practice_mode: "timing".into(),
+            practice_hand: "both".into(),
+            hand_strategy: "auto".into(),
+            split_pitch: 60,
+            track_hands: BTreeMap::new(),
+            left_color: "#eeac75".into(),
+            right_color: "#75c8fa".into(),
             speed: 1.,
             look_ahead: 4.,
             trail: 6.,
@@ -137,6 +160,15 @@ impl StageSettings {
             || !["live", "practice"].contains(&self.mode.as_str())
             || !["english", "solfege"].contains(&self.label_format.as_str())
             || !["timing", "wait"].contains(&self.practice_mode.as_str())
+            || !["both", "left", "right"].contains(&self.practice_hand.as_str())
+            || !["auto", "split"].contains(&self.hand_strategy.as_str())
+            || self.split_pitch > 127
+            || self.track_hands.len() > 256
+            || [&self.left_color, &self.right_color].iter().any(|c| {
+                c.len() != 7
+                    || !c.starts_with('#')
+                    || !c[1..].bytes().all(|b| b.is_ascii_hexdigit())
+            })
             || ![
                 "clean",
                 "glow",
@@ -172,6 +204,33 @@ impl StageSettings {
             return Err("演奏画面の設定値が範囲外です".into());
         }
         Ok(())
+    }
+    pub fn hand(&self, note: &SongNote) -> Hand {
+        match self
+            .track_hands
+            .get(&note.track)
+            .copied()
+            .unwrap_or_default()
+        {
+            Hand::Left => Hand::Left,
+            Hand::Right => Hand::Right,
+            Hand::Auto if self.hand_strategy == "auto" && note.hand != Hand::Auto => note.hand,
+            Hand::Auto => {
+                if note.pitch < self.split_pitch {
+                    Hand::Left
+                } else {
+                    Hand::Right
+                }
+            }
+        }
+    }
+    pub fn practiced(&self, note: &SongNote) -> bool {
+        self.practice_hand == "both"
+            || match self.hand(note) {
+                Hand::Left => self.practice_hand == "left",
+                Hand::Right => self.practice_hand == "right",
+                Hand::Auto => false,
+            }
     }
 }
 #[derive(Clone, Serialize)]
@@ -276,6 +335,7 @@ impl PerformanceEngine {
             .filter(|t| !t.percussion)
             .map(|t| t.id)
             .collect();
+        self.settings.track_hands.clear();
         self.settings.loop_enabled = false;
         self.settings.loop_start = 0.;
         self.settings.loop_end = song.duration.max(0.1);
@@ -288,6 +348,10 @@ impl PerformanceEngine {
     pub fn configure(&mut self, settings: StageSettings) -> Result<(), String> {
         settings.validate()?;
         let restart = self.settings.tracks != settings.tracks
+            || self.settings.practice_hand != settings.practice_hand
+            || self.settings.hand_strategy != settings.hand_strategy
+            || self.settings.split_pitch != settings.split_pitch
+            || self.settings.track_hands != settings.track_hands
             || self.settings.practice_mode != settings.practice_mode
             || self.settings.loop_enabled != settings.loop_enabled
             || self.settings.loop_start != settings.loop_start
@@ -308,6 +372,7 @@ impl PerformanceEngine {
         if let Some(song) = &self.song {
             for n in &song.notes {
                 if !self.settings.tracks.contains(&n.track)
+                    || !self.settings.practiced(n)
                     || (self.settings.loop_enabled
                         && (n.start < self.settings.loop_start
                             || n.start >= self.settings.loop_end))
@@ -669,6 +734,31 @@ impl PerformanceEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hand_targets_wait_only_for_the_selected_hand_and_allow_track_overrides() {
+        let mut s = song();
+        s.notes[0].hand = Hand::Left;
+        s.notes[1].hand = Hand::Right;
+        s.notes[2].hand = Hand::Right;
+        let mut e = PerformanceEngine::new(StageSettings::default());
+        e.load(s).unwrap();
+        let mut settings = e.settings.clone();
+        settings.practice_hand = "right".into();
+        settings.practice_mode = "wait".into();
+        e.configure(settings).unwrap();
+        assert_eq!(e.snapshot().target_count, 2);
+        e.seek(0.5).unwrap();
+        e.play().unwrap();
+        advance(&mut e, 0.8);
+        assert_eq!(e.snapshot().waiting, vec![64]);
+        e.input("keyboard", &[0x90, 64, 100], 0);
+        advance(&mut e, 1.3);
+        assert!(e.snapshot().position > 1.);
+        let mut settings = e.settings.clone();
+        settings.track_hands.insert(0, Hand::Left);
+        e.configure(settings).unwrap();
+        assert_eq!(e.snapshot().target_count, 0);
+    }
     fn song() -> Song {
         Song {
             title: "test".into(),
@@ -681,6 +771,7 @@ mod tests {
             }],
             notes: vec![
                 SongNote {
+                    hand: Hand::Auto,
                     id: 0,
                     pitch: 60,
                     start: 1.,
@@ -689,6 +780,7 @@ mod tests {
                     track: 0,
                 },
                 SongNote {
+                    hand: Hand::Auto,
                     id: 1,
                     pitch: 64,
                     start: 1.,
@@ -697,6 +789,7 @@ mod tests {
                     track: 0,
                 },
                 SongNote {
+                    hand: Hand::Auto,
                     id: 2,
                     pitch: 67,
                     start: 2.,
@@ -792,6 +885,7 @@ mod tests {
     fn final_short_note_keeps_its_late_hit_window_and_counts_misses() {
         let mut s = song();
         s.notes = vec![SongNote {
+            hand: Hand::Auto,
             id: 0,
             pitch: 60,
             start: 0.,

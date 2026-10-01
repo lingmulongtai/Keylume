@@ -1,4 +1,5 @@
 export interface SongNote {
+  hand?: 'auto' | 'left' | 'right';
   id: number;
   pitch: number;
   start: number;
@@ -22,6 +23,12 @@ export interface Song {
 export interface StageSettings {
   mode: 'live' | 'practice';
   practiceMode: 'timing' | 'wait';
+  practiceHand: 'both' | 'left' | 'right';
+  handStrategy: 'auto' | 'split';
+  splitPitch: number;
+  trackHands: Record<string, 'auto' | 'left' | 'right'>;
+  leftColor: string;
+  rightColor: string;
   speed: number;
   lookAhead: number;
   trail: number;
@@ -61,6 +68,12 @@ export interface StageSettings {
 export const defaultStageSettings: StageSettings = {
   mode: 'live',
   practiceMode: 'timing',
+  practiceHand: 'both',
+  handStrategy: 'auto',
+  splitPitch: 60,
+  trackHands: {},
+  leftColor: '#eeac75',
+  rightColor: '#75c8fa',
   speed: 1,
   lookAhead: 4,
   trail: 6,

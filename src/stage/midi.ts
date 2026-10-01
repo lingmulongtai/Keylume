@@ -1,5 +1,6 @@
 import { Midi } from '@tonejs/midi';
 import type { Song } from './types';
+import { assignHands } from './hands';
 export function parseMidi(data: ArrayBuffer, title: string): Song {
   const bytes = new Uint8Array(data),
     view = new DataView(data);
@@ -71,13 +72,13 @@ export function parseMidi(data: ArrayBuffer, title: string): Song {
     if (time > duration) break;
     beats.push(time);
   }
-  return {
+  return assignHands({
     title: (midi.name || title.replace(/\.midi?$/i, '')).slice(0, 200),
     duration,
     notes,
     tracks,
     beats,
-  };
+  });
 }
 export function demoSong(): Song {
   const pitches = [60, 64, 67, 72, 71, 67, 64, 62, 60, 64, 67, 72, 74, 71, 67, 60];
