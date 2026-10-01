@@ -383,3 +383,10 @@ html[data-surface='stage-controls'] #root {
 .stage-hand-controls input[type='number'] {
   width: 70px;
 }
+.stage-controls .stage-hand-controls {
+  margin-top: 8px;
+  font-size: 11px;
+}
+.stage-controls .stage-hand-controls input[type='range'] {
+  width: 100px;
+}

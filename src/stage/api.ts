@@ -93,7 +93,7 @@ export async function stageCommand<T = StageSnapshot>(
   if (name === 'play') {
     if (!song) throw Error('MIDIを読み込んでください');
     if (state.position >= state.duration) state.position = 0;
-    if (state.position === 0) state.position = -3;
+    if (state.position === 0 && state.settings.practiceMode !== 'listen') state.position = -3;
     state.running = true;
   }
   if (name === 'pause') state.running = false;

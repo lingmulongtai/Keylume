@@ -9,6 +9,7 @@ import { useStage } from './useStage';
 import { useStageChange } from './useStageChange';
 import StageTransport from './Transport';
 import HandControls from './HandControls';
+import PlaybackControls from './PlaybackControls';
 import { native } from '../api';
 import { union } from './geometry';
 import type { StageSettings, StageMonitor, StageView } from './types';
@@ -149,19 +150,7 @@ export default function Stage(props: ViewProps) {
           </div>
           <div className="stage-options">
             <HandControls settings={settings} change={change} />
-            <label className="stage-field">
-              <span>練習の進め方</span>
-              <select
-                aria-label="練習の進め方"
-                value={settings.practiceMode}
-                onChange={(e) =>
-                  change({ practiceMode: e.target.value as StageSettings['practiceMode'] })
-                }
-              >
-                <option value="timing">曲のテンポで進む・タイミング採点</option>
-                <option value="wait">正しい音まで待つ</option>
-              </select>
-            </label>
+            <PlaybackControls settings={settings} change={change} />
             <label className="stage-field">
               <span>入力遅延の補正（ms）</span>
               <input
@@ -250,7 +239,7 @@ export default function Stage(props: ViewProps) {
           )}
           <p className="stage-hint">
             鍵盤を弾くと内蔵音源が鳴ります。PERFECT ±80ms / GOOD ±160ms / LATE
-            ±250ms。範囲外の音はWRONG、弾かなかった音はMISS。画面外の音も採点対象です。ブラウザープレビューでは発音・採点は行いません。
+            ±250ms。試聴では採点しません。MIDIは選択中の楽器で鳴り、再生音量は楽器音量から独立しています。音のタイミングはプラスで遅く、マイナスで早くなります。ブラウザープレビューでは発音・採点は行いません。
           </p>
         </section>
       )}
@@ -513,6 +502,7 @@ export function StageControls() {
       </div>
       <StageTransport state={state} song={song} change={change} error={setError} />
       <HandControls settings={state.settings} change={change} compact />
+      <PlaybackControls settings={state.settings} change={change} />
       {error && <p role="alert">{error}</p>}
     </main>
   );
