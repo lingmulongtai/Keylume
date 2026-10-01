@@ -649,12 +649,12 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         was_suspended = suspended;
         let stopping = core.quitting.load(Ordering::SeqCst);
         let handoff = active_mode == CoexistMode::Handoff && (daw || now < resume_at);
-        let inactive = desired.paused
-            || suspended
+        let controls_blocked = suspended
             || handoff
             || stopping
             || mock_disconnected
             || now < resume_at;
+        let inactive = desired.paused || controls_blocked;
         let learning = core.controller_learning.load(Ordering::Acquire);
         if learning != was_learning {
             desktop.allowed(false);
@@ -666,11 +666,11 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             settings.controller.enabled
                 && !settings.mock
                 && transport.is_some()
-                && !inactive
+                && !controls_blocked
                 && !system::LOCKED.load(Ordering::Acquire)
                 && !core.controller_learning.load(Ordering::Acquire),
         );
-        if inactive || (keyboard.is_none() && !settings.mock) {
+        if controls_blocked || (keyboard.is_none() && !settings.mock) {
             desktop.stop_scroll();
             edges.clear();
         }
@@ -928,7 +928,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
             let b = &packet.bytes;
             let mut consumed = false;
-            if !inactive && settings.controller.enabled {
+            if !controls_blocked && settings.controller.enabled {
                 let (encoder_mode, fader_mode) = {
                     let input = core.input.lock().unwrap();
                     (input.encoder_mode, input.fader_mode)

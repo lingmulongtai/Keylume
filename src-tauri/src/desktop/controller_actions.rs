@@ -158,6 +158,8 @@ pub fn perform(
                     [(i as isize + direction).rem_euclid(control.presets.len() as isize) as usize]
                     .clone();
                 control.settings.active_preset = next.id.clone();
+                // A physical preset selection has the same priority as a manual UI choice.
+                control.settings.manual_lock = true;
                 control.draft = next;
                 control.revision += 1;
             }
