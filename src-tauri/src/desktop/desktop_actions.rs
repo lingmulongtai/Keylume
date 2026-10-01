@@ -135,27 +135,6 @@ impl VolumeRequest {
         }
     }
 }
-#[cfg(test)]
-mod volume_tests {
-    use super::VolumeRequest;
-    #[test]
-    fn coalescing_sums_relative_moves_and_keeps_absolute_order() {
-        let a = VolumeRequest {
-            value: 0.,
-            delta: Some(0.01),
-        };
-        let b = a.combine(a).combine(a);
-        assert!((b.delta.unwrap() - 0.03).abs() < 0.000001);
-        let absolute = VolumeRequest {
-            value: 0.5,
-            delta: None,
-        };
-        assert_eq!(b.combine(absolute).value, 0.5);
-        let after = absolute.combine(a).combine(a);
-        assert!((after.value - 0.52).abs() < 0.000001);
-        assert!(after.delta.is_none());
-    }
-}
 #[cfg(windows)]
 fn system_volume(value: f32, delta: Option<f32>) -> Result<f32, String> {
     use windows::Win32::{
@@ -304,4 +283,26 @@ fn send_keys(_: &[u16]) -> Result<(), String> {
 #[cfg(not(windows))]
 fn send_wheel(_: i32) -> Result<(), String> {
     Err("Windowsで利用できます".into())
+}
+
+#[cfg(test)]
+mod volume_tests {
+    use super::VolumeRequest;
+    #[test]
+    fn coalescing_sums_relative_moves_and_keeps_absolute_order() {
+        let a = VolumeRequest {
+            value: 0.,
+            delta: Some(0.01),
+        };
+        let b = a.combine(a).combine(a);
+        assert!((b.delta.unwrap() - 0.03).abs() < 0.000001);
+        let absolute = VolumeRequest {
+            value: 0.5,
+            delta: None,
+        };
+        assert_eq!(b.combine(absolute).value, 0.5);
+        let after = absolute.combine(a).combine(a);
+        assert!((after.value - 0.52).abs() < 0.000001);
+        assert!(after.delta.is_none());
+    }
 }
