@@ -138,6 +138,21 @@ test('selected hardware fader controls piano volume and can be disabled', async 
   await expect(page.getByLabel('ピアノ音量', { exact: true })).toHaveValue('1');
   await send(7, 0);
   await expect(page.getByLabel('ピアノ音量', { exact: true })).toHaveValue('0');
+  await page.getByLabel('音量を操作するフェーダー', { exact: true }).selectOption('8');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem('keylume-preview-v1')!).settings.controller.performance[
+            'fader-8'
+          ],
+      ),
+    )
+    .toBeUndefined();
+  await send(12, 127);
+  await expect(page.getByLabel('ピアノ音量', { exact: true })).toHaveValue('1');
+  await send(12, 0);
+  await expect(page.getByLabel('ピアノ音量', { exact: true })).toHaveValue('0');
   await page.getByLabel('音量を操作するフェーダー', { exact: true }).selectOption('0');
   await expect
     .poll(() =>

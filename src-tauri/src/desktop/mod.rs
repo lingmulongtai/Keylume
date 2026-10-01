@@ -274,8 +274,9 @@ fn dispatch(core: &Core, name: &str, args: Value) -> Result<Value, String> {
             c.settings = s;
         }
         "save_settings" => {
-            let s: Settings =
+            let mut s: Settings =
                 serde_json::from_value(args["settings"].clone()).map_err(|e| e.to_string())?;
+            s.reserve_piano_fader(c.settings.piano.volume_fader);
             s.validate()?;
             core.storage.lock().unwrap().save("settings.json", &s)?;
             c.settings = s;

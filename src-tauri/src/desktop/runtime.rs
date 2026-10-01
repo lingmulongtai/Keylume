@@ -146,6 +146,18 @@ impl Core {
                     .entry("fader-8".into())
                     .or_insert_with(|| crate::controller::Binding::new("systemVolume", ""));
             }
+        } else {
+            for bindings in [
+                &mut settings.controller.performance,
+                &mut settings.controller.desktop,
+            ] {
+                if bindings
+                    .get("fader-8")
+                    .is_some_and(|b| b.action == "systemVolume")
+                {
+                    bindings.remove("fader-8");
+                }
+            }
         }
         let performance_settings = storage
             .load(

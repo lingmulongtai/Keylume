@@ -147,7 +147,10 @@ export default function Piano({
                 </option>
               ))}
             </select>
-            <small>DAW Volumeモードの位置をピアノ音量へ反映します。</small>
+            <small>
+              DAW
+              Volumeモードの位置を反映します。変更すると選んだフェーダーの既存の割り当てをピアノ音量に置き換えます。
+            </small>
           </label>
           <label className="field">
             <span>ピアノの出力先</span>

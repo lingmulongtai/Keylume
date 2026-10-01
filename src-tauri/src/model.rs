@@ -491,6 +491,13 @@ impl Default for Settings {
     }
 }
 impl Settings {
+    pub fn reserve_piano_fader(&mut self, previous: u8) {
+        if self.piano.volume_fader != 0 && self.piano.volume_fader != previous {
+            let id = format!("fader-{}", self.piano.volume_fader);
+            self.controller.performance.remove(&id);
+            self.controller.desktop.remove(&id);
+        }
+    }
     pub fn patched(&self, patch: Value) -> Result<Self, String> {
         fn merge(target: &mut Value, patch: Value, depth: u8) -> Result<(), String> {
             if depth > 12 {
@@ -514,7 +521,8 @@ impl Settings {
         }
         let mut value = serde_json::to_value(self).map_err(|e| e.to_string())?;
         merge(&mut value, patch, 0)?;
-        let next: Self = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        let mut next: Self = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        next.reserve_piano_fader(self.piano.volume_fader);
         next.validate()?;
         Ok(next)
     }
@@ -547,6 +555,24 @@ impl Settings {
 #[cfg(test)]
 mod settings_patch_tests {
     use super::*;
+    #[test]
+    fn selecting_a_piano_fader_replaces_only_that_faders_controller_assignment() {
+        let settings = Settings::default();
+        assert!(settings.controller.performance.contains_key("fader-8"));
+        let next = settings
+            .patched(serde_json::json!({"piano":{"volumeFader":8}}))
+            .unwrap();
+        assert!(!next.controller.performance.contains_key("fader-8"));
+        assert!(!next.controller.desktop.contains_key("fader-8"));
+        assert_eq!(
+            next.controller.performance.get("encoder-1"),
+            settings.controller.performance.get("encoder-1")
+        );
+        let changed = next
+            .patched(serde_json::json!({"piano":{"volume":0.3}}))
+            .unwrap();
+        assert_eq!(changed.controller, next.controller);
+    }
     #[test]
     fn patch_preserves_hardware_values_and_validates_nested_fields() {
         let mut settings = Settings::default();
