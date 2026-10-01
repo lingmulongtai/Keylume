@@ -33,6 +33,9 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
         controlNames[l.id] ??
         (l.id.startsWith('fbtn.') ? `フェーダー下 ${l.id.split('.')[1]}` : (l.label ?? l.id)),
     })),
+    ...(state.layout.decor.controls ?? [])
+      .filter((c) => ['scale', 'arp', 'chordMap'].includes(c.id))
+      .map((c) => ({ id: c.id, label: c.label })),
     ...['pitch-wheel', 'mod-wheel'].map((id) => ({ id, label: controlNames[id] })),
     ...Object.keys(c[mode])
       .filter((id) => id.startsWith('midi:'))

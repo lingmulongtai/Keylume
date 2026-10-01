@@ -39,6 +39,9 @@ export const defaultController = (): ControllerSettings => {
     (name, i) => (performance[`encoder-${i + 1}`] = { action: 'effect', value: name }),
   );
   for (const [id, action, value] of [
+    ['scale', 'lighting', '1'],
+    ['chordMap', 'sound', '1'],
+    ['arp', 'metronome', ''],
     ['fader-8', 'systemVolume', ''],
     ['btn.encoderUp', 'sound', '-1'],
     ['btn.encoderDown', 'sound', '1'],

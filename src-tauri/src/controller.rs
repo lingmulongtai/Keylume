@@ -61,6 +61,9 @@ impl Default for ControllerSettings {
             performance.insert(format!("encoder-{}", i + 1), Binding::new("effect", effect));
         }
         for (control, action, value) in [
+            ("scale", "lighting", "1"),
+            ("chordMap", "sound", "1"),
+            ("arp", "metronome", ""),
             ("fader-8", "systemVolume", ""),
             ("btn.encoderUp", "sound", "-1"),
             ("btn.encoderDown", "sound", "1"),
@@ -125,6 +128,15 @@ impl ControllerSettings {
             self.performance
                 .entry(id.into())
                 .or_insert_with(|| Binding::new(action, ""));
+        }
+        for (id, action, value) in [
+            ("scale", "lighting", "1"),
+            ("chordMap", "sound", "1"),
+            ("arp", "metronome", ""),
+        ] {
+            self.performance
+                .entry(id.into())
+                .or_insert_with(|| Binding::new(action, value));
         }
     }
     pub fn bindings(&self) -> &BTreeMap<String, Binding> {

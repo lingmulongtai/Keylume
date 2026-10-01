@@ -342,6 +342,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut was_native_fx = false;
     let desktop = super::desktop_actions::DesktopActions::new(app.clone());
     let mut edges = crate::controller::Edges::default();
+    let mut feature_controls = crate::device::feature_controls::FeatureControls::default();
     let mut controls_dirty = false;
     let mut last_controls_emit = -1f32;
     let mut was_learning = false;
@@ -663,6 +664,25 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         let controls_blocked =
             suspended || handoff || stopping || mock_disconnected || now < resume_at;
         let inactive = desired.paused || controls_blocked;
+        let update = feature_controls.synchronize(
+            (settings.controller.enabled && !controls_blocked && transport.is_some())
+                .then(|| settings.controller.bindings()),
+            now,
+        );
+        if update.warning {
+            warn(&mut status, "本体機能の解除確認がありません。Scale/Arp/Chord Mapの割り当てを停止しました。再接続してください");
+        }
+        if let Some(t) = &mut transport {
+            for message in update.messages {
+                let _ = send(
+                    &mut **t,
+                    &message,
+                    &mut status,
+                    &mut monitor,
+                    settings.midi_log,
+                );
+            }
+        }
         let learning = core.controller_learning.load(Ordering::Acquire);
         if learning != was_learning {
             desktop.allowed(false);
@@ -737,7 +757,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
         if settings.mock {
             status.keyboard = "プレビュー入力".into();
         }
-        if inactive {
+        if controls_blocked
+            || (desired.paused && !settings.controller.enabled && !settings.piano.enabled)
+        {
             if transport.is_some() {
                 core.input.lock().unwrap().clear_port("daw");
                 release(
@@ -857,6 +879,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         }
                         native_fx.clear();
                         display_queue.reset();
+                        feature_controls.reset();
                         transport = Some(t);
                         last_full = -5.;
                         last_frame.clear();
@@ -910,6 +933,16 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
             }
         }
+        if transport.is_some() && !controls_blocked {
+            status.connection = if desired.paused {
+                "paused"
+            } else if settings.mock {
+                "preview"
+            } else {
+                "connected"
+            }
+            .into();
+        }
         if hardware::INPUT_OVERFLOW.swap(false, Ordering::SeqCst) {
             // Discard the uncertain event batch and release every note we actually sent.
             for _ in rx.try_iter() {}
@@ -936,6 +969,32 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             }
             let b = &packet.bytes;
             let mut consumed = false;
+            let feature_update = feature_controls.receive(&packet.source, b, now);
+            if let Some(t) = &mut transport {
+                for message in feature_update.messages {
+                    let _ = send(
+                        &mut **t,
+                        &message,
+                        &mut status,
+                        &mut monitor,
+                        settings.midi_log,
+                    );
+                }
+            }
+            let feature_input = feature_update.action.map(|id| {
+                let mut state = core.input.lock().unwrap();
+                let serial = state.pulse.as_ref().map_or(1, |p| p.1.wrapping_add(1));
+                state.pulse = Some((id.clone(), serial));
+                crate::controller::ControlInput {
+                    raw: id.clone(),
+                    id,
+                    value: 1.,
+                    delta: None,
+                    down: true,
+                    continuous: false,
+                    pulse: true,
+                }
+            });
             if !controls_blocked && settings.controller.enabled {
                 let (encoder_mode, fader_mode) = {
                     let input = core.input.lock().unwrap();
@@ -947,7 +1006,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     &desired.layout,
                     encoder_mode,
                     fader_mode,
-                ) {
+                )
+                .or(feature_input)
+                {
                     if core.controller_learning.load(Ordering::Acquire) {
                         consumed = true;
                         if input.down && input.delta != Some(0.) {
@@ -1319,7 +1380,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
             }
             if active_mode == CoexistMode::LightingFirst && settings.auto_repair {
-                if now - last_query >= 10. {
+                if now - last_query >= 10. && !feature_controls.owns(PAD_MODE) {
                     let _ = send(
                         &mut **t,
                         &[0xb7, PAD_MODE, 0],
