@@ -364,3 +364,22 @@ html[data-surface='stage-controls'] #root {
   margin: 3px 0;
   font-size: 11px;
 }
+.stage-hand-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  font-size: 12px;
+}
+.stage-hand-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stage-hand-controls small {
+  width: 100%;
+  color: var(--muted);
+}
+.stage-hand-controls input[type='number'] {
+  width: 70px;
+}

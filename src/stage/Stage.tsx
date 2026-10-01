@@ -8,6 +8,7 @@ import { stageCommand, subscribeInteraction } from './api';
 import { useStage } from './useStage';
 import { useStageChange } from './useStageChange';
 import StageTransport from './Transport';
+import HandControls from './HandControls';
 import { native } from '../api';
 import { union } from './geometry';
 import type { StageSettings, StageMonitor, StageView } from './types';
@@ -147,6 +148,7 @@ export default function Stage(props: ViewProps) {
             </span>
           </div>
           <div className="stage-options">
+            <HandControls settings={settings} change={change} />
             <label className="stage-field">
               <span>練習の進め方</span>
               <select
@@ -226,6 +228,22 @@ export default function Stage(props: ViewProps) {
                   />
                   {t.name}
                   {t.percussion ? '（ドラム）' : ''}
+                  <select
+                    aria-label={`${t.name} の手`}
+                    value={settings.trackHands[String(t.id)] ?? 'auto'}
+                    onChange={(e) =>
+                      change({
+                        trackHands: {
+                          ...settings.trackHands,
+                          [t.id]: e.target.value as 'auto' | 'left' | 'right',
+                        },
+                      })
+                    }
+                  >
+                    <option value="auto">自動</option>
+                    <option value="left">左手</option>
+                    <option value="right">右手</option>
+                  </select>
                 </label>
               ))}
             </div>
@@ -458,7 +476,9 @@ export function StageControls() {
       if (dead) fn();
       else off = fn;
     });
-    void stageCommand<boolean>('interaction').then(setEditing).catch((e) => setError(String(e)));
+    void stageCommand<boolean>('interaction')
+      .then(setEditing)
+      .catch((e) => setError(String(e)));
     return () => {
       dead = true;
       off?.();
@@ -492,6 +512,7 @@ export function StageControls() {
         </button>
       </div>
       <StageTransport state={state} song={song} change={change} error={setError} />
+      <HandControls settings={state.settings} change={change} compact />
       {error && <p role="alert">{error}</p>}
     </main>
   );
