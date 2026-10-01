@@ -2,20 +2,20 @@
 
 Launchkey MK4 61 向けの非公式ライティングコントローラー＆常駐演奏アプリ。Tauri 2 + Rust + React で、ウィンドウを閉じても演奏とライティングを続けます。
 
-**v0.5 は実機受け入れ未完了のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
+**v0.6 は実機受け入れ未完了のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
 
 ## 起動
 
-[GitHub Releases — v0.5.2 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.5.2) からダウンロードできます。
+[GitHub Releases — v0.6.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.6.0) からダウンロードできます。
 
-演奏画面の完全透過、実機のボタン受信、OLEDの操作名・値表示、クリックできる本体図の割り当て編集、独立メトロノームとCapture MIDI / Quantiseを追加・修正しました。エフェクト使用中に突然無音になる問題の修正も含みます。
+片手練習、左右の色分け、反対の手の自動伴奏、試聴、MIDI音量・音声タイミング調整を追加しました。固定した演奏表示は常にクリックを背面へ通し、操作パネルは独立して操作できます。Windows音量のフェーダー、デスクトップ操作中の鍵盤演奏、Scale/Arp/Chord Mapの割り当てとOLED表示の安定化も含みます。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.5.2/Keylume_0.5.2_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.5.2/Keylume_0.5.2_windows-x64.zip)
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.0/Keylume_0.6.0_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.0/Keylume_0.6.0_windows-x64.zip)
 
 ![画面を離れずに選べるライティング](docs/images/v050-lighting.png)
 
-インストーラーはダウンロードした `Keylume_0.5.2_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.5.2_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.6.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.6.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「設定 → デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
@@ -27,7 +27,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## ピアノを弾く
 
-ライティング画面の **Upright Piano の電源**をオンにしてください。4種類の無料ピアノ音源を同梱しているため、DAWや追加インストールは不要です。ベロシティ、サステインペダル（CC64）、本体のOctave変更、アプリの追加オクターブ、音量、出力デバイス選択に対応。設定を保存し、ウィンドウを閉じても使えます。[詳しい使い方と対応範囲](docs/piano.md)
+ホーム画面の **Upright Piano の電源**をオンにしてください。4種類の無料ピアノ音源を同梱しているため、DAWや追加インストールは不要です。ベロシティ、サステインペダル（CC64）、本体のOctave変更、アプリの追加オクターブ、音量、出力デバイス選択に対応。設定を保存し、ウィンドウを閉じても使えます。[詳しい使い方と対応範囲](docs/piano.md)
 
 「選ぶ」で音源カードを開くと、グランドピアノ、シンセ、パッド、ストリングスなど追加274音色を選べます。初回だけ約32MBを取得し、その後はオフラインで使えます。自分のSF2もインポートできます。本体の8ノブではリバーブなどの音作りを操作できます。
 
@@ -71,7 +71,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 更新
 
-**v0.1.0からはv0.5.2を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
+**v0.1.0からはv0.6.0を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
 
 プリセットと設定はそのまま保持します。旧既定レイアウトは61鍵モデルの配置へ移行し、LEDアドレス・種類・検証状態を保持します。座標を編集したカスタムレイアウトは維持します。[本体図と移行仕様](docs/device-layout.md)
 
@@ -101,7 +101,7 @@ npm run package      # Windows NSIS インストーラー
 
 ## 検証
 
-今回の無音修正・確認範囲・アトミックコミット一覧は [v0.5.2検証記録](docs/verification-v0.5.2.md)、機能全体の記録は [v0.5.0検証記録](docs/verification-v0.5.0.md)、以前の記録は [検証記録](docs/verification.md) にまとめています。掲載画像はv0.5.0のUIのブラウザープレビューです。
+今回の確認範囲・アトミックコミット一覧は [v0.6.0検証記録](docs/verification-v0.6.0.md)、機能全体の記録は [v0.5.0検証記録](docs/verification-v0.5.0.md)、以前の記録は [検証記録](docs/verification.md) にまとめています。掲載画像はv0.5.0のUIのブラウザープレビューです。
 
 GitHub Actions は PR と `main` で Windows のテスト・インストーラー生成・ネイティブ自己テストを実行します。`main` に含まれる `v*` タグから同じ検証を行い、成功した成果物だけを Preview Release に公開します。Release には SHA-256、ビルド元コミット、Mock 検証結果を添付します。
 
