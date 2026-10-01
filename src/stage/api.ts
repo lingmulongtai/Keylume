@@ -81,6 +81,9 @@ export async function stageCommand<T = StageSnapshot>(
     state.settings = {
       ...state.settings,
       mode: 'practice',
+      trackHands: {},
+      loopEnabled: false,
+      loopStart: 0,
       tracks: song.tracks.filter((t) => !t.percussion).map((t) => t.id),
       loopEnd: Math.max(0.1, song.duration),
     };

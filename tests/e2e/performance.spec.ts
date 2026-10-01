@@ -3,7 +3,7 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
   page,
 }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'ライティング', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ホーム', exact: true })).toBeVisible();
   const fader = page.locator('.device-base [data-control="fader-1"]');
   await expect(fader).toHaveAttribute('data-value', 'unknown');
   await page.evaluate(async () => {
@@ -35,7 +35,7 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
   );
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
   await page.getByRole('button', { name: '設定', exact: true }).click();
-  await page.getByRole('button', { name: 'ライティング', exact: true }).click();
+  await page.getByRole('button', { name: 'ホーム', exact: true }).click();
   await expect(fader).toHaveAttribute('data-value', '127');
   await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
   await page.getByRole('button', { name: '一時停止', exact: true }).click();
@@ -159,7 +159,7 @@ test('settings offers a persistent output choice and Windows default following',
   await expect(output).toBeVisible();
   await expect(output).toHaveValue('');
   await expect(output.locator('option:checked')).toHaveText('Windows の既定に自動追従');
-  await page.getByRole('button', { name: 'ライティング', exact: true }).click();
+  await page.getByRole('button', { name: 'ホーム', exact: true }).click();
   await page.getByText('音声と演奏の設定', { exact: true }).click();
   await expect(page.getByLabel('ピアノの出力先', { exact: true })).toHaveValue('');
 });
