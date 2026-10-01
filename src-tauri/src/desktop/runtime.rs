@@ -1091,7 +1091,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 core.show_feedback("Piano Volume", format!("{:.0}%", volume * 100.));
                 let _ = app.emit("piano_volume", volume);
             }
-            if !inactive
+            if !controls_blocked
                 || ((packet.source == "keyboard" || packet.source == "screen")
                     && !suspended
                     && !handoff
