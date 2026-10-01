@@ -89,7 +89,7 @@ export default function Editor({
       <section className="editor-main">
         <div className="workspace-top">
           <div>
-            <h1>ライティング</h1>
+            <h1>ホーム</h1>
           </div>
           <LightingPicker
             state={state}
