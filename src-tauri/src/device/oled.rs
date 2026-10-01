@@ -45,6 +45,7 @@ pub struct DisplayQueue {
     awaiting_ack: Option<f64>,
     warned: bool,
     retry_at: f64,
+    sent_at: f64,
 }
 impl Default for DisplayQueue {
     fn default() -> Self {
@@ -57,6 +58,7 @@ impl Default for DisplayQueue {
             awaiting_ack: None,
             warned: false,
             retry_at: 0.,
+            sent_at: f64::NEG_INFINITY,
         }
     }
 }
@@ -96,6 +98,7 @@ impl DisplayQueue {
             let flight = self.flight.take().unwrap();
             match result {
                 Ok(()) => {
+                    self.sent_at = now;
                     self.applied_owned = Some(flight.owned);
                     if matches!(flight.content, Content::Bitmap(_)) && !flight.early_ack && !mock {
                         self.awaiting_ack = Some(now);
@@ -116,7 +119,9 @@ impl DisplayQueue {
         }
         if self.flight.is_none()
             && now >= self.retry_at
-            && (self.last.as_ref() != Some(&self.desired) || self.applied_owned != Some(self.owned))
+            && (self.last.as_ref() != Some(&self.desired)
+                || self.applied_owned != Some(self.owned)
+                || matches!(self.desired, Content::Feedback(_, _, _)) && now - self.sent_at > 0.5)
             && (!matches!(self.desired, Content::Bitmap(_))
                 || self.awaiting_ack.is_none()
                 || matches!(self.last, Some(Content::Feedback(_, _, _))))
@@ -156,6 +161,32 @@ impl DisplayQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn operation_feedback_stays_visible_until_the_app_expires_it() {
+        let mut q = DisplayQueue::default();
+        let mut out = Deferred::default();
+        q.request(Content::Feedback(
+            "Piano Volume".into(),
+            "53%".into(),
+            Instant::now(),
+        ));
+        q.pump(0., &mut out, false);
+        out.replies[0].send(Ok(())).unwrap();
+        q.pump(0.1, &mut out, false);
+        q.pump(0.5, &mut out, false);
+        assert_eq!(out.batches.len(), 1);
+        q.pump(0.7, &mut out, false);
+        assert_eq!(out.batches[1], q.desired.messages().unwrap());
+        out.replies[1].send(Ok(())).unwrap();
+        q.pump(0.8, &mut out, false);
+        q.request(Content::Off);
+        q.pump(2.5, &mut out, false);
+        assert!(out.batches[2].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
+        out.replies[2].send(Ok(())).unwrap();
+        q.pump(2.6, &mut out, false);
+        q.pump(3.5, &mut out, false);
+        assert_eq!(out.batches.len(), 3);
+    }
     #[test]
     fn repeated_operations_retrigger_feedback_and_restore_native_popups() {
         let mut q = DisplayQueue::default();
