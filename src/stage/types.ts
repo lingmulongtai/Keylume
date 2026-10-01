@@ -22,7 +22,10 @@ export interface Song {
 }
 export interface StageSettings {
   mode: 'live' | 'practice';
-  practiceMode: 'timing' | 'wait';
+  practiceMode: 'timing' | 'wait' | 'listen';
+  playbackMode: 'off' | 'accompaniment' | 'full';
+  playbackVolume: number;
+  audioOffsetMs: number;
   practiceHand: 'both' | 'left' | 'right';
   handStrategy: 'auto' | 'split';
   splitPitch: number;
@@ -68,6 +71,9 @@ export interface StageSettings {
 export const defaultStageSettings: StageSettings = {
   mode: 'live',
   practiceMode: 'timing',
+  playbackMode: 'accompaniment',
+  playbackVolume: 0.6,
+  audioOffsetMs: 0,
   practiceHand: 'both',
   handStrategy: 'auto',
   splitPitch: 60,

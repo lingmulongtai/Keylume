@@ -88,6 +88,9 @@ pub struct StageSettings {
     pub track_hands: BTreeMap<u16, Hand>,
     pub left_color: String,
     pub right_color: String,
+    pub playback_mode: String,
+    pub playback_volume: f32,
+    pub audio_offset_ms: f64,
     pub speed: f64,
     pub look_ahead: f64,
     pub trail: f64,
@@ -125,6 +128,9 @@ impl Default for StageSettings {
             track_hands: BTreeMap::new(),
             left_color: "#eeac75".into(),
             right_color: "#75c8fa".into(),
+            playback_mode: "accompaniment".into(),
+            playback_volume: 0.6,
+            audio_offset_ms: 0.,
             speed: 1.,
             look_ahead: 4.,
             trail: 6.,
@@ -159,7 +165,10 @@ impl StageSettings {
             || self.monitor_ids.iter().collect::<HashSet<_>>().len() != self.monitor_ids.len()
             || !["live", "practice"].contains(&self.mode.as_str())
             || !["english", "solfege"].contains(&self.label_format.as_str())
-            || !["timing", "wait"].contains(&self.practice_mode.as_str())
+            || !["timing", "wait", "listen"].contains(&self.practice_mode.as_str())
+            || !["off", "accompaniment", "full"].contains(&self.playback_mode.as_str())
+            || !(0. ..=1.).contains(&self.playback_volume)
+            || !(-1000. ..=1000.).contains(&self.audio_offset_ms)
             || !["both", "left", "right"].contains(&self.practice_hand.as_str())
             || !["auto", "split"].contains(&self.hand_strategy.as_str())
             || self.split_pitch > 127
@@ -287,6 +296,7 @@ struct Target {
     status: u8,
 }
 pub struct PerformanceEngine {
+    pub playback_epoch: u64,
     pub settings: StageSettings,
     pub song: Option<Song>,
     pub song_revision: u64,
@@ -307,6 +317,7 @@ pub struct PerformanceEngine {
 impl PerformanceEngine {
     pub fn new(settings: StageSettings) -> Self {
         Self {
+            playback_epoch: 0,
             settings,
             song: None,
             song_revision: 0,
@@ -357,6 +368,12 @@ impl PerformanceEngine {
             || self.settings.loop_start != settings.loop_start
             || self.settings.loop_end != settings.loop_end;
         let mode_changed = self.settings.mode != settings.mode;
+        if self.settings.playback_mode != settings.playback_mode
+            || self.settings.audio_offset_ms != settings.audio_offset_ms
+            || self.settings.speed != settings.speed
+        {
+            self.playback_epoch += 1;
+        }
         self.settings = settings;
         if restart {
             self.reset_attempt(self.position.max(0.));
@@ -369,7 +386,11 @@ impl PerformanceEngine {
     fn rebuild_targets(&mut self, from: f64) {
         self.targets.clear();
         let mut seen = HashSet::new();
-        if let Some(song) = &self.song {
+        if let Some(song) = self
+            .song
+            .as_ref()
+            .filter(|_| self.settings.practice_mode != "listen")
+        {
             for n in &song.notes {
                 if !self.settings.tracks.contains(&n.track)
                     || !self.settings.practiced(n)
@@ -391,6 +412,7 @@ impl PerformanceEngine {
         self.next_miss = self.targets.partition_point(|n| n.status != 0);
     }
     fn reset_attempt(&mut self, position: f64) {
+        self.playback_epoch += 1;
         self.running = false;
         self.position = position;
         self.score = Score::default();
@@ -411,7 +433,7 @@ impl PerformanceEngine {
         Ok(())
     }
     pub fn play(&mut self) -> Result<(), String> {
-        if self.song.is_none() || self.targets.is_empty() {
+        if self.song.is_none() || self.settings.tracks.is_empty() {
             return Err("演奏するMIDIトラックを選択してください".into());
         }
         if self.settings.mode != "practice" {
@@ -426,14 +448,16 @@ impl PerformanceEngine {
         if self.position >= end || self.position < begin {
             self.reset_attempt(begin);
         }
-        if (self.position - begin).abs() < 0.001 {
+        if (self.position - begin).abs() < 0.001 && self.settings.practice_mode != "listen" {
             self.position = begin - self.settings.look_ahead.min(3.);
         }
         self.running = true;
+        self.playback_epoch += 1;
         Ok(())
     }
     pub fn pause(&mut self) {
         self.running = false;
+        self.playback_epoch += 1;
     }
     pub fn stop(&mut self) {
         let begin = if self.settings.loop_enabled {
@@ -499,6 +523,7 @@ impl PerformanceEngine {
                         }
                 {
                     if self.settings.loop_enabled {
+                        self.playback_epoch += 1;
                         self.position = self.settings.loop_start - 1.;
                         self.loop_count += 1;
                         self.rebuild_targets(self.settings.loop_start);
@@ -550,7 +575,10 @@ impl PerformanceEngine {
         });
     }
     fn hit(&mut self, pitch: u8) {
-        if !self.running || self.settings.mode != "practice" {
+        if !self.running
+            || self.settings.mode != "practice"
+            || self.settings.practice_mode == "listen"
+        {
             return;
         }
         let at = self.position
@@ -729,6 +757,13 @@ impl PerformanceEngine {
             loop_count: self.loop_count,
             target_count: self.targets.len(),
         }
+    }
+    pub fn playback_cursor(&self) -> (f64, f64, bool) {
+        (
+            self.clock,
+            self.position,
+            self.running && self.settings.mode == "practice",
+        )
     }
 }
 #[cfg(test)]
