@@ -3,14 +3,14 @@ use crossbeam_channel::{bounded, Sender};
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     time::{Duration, Instant},
 };
 use tauri::Emitter;
 
 struct Shared {
-    volume: AtomicU64,
+    volume: Mutex<Option<VolumeRequest>>,
     allowed: AtomicBool,
     epoch: AtomicU64,
     rate: AtomicU32,
@@ -21,9 +21,9 @@ pub struct DesktopActions {
     tx: Sender<(u64, Binding)>,
 }
 impl DesktopActions {
-    pub fn new(app: tauri::AppHandle) -> Self {
+    pub fn new(app: tauri::AppHandle, core: Arc<super::runtime::Core>) -> Self {
         let shared = Arc::new(Shared {
-            volume: AtomicU64::new(u64::MAX),
+            volume: Mutex::new(None),
             allowed: AtomicBool::new(false),
             epoch: AtomicU64::new(0),
             rate: AtomicU32::new(0),
@@ -43,15 +43,18 @@ impl DesktopActions {
                     || super::system::SUSPENDED.load(Ordering::Acquire)
                 {
                     remainder = 0.;
-                    state.volume.store(u64::MAX, Ordering::Release);
+                    state.volume.lock().unwrap().take();
                     continue;
                 }
-                let volume = state.volume.swap(u64::MAX, Ordering::AcqRel);
-                if volume != u64::MAX {
-                    let value = f32::from_bits(volume as u32);
-                    let delta = f32::from_bits((volume >> 32) as u32);
-                    if let Err(error) = system_volume(value, delta.is_finite().then_some(delta)) {
-                        let _ = app.emit("notice", error);
+                let volume = state.volume.lock().unwrap().take();
+                if let Some(volume) = volume {
+                    match system_volume(volume.value, volume.delta) {
+                        Ok(level) => {
+                            core.show_feedback("Windows Volume", format!("{:.0}%", level * 100.))
+                        }
+                        Err(error) => {
+                            let _ = app.emit("notice", error);
+                        }
                     }
                 }
                 if let Some((epoch, binding)) =
@@ -104,17 +107,57 @@ impl DesktopActions {
         self.shared.rate.store(rate.to_bits(), Ordering::Release);
     }
     pub fn volume(&self, value: f32, delta: Option<f32>) {
-        self.shared.volume.store(
-            value.to_bits() as u64 | ((delta.unwrap_or(f32::NAN).to_bits() as u64) << 32),
-            Ordering::Release,
-        );
+        let mut pending = self.shared.volume.lock().unwrap();
+        let next = VolumeRequest { value, delta };
+        *pending = Some(pending.map_or(next, |old| old.combine(next)));
     }
     pub fn stop_scroll(&self) {
         self.shared.rate.store(0, Ordering::Release);
     }
 }
+#[derive(Clone, Copy)]
+struct VolumeRequest {
+    value: f32,
+    delta: Option<f32>,
+}
+impl VolumeRequest {
+    fn combine(self, next: Self) -> Self {
+        match (self.delta, next.delta) {
+            (_, None) => next,
+            (Some(old), Some(delta)) => Self {
+                value: next.value,
+                delta: Some(old + delta),
+            },
+            (None, Some(delta)) => Self {
+                value: (self.value + delta).clamp(0., 1.),
+                delta: None,
+            },
+        }
+    }
+}
+#[cfg(test)]
+mod volume_tests {
+    use super::VolumeRequest;
+    #[test]
+    fn coalescing_sums_relative_moves_and_keeps_absolute_order() {
+        let a = VolumeRequest {
+            value: 0.,
+            delta: Some(0.01),
+        };
+        let b = a.combine(a).combine(a);
+        assert!((b.delta.unwrap() - 0.03).abs() < 0.000001);
+        let absolute = VolumeRequest {
+            value: 0.5,
+            delta: None,
+        };
+        assert_eq!(b.combine(absolute).value, 0.5);
+        let after = absolute.combine(a).combine(a);
+        assert!((after.value - 0.52).abs() < 0.000001);
+        assert!(after.delta.is_none());
+    }
+}
 #[cfg(windows)]
-fn system_volume(value: f32, delta: Option<f32>) -> Result<(), String> {
+fn system_volume(value: f32, delta: Option<f32>) -> Result<f32, String> {
     use windows::Win32::{
         Media::Audio::{
             eMultimedia, eRender, Endpoints::IAudioEndpointVolume, IMMDeviceEnumerator,
@@ -126,7 +169,7 @@ fn system_volume(value: f32, delta: Option<f32>) -> Result<(), String> {
         CoInitializeEx(None, COINIT_MULTITHREADED)
             .ok()
             .map_err(|e| e.to_string())?;
-        let result = (|| -> windows::core::Result<()> {
+        let result = (|| -> windows::core::Result<f32> {
             let enumerator: IMMDeviceEnumerator =
                 CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
             // Resolve each time so the fader follows Windows' default output device.
@@ -137,14 +180,16 @@ fn system_volume(value: f32, delta: Option<f32>) -> Result<(), String> {
             } else {
                 value
             };
-            endpoint.SetMasterVolumeLevelScalar(value.clamp(0., 1.), std::ptr::null())
+            let value = value.clamp(0., 1.);
+            endpoint.SetMasterVolumeLevelScalar(value, std::ptr::null())?;
+            endpoint.GetMasterVolumeLevelScalar()
         })();
         CoUninitialize();
         result.map_err(|e| format!("Windows音量を変更できませんでした: {e}"))
     }
 }
 #[cfg(not(windows))]
-fn system_volume(_: f32, _: Option<f32>) -> Result<(), String> {
+fn system_volume(_: f32, _: Option<f32>) -> Result<f32, String> {
     Err("Windowsで利用できます".into())
 }
 impl Drop for DesktopActions {

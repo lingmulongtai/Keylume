@@ -16,8 +16,9 @@ pub fn perform(
     if action == "systemVolume" {
         if !core.control.lock().unwrap().settings.mock {
             desktop.volume(input.value, input.delta);
+        } else {
+            core.show_feedback("Windows Volume", "Preview");
         }
-        core.show_feedback("Windows Volume", format!("{:.0}%", input.value * 100.));
         return Ok(false);
     }
     if action == "shortcut" || action == "open" {

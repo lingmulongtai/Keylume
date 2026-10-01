@@ -352,7 +352,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let mut last_volume_save = -1f32;
     let mut native_fx: std::collections::HashMap<String, Vec<u8>> = Default::default();
     let mut was_native_fx = false;
-    let desktop = super::desktop_actions::DesktopActions::new(app.clone());
+    let desktop = super::desktop_actions::DesktopActions::new(app.clone(), core.clone());
     let mut edges = crate::controller::Edges::default();
     let mut feature_controls = crate::device::feature_controls::FeatureControls::default();
     let mut controls_dirty = false;
