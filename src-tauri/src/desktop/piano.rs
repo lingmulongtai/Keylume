@@ -31,7 +31,13 @@ struct Event {
     sound: Option<SoundEvent>,
     command: Option<LoopCommand>,
 }
+struct PlaybackEvent {
+    generation: u64,
+    messages: Vec<[u8; 3]>,
+}
 struct Shared {
+    playback_generation: AtomicU64,
+    playback_volume: AtomicU32,
     generation: AtomicU64,
     looper: Arc<Mutex<Looper>>,
     enabled: AtomicBool,
@@ -83,10 +89,49 @@ impl Shared {
 }
 #[derive(Clone)]
 pub struct PianoBus {
+    playback_tx: Sender<PlaybackEvent>,
     tx: Sender<Event>,
     shared: Arc<Shared>,
 }
 impl PianoBus {
+    pub fn audio_epoch(&self) -> u64 {
+        (self.shared.generation.load(Ordering::Acquire) << 1)
+            | u64::from(self.shared.enabled.load(Ordering::Acquire))
+    }
+    pub fn playback(&self, batch: crate::song_playback::PlaybackBatch, volume: f32) -> bool {
+        self.shared
+            .playback_volume
+            .store(volume.to_bits(), Ordering::Release);
+        if batch.reset {
+            self.shared
+                .playback_generation
+                .fetch_add(1, Ordering::AcqRel);
+        }
+        if batch.messages.is_empty() {
+            return true;
+        }
+        // No consumer exists while the device is off/loading. Readiness changes invalidate
+        // the scheduler and recover current voices without stopping the visual transport.
+        if !self.shared.enabled.load(Ordering::Acquire)
+            || self.shared.blocked.load(Ordering::Acquire)
+        {
+            return true;
+        }
+        if self
+            .playback_tx
+            .try_send(PlaybackEvent {
+                generation: self.shared.playback_generation.load(Ordering::Acquire),
+                messages: batch.messages,
+            })
+            .is_err()
+        {
+            self.shared
+                .playback_generation
+                .fetch_add(1, Ordering::AcqRel);
+            return false;
+        }
+        true
+    }
     pub fn is_performing(&self) -> bool {
         self.shared.performing.load(Ordering::Acquire)
     }
@@ -189,8 +234,11 @@ pub struct Piano {
 impl Piano {
     pub fn new(library: Arc<super::sound_library::Library>) -> Self {
         let (tx, rx) = bounded(1024);
+        let (playback_tx, playback_rx) = bounded(8);
         let (wake, wakeup) = bounded(1);
         let shared = Arc::new(Shared {
+            playback_generation: AtomicU64::new(0),
+            playback_volume: AtomicU32::new(0.6f32.to_bits()),
             generation: AtomicU64::new(0),
             looper: Arc::new(Mutex::new(Looper::default())),
             enabled: AtomicBool::new(false),
@@ -220,7 +268,11 @@ impl Piano {
             loop_metronome: AtomicBool::new(false),
             loop_undo: AtomicBool::new(false),
         });
-        let bus = PianoBus { tx, shared };
+        let bus = PianoBus {
+            tx,
+            playback_tx,
+            shared,
+        };
         let config = Arc::new(Mutex::new(PianoSettings::default()));
         let status = Arc::new(Mutex::new(PianoStatus {
             state: "off".into(),
@@ -304,6 +356,7 @@ impl Piano {
                             &font.as_ref().unwrap().1,
                             &current,
                             rx.clone(),
+                            playback_rx.clone(),
                             thread_bus.shared.clone(),
                             error_tx.clone(),
                         )
@@ -311,6 +364,7 @@ impl Piano {
                     match result {
                         Ok((output, status, device)) => {
                             for _ in rx.try_iter() {}
+                            for _ in playback_rx.try_iter() {}
                             endpoint = Some(device);
                             stream = Some(output);
                             *thread_status.lock().unwrap() = status;
@@ -441,6 +495,7 @@ fn start(
     font: &Arc<rustysynth::SoundFont>,
     settings: &PianoSettings,
     rx: Receiver<Event>,
+    playback_rx: Receiver<PlaybackEvent>,
     shared: Arc<Shared>,
     errors: Sender<String>,
 ) -> Result<(cpal::Stream, PianoStatus, cpal::Device), String> {
@@ -467,6 +522,7 @@ fn start(
             config,
             font,
             rx.clone(),
+            playback_rx.clone(),
             shared.clone(),
             errors.clone(),
         ),
@@ -475,6 +531,7 @@ fn start(
             config,
             font,
             rx.clone(),
+            playback_rx.clone(),
             shared.clone(),
             errors.clone(),
         ),
@@ -483,6 +540,7 @@ fn start(
             config,
             font,
             rx.clone(),
+            playback_rx.clone(),
             shared.clone(),
             errors.clone(),
         ),
@@ -528,17 +586,38 @@ fn loop_command(
         drums.panic();
     }
 }
+fn playback_event(
+    synth: &mut PianoSynth,
+    generation: &mut u64,
+    current: u64,
+    event: PlaybackEvent,
+) {
+    if *generation != current {
+        synth.panic();
+        *generation = current;
+    }
+    if event.generation == current {
+        for bytes in event.messages {
+            synth.midi(false, bytes);
+        }
+    }
+}
 
 fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
     font: &Arc<rustysynth::SoundFont>,
     rx: Receiver<Event>,
+    playback_rx: Receiver<PlaybackEvent>,
     shared: Arc<Shared>,
     errors: Sender<String>,
 ) -> Result<cpal::Stream, String> {
     let mut synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
     let mut loop_synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
+    let mut playback_synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
+    let mut playback_left = [0.; 256];
+    let mut playback_right = [0.; 256];
+    let mut playback_generation = shared.playback_generation.load(Ordering::Acquire);
     let mut drums = DrumSynth::new(config.sample_rate.0);
     let mut loop_drums = DrumSynth::new(config.sample_rate.0);
     let mut effects = Effects::new(
@@ -568,6 +647,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 if generation != next {
                     synth.panic();
                     loop_synth.panic();
+                    playback_synth.panic();
                     drums.panic();
                     loop_drums.panic();
                     effects.reset();
@@ -578,9 +658,27 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 let patch = shared.patch.load(Ordering::Acquire);
                 synth.set_patch((patch >> 8) as u16, patch as u8);
                 loop_synth.set_patch((patch >> 8) as u16, patch as u8);
+                playback_synth.set_patch((patch >> 8) as u16, patch as u8);
+                let next_playback = shared.playback_generation.load(Ordering::Acquire);
+                if next_playback != playback_generation {
+                    playback_synth.panic();
+                    playback_generation = next_playback;
+                }
                 let active = shared.enabled.load(Ordering::Acquire)
                     && !shared.blocked.load(Ordering::Acquire)
                     && shared.performing.load(Ordering::Acquire);
+                let audible = shared.enabled.load(Ordering::Acquire)
+                    && !shared.blocked.load(Ordering::Acquire);
+                for event in playback_rx.try_iter().take(8) {
+                    if audible {
+                        playback_event(
+                            &mut playback_synth,
+                            &mut playback_generation,
+                            shared.playback_generation.load(Ordering::Acquire),
+                            event,
+                        );
+                    }
+                }
                 for event in rx.try_iter().take(1024) {
                     if active && event.generation == generation {
                         if let Some(command) = event.command {
@@ -602,6 +700,8 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                     .frames
                     .store((data.len() / channels) as u32, Ordering::Relaxed);
                 let volume = f32::from_bits(shared.volume.load(Ordering::Relaxed));
+                let playback_volume =
+                    f32::from_bits(shared.playback_volume.load(Ordering::Relaxed));
                 let drum_volume = f32::from_bits(shared.drum_volume.load(Ordering::Relaxed));
                 let effect_settings = InstrumentFx::from_values(std::array::from_fn(|i| {
                     f32::from_bits(shared.effects[i].load(Ordering::Relaxed))
@@ -634,9 +734,21 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                             right[i] = right[i] * volume + (dr + lr) * drum_volume;
                         }
                     }
+                    if !active {
+                        left[..frames].fill(0.);
+                        right[..frames].fill(0.);
+                    }
+                    if audible {
+                        playback_synth
+                            .render(&mut playback_left[..frames], &mut playback_right[..frames]);
+                        for i in 0..frames {
+                            left[i] += playback_left[i] * playback_volume;
+                            right[i] += playback_right[i] * playback_volume;
+                        }
+                    }
                     for (i, frame) in chunk.chunks_mut(channels).enumerate() {
                         for (channel, sample) in frame.iter_mut().enumerate() {
-                            let value = if !active {
+                            let value = if !audible {
                                 0.
                             } else if channels == 1 {
                                 (left[i] + right[i]) * 0.5
@@ -706,6 +818,40 @@ fn same_endpoint(a: Option<&cpal::Device>, b: Option<&cpal::Device>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn playback_adopts_a_reset_that_arrived_after_the_callback_snapshot() {
+        let font = crate::piano::sound_font().unwrap();
+        let mut live = PianoSynth::new(&font, 48000).unwrap();
+        let mut playback = PianoSynth::new(&font, 48000).unwrap();
+        let mut generation = 0;
+        live.midi(false, [0x90, 60, 100]);
+        playback_event(
+            &mut playback,
+            &mut generation,
+            1,
+            PlaybackEvent {
+                generation: 1,
+                messages: vec![[0x90, 72, 100]],
+            },
+        );
+        let mut l = [0.; 4096];
+        let mut r = [0.; 4096];
+        playback.render(&mut l, &mut r);
+        assert!(l.iter().any(|v| v.abs() > 0.0001));
+        playback_event(
+            &mut playback,
+            &mut generation,
+            2,
+            PlaybackEvent {
+                generation: 1,
+                messages: vec![[0x90, 72, 100]],
+            },
+        );
+        playback.render(&mut l, &mut r);
+        assert!(l.iter().all(|v| *v == 0.));
+        live.render(&mut l, &mut r);
+        assert!(l.iter().any(|v| v.abs() > 0.0001));
+    }
     #[test]
     fn record_button_keeps_a_sustained_loop_voice_when_toggling_overdub() {
         let font = crate::piano::sound_font().unwrap();

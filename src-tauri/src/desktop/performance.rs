@@ -97,6 +97,8 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<Core>) {
     std::thread::spawn(move || {
         let mut next = Instant::now();
         let mut saved = Instant::now();
+        let mut playback = crate::song_playback::SongPlayback::default();
+        let mut audio_epoch = core.piano.bus.audio_epoch();
         while !core.quitting.load(Ordering::Acquire) {
             let snapshot = {
                 let mut e = core.performance.engine.lock().unwrap();
@@ -119,6 +121,16 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<Core>) {
                     e.input(&source, &bytes, octave);
                 }
                 e.tick(core.performance.epoch.elapsed().as_secs_f64());
+                let next_audio_epoch = core.piano.bus.audio_epoch();
+                if next_audio_epoch != audio_epoch {
+                    playback.invalidate();
+                    audio_epoch = next_audio_epoch;
+                }
+                let batch = playback.update(&e);
+                if !core.piano.bus.playback(batch, e.settings.playback_volume) {
+                    e.pause();
+                    let _ = app.emit("notice", "MIDI再生が混み合ったため停止しました");
+                }
                 if Instant::now() >= next {
                     next = Instant::now() + Duration::from_millis(33);
                     Some(e.snapshot())
@@ -370,7 +382,7 @@ pub async fn stage_command(
             .title("Keylume · 演奏操作")
             .decorations(false)
             .always_on_top(true)
-            .inner_size(960., 158.)
+            .inner_size(1060., 250.)
             .resizable(false)
             .visible(false)
             .build()

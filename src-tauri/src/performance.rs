@@ -516,6 +516,11 @@ impl PerformanceEngine {
                 }
                 if self.position
                     >= self.end()
+                        + if self.settings.playback_mode != "off" {
+                            self.settings.audio_offset_ms.max(0.) / 1000. * self.settings.speed
+                        } else {
+                            0.
+                        }
                         + if self.settings.practice_mode == "timing" {
                             0.25 * self.settings.speed
                         } else {

@@ -26,6 +26,7 @@ pub struct SongPlayback {
     cursor: usize,
     active: HashMap<u32, Active>,
     counts: [u16; 128],
+    attacks: [f64; 128],
 }
 impl Default for SongPlayback {
     fn default() -> Self {
@@ -37,6 +38,7 @@ impl Default for SongPlayback {
             cursor: 0,
             active: HashMap::new(),
             counts: [0; 128],
+            attacks: [f64::NEG_INFINITY; 128],
         }
     }
 }
@@ -66,9 +68,10 @@ impl SongPlayback {
         );
         let count = &mut self.counts[event.pitch as usize];
         // Coalesce simultaneous unisons while keeping independent note lifetimes.
-        if *count == 0 {
+        if *count == 0 || (self.attacks[event.pitch as usize] - event.at).abs() > 0.001 {
             out.push([0x90, event.pitch, event.velocity]);
         }
+        self.attacks[event.pitch as usize] = event.at;
         *count = count.saturating_add(1);
     }
     pub fn update(&mut self, engine: &PerformanceEngine) -> PlaybackBatch {
@@ -140,6 +143,7 @@ impl SongPlayback {
             self.epoch = Some(engine.playback_epoch);
             self.active.clear();
             self.counts.fill(0);
+            self.attacks.fill(f64::NEG_INFINITY);
             self.cursor = self.events.partition_point(|event| event.at < at);
             if running {
                 for i in 0..self.cursor {
@@ -196,6 +200,38 @@ mod tests {
         e.seek(0.5).unwrap();
         e.play().unwrap();
         e
+    }
+    #[test]
+    fn repeated_overlapping_notes_keep_their_attacks_and_delayed_final_notes_finish() {
+        let mut e = engine("listen");
+        let mut song = e.song.clone().unwrap();
+        song.notes.retain(|n| n.pitch == 48);
+        song.notes[0].start = 0.5;
+        song.notes[0].end = 2.;
+        let mut second = song.notes[0].clone();
+        second.id = 2;
+        second.start = 1.;
+        second.velocity = 110;
+        song.notes.push(second);
+        song.duration = 2.;
+        e.load(song).unwrap();
+        let mut s = e.settings.clone();
+        s.audio_offset_ms = 200.;
+        e.configure(s).unwrap();
+        e.seek(0.1).unwrap();
+        e.play().unwrap();
+        let mut player = SongPlayback::default();
+        player.update(&e);
+        e.tick(0.61);
+        assert_eq!(player.update(&e).messages, vec![[0x90, 48, 90]]);
+        e.tick(1.11);
+        assert_eq!(player.update(&e).messages, vec![[0x90, 48, 110]]);
+        e.tick(1.91);
+        assert!(e.snapshot().running);
+        assert!(player.update(&e).messages.is_empty());
+        e.tick(2.11);
+        assert!(!e.snapshot().running);
+        assert!(player.update(&e).reset);
     }
     #[test]
     fn accompaniment_plays_the_other_hand_once_and_releases_during_waits() {
