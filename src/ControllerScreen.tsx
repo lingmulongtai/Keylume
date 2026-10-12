@@ -6,11 +6,13 @@ import { command, subscribe, native } from './api';
 import { Card, PageTitle, Toggle, Slider } from './components';
 import {
   actionNames,
+  activeBindings,
   bindingName,
   controlNames,
   defaultController,
   effectNames,
   effectLabels,
+  nativeFeatureIds,
   type Binding,
 } from './controller';
 export default function ControllerScreen({ state, saveSettings, act, toast }: ViewProps) {
@@ -168,6 +170,16 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
             saveSettings({ ...state.settings, controller: { ...c, scrollSpeed } })
           }
         />
+        <Toggle
+          label="Scale / Arp / Chord Mapの割り当てを有効にする（実験的）"
+          checked={c.nativeFeatures}
+          onChange={(nativeFeatures) =>
+            saveSettings({ ...state.settings, controller: { ...c, nativeFeatures } })
+          }
+        />
+        <small>
+          通常は本体の機能を使います。有効にしても本体の処理が先に動くため、OLED表示や演奏に干渉する場合があります。中央左右・パッド左上下の割り当てはこの設定に関係なく使えます。
+        </small>
       </Card>
       <Card>
         <h3>本体のOLED</h3>
@@ -212,7 +224,7 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
       <ControllerMap
         layout={state.layout}
         selected={selected}
-        bindings={c[mode]}
+        bindings={activeBindings(c, mode)}
         names={Object.fromEntries(controls.map((c) => [c.id, c.label]))}
         select={select}
         inform={toast}
@@ -250,7 +262,11 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
                   onClick={() => select(item.id)}
                 >
                   <span>{item.label}</span>
-                  <small>{bindingName(c[mode][item.id])}</small>
+                  <small>
+                    {!c.nativeFeatures && nativeFeatureIds.includes(item.id)
+                      ? '本体の機能'
+                      : bindingName(c[mode][item.id])}
+                  </small>
                 </button>
               ))}
           </div>
@@ -258,6 +274,11 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
         <Card>
           <h3>{controls.find((v) => v.id === selected)?.label ?? selected}</h3>
           <p className="muted">{mode === 'performance' ? '演奏時' : 'デスクトップ時'}の操作</p>
+          {!c.nativeFeatures && nativeFeatureIds.includes(selected) && (
+            <p role="status">
+              この割り当ては保存されますが、実行には上の実験的な設定を有効にする必要があります。
+            </p>
+          )}
           <button
             disabled={!native}
             aria-pressed={learning}

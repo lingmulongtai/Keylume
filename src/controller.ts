@@ -5,6 +5,7 @@ export interface Binding {
 export interface ControllerSettings {
   enabled: boolean;
   desktopPiano: boolean;
+  nativeFeatures: boolean;
   mode: 'performance' | 'desktop';
   performance: Record<string, Binding>;
   desktop: Record<string, Binding>;
@@ -39,9 +40,6 @@ export const defaultController = (): ControllerSettings => {
     (name, i) => (performance[`encoder-${i + 1}`] = { action: 'effect', value: name }),
   );
   for (const [id, action, value] of [
-    ['scale', 'lighting', '1'],
-    ['chordMap', 'sound', '1'],
-    ['arp', 'metronome', ''],
     ['fader-8', 'systemVolume', ''],
     ['btn.encoderUp', 'sound', '-1'],
     ['btn.encoderDown', 'sound', '1'],
@@ -65,6 +63,7 @@ export const defaultController = (): ControllerSettings => {
   return {
     enabled: true,
     desktopPiano: true,
+    nativeFeatures: false,
     mode: 'performance',
     scrollSpeed: 1,
     displayFeedback: true,
@@ -88,6 +87,12 @@ export const defaultController = (): ControllerSettings => {
     ),
   };
 };
+export const nativeFeatureIds = ['scale', 'arp', 'chordMap'];
+export function activeBindings(c: ControllerSettings, mode = c.mode) {
+  return Object.fromEntries(
+    Object.entries(c[mode]).filter(([id]) => c.nativeFeatures || !nativeFeatureIds.includes(id)),
+  );
+}
 export const actionNames: Record<string, string> = {
   none: '割り当てなし',
   mode: '演奏 / デスクトップ切替',

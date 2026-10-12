@@ -36,6 +36,7 @@ impl Binding {
 pub struct ControllerSettings {
     pub enabled: bool,
     pub desktop_piano: bool,
+    pub native_features: bool,
     pub mode: Mode,
     pub performance: BTreeMap<String, Binding>,
     pub desktop: BTreeMap<String, Binding>,
@@ -61,9 +62,6 @@ impl Default for ControllerSettings {
             performance.insert(format!("encoder-{}", i + 1), Binding::new("effect", effect));
         }
         for (control, action, value) in [
-            ("scale", "lighting", "1"),
-            ("chordMap", "sound", "1"),
-            ("arp", "metronome", ""),
             ("fader-8", "systemVolume", ""),
             ("btn.encoderUp", "sound", "-1"),
             ("btn.encoderDown", "sound", "1"),
@@ -108,6 +106,7 @@ impl Default for ControllerSettings {
         Self {
             enabled: true,
             desktop_piano: true,
+            native_features: false,
             mode: Mode::Performance,
             performance,
             desktop,
@@ -129,15 +128,9 @@ impl ControllerSettings {
                 .entry(id.into())
                 .or_insert_with(|| Binding::new(action, ""));
         }
-        for (id, action, value) in [
-            ("scale", "lighting", "1"),
-            ("chordMap", "sound", "1"),
-            ("arp", "metronome", ""),
-        ] {
-            self.performance
-                .entry(id.into())
-                .or_insert_with(|| Binding::new(action, value));
-        }
+    }
+    pub fn feature_bindings(&self) -> Option<&BTreeMap<String, Binding>> {
+        (self.enabled && self.native_features).then(|| self.bindings())
     }
     pub fn bindings(&self) -> &BTreeMap<String, Binding> {
         if self.mode == Mode::Performance {
@@ -396,6 +389,24 @@ pub fn scroll_rate(value: f32, speed: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_features_are_opt_in_and_legacy_bindings_are_preserved() {
+        let mut c: ControllerSettings = serde_json::from_value(serde_json::json!({
+            "performance": {"scale": {"action": "lighting", "value": "1"}}
+        }))
+        .unwrap();
+        c.upgrade_defaults();
+        assert!(c.feature_bindings().is_none());
+        assert_eq!(c.performance["scale"], Binding::new("lighting", "1"));
+        assert!(!c.performance.contains_key("arp"));
+        assert!(!ControllerSettings::default()
+            .performance
+            .contains_key("scale"));
+        c.native_features = true;
+        assert!(c.feature_bindings().unwrap().contains_key("scale"));
+        c.enabled = false;
+        assert!(c.feature_bindings().is_none());
+    }
     #[test]
     fn daw_channel_one_buttons_work_after_led_output_calibration() {
         let mut layout = DeviceLayout::default();
