@@ -2,6 +2,18 @@ use serde::{Deserialize, Serialize};
 use std::f32::consts::TAU;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
+/// Preserve normal audio exactly; soften only overloads before device conversion.
+pub fn output_sample(value: f32) -> f32 {
+    if !value.is_finite() {
+        return 0.;
+    }
+    if value.abs() <= 0.9 {
+        value
+    } else {
+        value.signum() * (0.9 + 0.1 * ((value.abs() - 0.9) * 10.).tanh())
+    }
+}
+
 /// Normalized controls, ordered to match the eight factory encoder bindings.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -223,6 +235,19 @@ impl Effects {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn output_protection_is_linear_below_overload_and_contains_invalid_audio() {
+        for value in [-0.9, -0.25, 0., 0.25, 0.9] {
+            assert_eq!(output_sample(value), value);
+        }
+        for value in [-100., -1.2, 1.2, 100.] {
+            let out = output_sample(value);
+            assert!(out.abs() <= 1. && out.signum() == value.signum());
+        }
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(output_sample(value), 0.);
+        }
+    }
     #[test]
     fn fractional_delay_wrap_cannot_index_past_the_buffer() {
         let mut line = Delay::new(1920);
