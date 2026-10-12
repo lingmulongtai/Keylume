@@ -16,7 +16,7 @@ import type {
 import { effects, uid, defaultInstrumentFx } from './types';
 import layout from '../resources/layout.json';
 import presets from '../resources/presets.json';
-import { previewInput, renderPreview } from './preview';
+import { clearPreviewInput, previewInput, renderPreview } from './preview';
 import { upgradeLayout } from './layout';
 import { PreviewInput, type InputState } from './input';
 const liveInput = new PreviewInput();
@@ -479,6 +479,7 @@ export async function command<T = unknown>(
       break;
     case 'piano_panic':
       liveInput.reset();
+      clearPreviewInput();
       emit('input_state', structuredClone(liveInput.state));
       break;
     case 'piano_screen_release':
@@ -524,6 +525,7 @@ export async function command<T = unknown>(
       break;
     case 'mock_disconnect':
       liveInput.reset();
+      clearPreviewInput();
       emit('input_state', structuredClone(liveInput.state));
       mock.status.connection = args.value ? 'disconnected' : 'preview';
       break;

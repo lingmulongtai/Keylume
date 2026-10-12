@@ -15,6 +15,7 @@ pub fn instrument_controls() -> [[u8; 3]; 5] {
 pub fn analogue_displays(owned: bool) -> Vec<Vec<u8>> {
     (5..=13)
         .chain(21..=28)
+        .chain(34..=40)
         .map(|target| sysex(&[4, target, if owned { 4 } else { 0x64 }]).unwrap())
         .collect()
 }
@@ -96,22 +97,21 @@ pub fn display_text(text: &str, target: u8) -> Result<Vec<Vec<u8>>, String> {
     display_lines(text, "", target)
 }
 pub fn display_lines(title: &str, value: &str, target: u8) -> Result<Vec<Vec<u8>>, String> {
-    let line = |text: &str, field| {
-        let ascii: Vec<u8> = text
-            .bytes()
-            .filter(|&b| (0x20..=0x7e).contains(&b) || (0x1b..=0x1e).contains(&b))
-            .take(32)
-            .collect();
-        let mut body = vec![6, target, field];
-        body.extend(ascii);
-        sysex(&body)
-    };
     Ok(vec![
         sysex(&[4, target, 1])?,
-        line(title, 0)?,
-        line(value, 1)?,
+        display_field(title, target, 0)?,
+        display_field(value, target, 1)?,
         sysex(&[4, target, 0x7f])?,
     ])
+}
+pub fn display_field(text: &str, target: u8, field: u8) -> Result<Vec<u8>, String> {
+    let mut body = vec![6, target, field];
+    body.extend(
+        text.bytes()
+            .filter(|&b| (0x20..=0x7e).contains(&b) || (0x1b..=0x1e).contains(&b))
+            .take(32),
+    );
+    sysex(&body)
 }
 pub fn is_bitmap_ack(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0xf0, 0, 0x20, 0x29, 2, 0x14, 9, 0x7f])

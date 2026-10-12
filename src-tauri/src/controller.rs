@@ -36,6 +36,7 @@ impl Binding {
 pub struct ControllerSettings {
     pub enabled: bool,
     pub desktop_piano: bool,
+    pub native_features: bool,
     pub mode: Mode,
     pub performance: BTreeMap<String, Binding>,
     pub desktop: BTreeMap<String, Binding>,
@@ -61,9 +62,6 @@ impl Default for ControllerSettings {
             performance.insert(format!("encoder-{}", i + 1), Binding::new("effect", effect));
         }
         for (control, action, value) in [
-            ("scale", "lighting", "1"),
-            ("chordMap", "sound", "1"),
-            ("arp", "metronome", ""),
             ("fader-8", "systemVolume", ""),
             ("btn.encoderUp", "sound", "-1"),
             ("btn.encoderDown", "sound", "1"),
@@ -108,6 +106,7 @@ impl Default for ControllerSettings {
         Self {
             enabled: true,
             desktop_piano: true,
+            native_features: false,
             mode: Mode::Performance,
             performance,
             desktop,
@@ -129,15 +128,9 @@ impl ControllerSettings {
                 .entry(id.into())
                 .or_insert_with(|| Binding::new(action, ""));
         }
-        for (id, action, value) in [
-            ("scale", "lighting", "1"),
-            ("chordMap", "sound", "1"),
-            ("arp", "metronome", ""),
-        ] {
-            self.performance
-                .entry(id.into())
-                .or_insert_with(|| Binding::new(action, value));
-        }
+    }
+    pub fn feature_bindings(&self) -> Option<&BTreeMap<String, Binding>> {
+        (self.enabled && self.native_features).then(|| self.bindings())
     }
     pub fn bindings(&self) -> &BTreeMap<String, Binding> {
         if self.mode == Mode::Performance {
@@ -328,12 +321,12 @@ pub fn decode(
         } else if (5..=13).contains(&b[1]) && fader_mode.is_none_or(|m| m == 1) {
             input.id = format!("fader-{}", b[1] - 4);
             input.continuous = true;
-        } else if let Some(led) = layout.leds.iter().find(|l| {
-            l.address.cc == Some(b[1])
-                && (!l.id.starts_with("fbtn.") || fader_mode.is_none_or(|m| m == 1))
-                && (!l.id.starts_with("btn.encoder") || encoder_mode.is_none_or(|m| m < 6))
-        }) {
-            input.id = led.id.clone();
+        } else if let Some(id) = surface_button(b[1], encoder_mode, fader_mode) {
+            input.id = id;
+        }
+    } else if source == "daw" && b[0] == 0xb0 {
+        if let Some(id) = surface_button(b[1], encoder_mode, fader_mode) {
+            input.id = id;
         }
     } else if [0x80, 0x90].contains(&(b[0] & 0xf0)) && b[0] & 15 != 15 {
         input.raw = format!("midi:daw:{}:{}", 0x90 | (b[0] & 15), b[1]);
@@ -357,6 +350,12 @@ pub fn decode(
         return None;
     }
     Some(input)
+}
+fn surface_button(cc: u8, encoder_mode: Option<u8>, fader_mode: Option<u8>) -> Option<String> {
+    crate::device::constants::surface_button(cc).filter(|id| {
+        (!id.starts_with("fbtn.") || fader_mode.is_none_or(|m| m == 1))
+            && (!id.starts_with("btn.encoder") || encoder_mode.is_none_or(|m| m < 6))
+    })
 }
 #[derive(Default)]
 pub struct Edges {
@@ -390,6 +389,62 @@ pub fn scroll_rate(value: f32, speed: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_features_are_opt_in_and_legacy_bindings_are_preserved() {
+        let mut c: ControllerSettings = serde_json::from_value(serde_json::json!({
+            "performance": {"scale": {"action": "lighting", "value": "1"}}
+        }))
+        .unwrap();
+        c.upgrade_defaults();
+        assert!(c.feature_bindings().is_none());
+        assert_eq!(c.performance["scale"], Binding::new("lighting", "1"));
+        assert!(!c.performance.contains_key("arp"));
+        assert!(!ControllerSettings::default()
+            .performance
+            .contains_key("scale"));
+        c.native_features = true;
+        assert!(c.feature_bindings().unwrap().contains_key("scale"));
+        c.enabled = false;
+        assert!(c.feature_bindings().is_none());
+    }
+    #[test]
+    fn daw_channel_one_buttons_work_after_led_output_calibration() {
+        let mut layout = DeviceLayout::default();
+        for led in &mut layout.leds {
+            led.address.cc = None;
+        }
+        let settings = ControllerSettings::default();
+        let mut edges = Edges::default();
+        for (cc, id) in [
+            (103, "btn.trackPrevious"),
+            (102, "btn.trackNext"),
+            (106, "btn.padUp"),
+            (107, "btn.padDown"),
+            (51, "btn.encoderUp"),
+            (52, "btn.encoderDown"),
+            (117, "btn.record"),
+            (77, "btn.undo"),
+            (76, "btn.metronome"),
+        ] {
+            let down = decode("daw", &[0xb0, cc, 127], &layout, Some(2), Some(1)).unwrap();
+            assert_eq!(down.id, id);
+            assert!(settings.performance.contains_key(&down.id));
+            assert!(edges.press(&down));
+            assert!(!edges.press(&down));
+            let up = decode("daw", &[0xb0, cc, 0], &layout, Some(2), Some(1)).unwrap();
+            assert!(!edges.press(&up));
+            assert!(edges.press(&down));
+            edges.clear();
+        }
+        assert!(decode("daw", &[0xb0, 5, 100], &layout, None, None)
+            .unwrap()
+            .id
+            .starts_with("midi:"));
+        assert!(decode("daw", &[0xb0, 21, 100], &layout, None, None)
+            .unwrap()
+            .id
+            .starts_with("midi:"));
+    }
     #[test]
     fn captured_standalone_buttons_and_realtime_transport_trigger_each_press() {
         let l = DeviceLayout::default();

@@ -1,7 +1,8 @@
 import type { Color, Preset, Layout, Layer } from './types';
 import { includesLed } from './types';
-import { keyPosition, keybed } from './layout';
+import { keyPosition, keybed, lightingPosition } from './layout';
 import palette from '../resources/palette.json';
+import { PreviewInput } from './input';
 export const clamp = (n: number, min = 0, max = 1) => Math.max(min, Math.min(max, n));
 export const hex = (s: string): Color =>
   /^#[0-9a-f]{6}$/i.test(s)
@@ -42,8 +43,26 @@ interface Hit {
 }
 const hits: Hit[] = [];
 const held = new Set<number>();
+const released = new Map<number, number>();
+const buttons = new PreviewInput();
+const buttonFlashes = new Map<string, number>();
+export function clearPreviewInput() {
+  hits.length = 0;
+  held.clear();
+  released.clear();
+  buttons.reset();
+  buttonFlashes.clear();
+}
 export function previewInput(bytes: number[], source: string, layout: Layout) {
   const time = performance.now() / 1000;
+  const before = buttons.state.held;
+  const pulse = buttons.state.pulse;
+  buttons.receive(source, bytes, layout);
+  if (buttons.state.pulse !== pulse && buttons.state.pulse)
+    buttonFlashes.set(buttons.state.pulse[0], time);
+  for (const id of before)
+    if (!buttons.state.held.includes(id) && (id.startsWith('btn.') || id.startsWith('fbtn.')))
+      buttonFlashes.set(id, time);
   const [s, n, v] = bytes;
   const on = (s & 240) === 144 && v > 0;
   const off = (s & 240) === 128 || ((s & 240) === 144 && v === 0);
@@ -55,8 +74,15 @@ export function previewInput(bytes: number[], source: string, layout: Layout) {
         )
       : undefined;
   if (source === 'keyboard' || source === 'screen') {
-    if (on) held.add(n);
-    if (off) held.delete(n);
+    if (on) {
+      held.add(n);
+      released.delete(n);
+    }
+    if (off && held.delete(n)) released.set(n, time);
+    if ((s & 240) === 176 && [120, 123].includes(n)) {
+      held.clear();
+      released.clear();
+    }
   }
   if (on) {
     hits.push({
@@ -164,10 +190,47 @@ function effect(
       return out;
     }
     case 'note_map': {
+      const x = lightingPosition(layout, i);
       let out: Color = [0, 0, 0];
-      for (const n of held)
-        if (Math.abs(x - keyPosition(layout, n)) < 0.065)
-          out = compose(out, hsv((n % 12) / 12), 1, 'add');
+      const release = clamp(number(l, 'release', 0.55), 0, 8);
+      const notes: [number, number][] = [...held].map((n) => [n, 1]);
+      for (const [n, at] of released) {
+        if (time - at >= 8) {
+          released.delete(n);
+          continue;
+        }
+        if (!release) continue;
+        const t = clamp((time - at) / release);
+        notes.push([n, 1 - t * t * (3 - 2 * t)]);
+      }
+      let hx = 0,
+        hy = 0,
+        closest = 0,
+        fallback = 0;
+      for (const [n, fade] of notes.sort((a, b) => a[0] - b[0])) {
+        const key =
+          (keyPosition(layout, n) - keyPosition(layout, 36)) /
+          Math.max(0.001, keyPosition(layout, 96) - keyPosition(layout, 36));
+        const weight = Math.max(0, 1 - Math.abs(x - key) / 0.16) * fade;
+        const h = (n % 12) / 12;
+        hx += Math.cos(h * Math.PI * 2) * weight;
+        hy += Math.sin(h * Math.PI * 2) * weight;
+        if (weight > closest) {
+          closest = weight;
+          fallback = h;
+        }
+        if (text(l, 'mix', 'hue') === 'add')
+          out = compose(out, hsv(h).map((v) => 0.04 + v * 0.96) as Color, weight, 'add');
+      }
+      if (text(l, 'mix', 'hue') !== 'add') {
+        const h =
+          Math.abs(hx) + Math.abs(hy) < 0.00001
+            ? fallback
+            : fract(Math.atan2(hy, hx) / (Math.PI * 2));
+        out = scale(hsv(h).map((v) => 0.04 + v * 0.96) as Color, closest);
+      }
+      if (layout.leds[i].kind === 'mono')
+        out = Array(3).fill(Math.max(...out, clamp(number(l, 'idle', 0.24)))) as Color;
       return out;
     }
     case 'chord_color': {
@@ -213,6 +276,9 @@ export function renderPreview(
   time: number,
   master: number,
 ): Color[] {
+  for (const id of buttons.state.held)
+    if (id.startsWith('btn.') || id.startsWith('fbtn.')) buttonFlashes.set(id, time);
+  for (const [id, at] of buttonFlashes) if (time - at >= 0.35) buttonFlashes.delete(id);
   return layout.leds.map((led, i) => {
     let c: Color = [0, 0, 0];
     if (led.kind === 'none') return c;
@@ -237,6 +303,17 @@ export function renderPreview(
         l.opacity,
         l.blend,
       );
+    }
+    const at = buttonFlashes.get(led.id);
+    if (at !== undefined && time >= at) {
+      const peak = Math.max(...c);
+      const accent: Color =
+        led.kind === 'mono'
+          ? [1, 1, 1]
+          : peak > 0.001
+            ? (c.map((v) => v / peak) as Color)
+            : [0.1, 0.8, 1];
+      c = mix(c, accent, clamp(1 - (time - at) / 0.35));
     }
     c = scale(c, preset.post.brightness * master);
     const lum = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;

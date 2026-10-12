@@ -10,3 +10,29 @@ pub const MONO_CANDIDATES: [u8; 2] = [0xb3, 0x93];
 pub const ENCODER_DOWN_CANDIDATES: [u8; 2] = [0x34, 0x44];
 pub const OLED_TERMINATOR: u8 = 0xf7;
 pub const VEGAS_ON_UNVERIFIED: u8 = 127;
+
+/// Fixed MIDI input identities; LED output calibration must not rename controls.
+pub fn surface_button(cc: u8) -> Option<String> {
+    let id = match cc {
+        37..=45 => return Some(format!("fbtn.{}", cc - 36)),
+        51 => "btn.encoderUp",
+        52 => "btn.encoderDown",
+        63 => "btn.shift",
+        74 => "btn.capture",
+        75 => "btn.quantise",
+        76 => "btn.metronome",
+        77 => "btn.undo",
+        102 => "btn.trackNext",
+        103 => "btn.trackPrevious",
+        104 => "btn.scene",
+        105 => "btn.function",
+        106 => "btn.padUp",
+        107 => "btn.padDown",
+        115 => "btn.play",
+        116 => "btn.stop",
+        117 => "btn.record",
+        118 => "btn.loop",
+        _ => return None,
+    };
+    Some(id.into())
+}

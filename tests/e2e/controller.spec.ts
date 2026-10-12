@@ -4,6 +4,11 @@ test('controller keeps independent mode bindings and records keyboard shortcuts'
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'コントローラー', exact: true }).click();
+  const nativeFeatures = page.getByRole('switch', {
+    name: 'Scale / Arp / Chord Mapの割り当てを有効にする（実験的）',
+  });
+  await expect(nativeFeatures).not.toBeChecked();
+  await nativeFeatures.check();
   await expect(page.getByLabel('割り当てるエフェクト', { exact: true })).toHaveValue('reverb');
   await page.getByLabel('割り当てるエフェクト', { exact: true }).selectOption('delay');
   await page.getByRole('button', { name: '割り当てを保存', exact: true }).click();
@@ -27,6 +32,7 @@ test('controller keeps independent mode bindings and records keyboard shortcuts'
     )
     .toMatchObject({
       mode: 'desktop',
+      nativeFeatures: true,
       performance: { 'encoder-1': { action: 'effect', value: 'delay' } },
       desktop: { 'btn.undo': { action: 'shortcut', value: 'Ctrl+Shift+K' } },
     });

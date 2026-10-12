@@ -27,7 +27,20 @@ pub struct InputState {
     pressure_source: String,
 }
 impl InputState {
+    fn button(&mut self, source: &str, ch: u8, cc: u8, value: u8) {
+        if let Some(id) = super::constants::surface_button(cc) {
+            let key = (source.into(), ch, cc);
+            if value > 0 {
+                let serial = self.pulse.as_ref().map_or(1, |p| p.1.wrapping_add(1));
+                self.pulse = Some((id.clone(), serial));
+                self.presses.insert(key, id);
+            } else {
+                self.presses.remove(&key);
+            }
+        }
+    }
     pub fn clear_port(&mut self, source: &str) {
+        self.pulse = None;
         self.presses.retain(|(s, _, _), _| s != source);
         self.held = self.presses.values().cloned().collect();
         self.held.sort();
@@ -151,6 +164,8 @@ impl InputState {
                 },
                 _ => {}
             }
+        } else if source == "daw" && b[0] == 0xb0 {
+            self.button(source, ch, b[1], v);
         } else if (source == "daw" || source == "keyboard") && b[0] == 0xbf {
             match b[1] {
                 5..=13 => self.faders[(b[1] - 5) as usize] = Some(v),
@@ -170,37 +185,14 @@ impl InputState {
                     self.relative[i] = true;
                 }
                 _ => {
-                    let id = if b[1] == 63 {
-                        Some("btn.shift".to_string())
-                    } else {
-                        layout
-                            .leds
-                            .iter()
-                            .find(|l| l.address.cc == Some(b[1]))
-                            .map(|l| l.id.clone())
-                    };
-                    if let Some(id) = id {
-                        let key = (source.into(), ch, b[1]);
-                        if v > 0 {
-                            let serial = self.pulse.as_ref().map_or(1, |p| p.1.wrapping_add(1));
-                            self.pulse = Some((id.clone(), serial));
-                            self.presses.insert(key, id);
-                        } else {
-                            self.presses.remove(&key);
-                        }
-                    }
+                    self.button(source, ch, b[1], v);
                 }
             }
         } else if source == "daw" && b[0] == 0xb6 {
             self.features.insert(b[1], v);
             match b[1] {
                 0x3f => {
-                    let key = (source.into(), ch, b[1]);
-                    if v > 0 {
-                        self.presses.insert(key, "btn.shift".into());
-                    } else {
-                        self.presses.remove(&key);
-                    }
+                    self.button(source, ch, b[1], v);
                 }
                 0x1e => {
                     if self.encoder_mode != Some(v) {
@@ -227,6 +219,22 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn daw_channel_one_buttons_are_visible_without_moving_analogue_controls() {
+        let mut state = InputState::default();
+        let mut layout = DeviceLayout::default();
+        layout.leds.iter_mut().for_each(|led| led.address.cc = None);
+        for cc in [103, 102, 106, 107, 51, 52, 117, 77, 76] {
+            state.receive("daw", &[0xb0, cc, 127], &layout);
+            assert_eq!(state.held.len(), 1);
+            state.receive("daw", &[0xb0, cc, 0], &layout);
+            assert!(state.held.is_empty());
+        }
+        state.receive("daw", &[0xb0, 5, 127], &layout);
+        state.receive("daw", &[0xb0, 21, 127], &layout);
+        assert_eq!(state.faders, [None; 9]);
+        assert_eq!(state.encoders, [None; 8]);
+    }
     #[test]
     fn standalone_buttons_and_transport_are_visible_without_sticking() {
         let mut s = InputState::default();

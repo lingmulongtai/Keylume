@@ -6,7 +6,7 @@ import { hardwareColor } from './input';
 import { useInput } from './useInput';
 import HardwareFace, { labelSize } from './HardwareFace';
 import { buttonLabel, keybed } from './layout';
-import { bindingName, controlNames } from './controller';
+import { activeBindings, bindingName, controlNames, nativeFeatureIds } from './controller';
 function layoutAreas(state: AppState) {
   const d = state.layout.decor;
   return [
@@ -74,8 +74,10 @@ export default function DeviceCanvas({
   const input = useInput();
   const held = new Set(input.held);
   const c = state.settings.controller;
+  const bindings = activeBindings(c);
   const assignment = (id: string) => {
-    const binding = c.enabled ? c[c.mode][id] : undefined;
+    if (nativeFeatureIds.includes(id) && !c.nativeFeatures) return '本体の機能';
+    const binding = c.enabled ? bindings[id] : undefined;
     return binding && binding.action !== 'none'
       ? bindingName(binding)
       : id === `fader-${state.settings.piano.volumeFader}`

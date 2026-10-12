@@ -299,6 +299,28 @@ struct Probe {
 pub fn spawn(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     std::thread::spawn(move || worker(app, core, actions));
 }
+fn receive_lighting_input(
+    state: &mut InputState,
+    engine: &mut Engine,
+    source: &str,
+    bytes: &[u8],
+    layout: &DeviceLayout,
+) {
+    let before = state.pulse.clone();
+    state.receive(source, bytes, layout);
+    if state.pulse != before {
+        if let Some((id, _)) = &state.pulse {
+            engine.button(id.clone());
+        }
+    }
+    if (source == "keyboard" || source == "screen")
+        && bytes.len() == 3
+        && bytes[0] & 0xf0 == 0xb0
+        && [120, 123].contains(&bytes[1])
+    {
+        engine.clear_keys();
+    }
+}
 fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let start = Instant::now();
     let (tx, rx) = bounded::<MidiPacket>(1024);
@@ -471,7 +493,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     desktop.allowed(false);
                     core.piano.bus.panic();
                     core.performance.pause();
-                    engine.held.clear();
+                    engine.clear_keys();
                     *core.input.lock().unwrap() = InputState::default();
                     for _ in rx.try_iter() {}
                 }
@@ -680,11 +702,9 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             suspended || handoff || stopping || mock_disconnected || now < resume_at;
         let inactive = desired.paused || controls_blocked;
         let update = feature_controls.synchronize(
-            (!settings.mock
-                && settings.controller.enabled
-                && !controls_blocked
-                && transport.is_some())
-            .then(|| settings.controller.bindings()),
+            (!settings.mock && !controls_blocked && transport.is_some())
+                .then(|| settings.controller.feature_bindings())
+                .flatten(),
             now,
         );
         if update.warning {
@@ -792,7 +812,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 );
                 daw_input_since = Instant::now();
                 forward.close();
-                engine.held.clear();
+                engine.clear_keys();
                 probe = None;
                 status.probe = None;
                 core.notify(
@@ -863,8 +883,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         vec![0xb6, PAD_MODE, 2],
                         vec![0xb7, 0x1e, 0],
                         vec![0xb7, 0x1f, 0],
-                        vec![0xb7, 0x49, 0],
-                        vec![0xb7, 0x4a, 0],
                         vec![0xb6, DAW_DRUM, if settings.daw_drum { 1 } else { 0 }],
                     ];
                     if settings.controller.enabled {
@@ -966,7 +984,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             // Discard the uncertain event batch and release every note we actually sent.
             for _ in rx.try_iter() {}
             forward.release();
-            engine.held.clear();
+            engine.clear_keys();
             core.piano.bus.panic();
             core.performance.pause();
             *core.input.lock().unwrap() = InputState::default();
@@ -1001,6 +1019,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
             }
             let feature_input = feature_update.action.map(|id| {
+                engine.button(id.clone());
                 let mut state = core.input.lock().unwrap();
                 let serial = state.pulse.as_ref().map_or(1, |p| p.1.wrapping_add(1));
                 state.pulse = Some((id.clone(), serial));
@@ -1105,10 +1124,13 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     && !stopping
                     && !mock_disconnected)
             {
-                core.input
-                    .lock()
-                    .unwrap()
-                    .receive(&packet.source, b, &desired.layout);
+                receive_lighting_input(
+                    &mut core.input.lock().unwrap(),
+                    &mut engine,
+                    &packet.source,
+                    b,
+                    &desired.layout,
+                );
             }
             if settings.midi_log {
                 log_midi(&mut monitor, "←", b);
@@ -1159,11 +1181,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     if (packet.source == "keyboard" || packet.source == "screen")
                         && settings.keyboard_reactive
                     {
-                        if pressed {
-                            engine.held.insert(b[1]);
-                        } else {
-                            engine.held.remove(&b[1]);
-                        }
+                        engine.key(b[1], pressed);
                     }
                     if pressed && (packet.source == "daw" || settings.keyboard_reactive) {
                         engine.hit(Hit {
@@ -1195,6 +1213,15 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
             }
         }
+        {
+            let input = core.input.lock().unwrap();
+            engine.buttons = input
+                .held
+                .iter()
+                .filter(|id| id.starts_with("btn.") || id.starts_with("fbtn."))
+                .cloned()
+                .collect();
+        }
         if settings.keyboard_reactive && !inactive {
             engine.held = core
                 .input
@@ -1205,7 +1232,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 .filter_map(|id| id.strip_prefix("key.").and_then(|n| n.parse().ok()))
                 .collect();
         } else {
-            engine.held.clear();
+            engine.clear_keys();
         }
         let audio_needed = (active_preset
             .layers
@@ -1489,7 +1516,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         settings.controller.display_feedback
                             && at.elapsed().as_secs_f32() < settings.controller.display_seconds
                     }) {
-                    let value = if title == "Looper" {
+                    let value = if title == "Looper" && value.is_empty() {
                         let status = core.piano.bus.loop_status();
                         format!("{} / {} events", status.mode, status.count)
                     } else {
@@ -1696,6 +1723,59 @@ fn release(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn short_buttons_in_one_batch_both_light_and_all_notes_off_clears_rainbow_release() {
+        let layout = DeviceLayout::default();
+        let mut input = InputState::default();
+        let mut engine = Engine::default();
+        for cc in [102, 77] {
+            receive_lighting_input(&mut input, &mut engine, "daw", &[0xb0, cc, 127], &layout);
+            receive_lighting_input(&mut input, &mut engine, "daw", &[0xb0, cc, 0], &layout);
+        }
+        let mut p = crate::model::builtin_presets().remove(0);
+        p.layers.clear();
+        p.post.brightness = 1.;
+        p.post.gamma = 1.;
+        let frame = engine.render(&p, &layout, 1.).1;
+        for id in ["btn.trackNext", "btn.undo"] {
+            let i = layout.leds.iter().position(|led| led.id == id).unwrap();
+            assert!(frame[i].iter().copied().max().unwrap() > 100, "{id}");
+        }
+        engine.key(60, true);
+        engine.time = 1.;
+        engine.key(60, false);
+        let rainbow = crate::model::builtin_presets()
+            .into_iter()
+            .find(|p| p.id == "note-rainbow")
+            .unwrap();
+        let pad = layout
+            .leds
+            .iter()
+            .position(|led| led.id == "pad.top.4")
+            .unwrap();
+        engine.time = 1.1;
+        assert!(engine.render(&rainbow, &layout, 1.).1[pad]
+            .iter()
+            .any(|&v| v > 0));
+        receive_lighting_input(
+            &mut input,
+            &mut engine,
+            "keyboard",
+            &[0xb0, 123, 0],
+            &layout,
+        );
+        assert_eq!(engine.render(&rainbow, &layout, 1.).1[pad], [0; 3]);
+        engine.key(60, true);
+        engine.key(60, false);
+        receive_lighting_input(
+            &mut input,
+            &mut engine,
+            "keyboard",
+            &[0xb0, 120, 0],
+            &layout,
+        );
+        assert_eq!(engine.render(&rainbow, &layout, 1.).1[pad], [0; 3]);
+    }
     struct Record(Arc<Mutex<Vec<Vec<u8>>>>);
     impl LedTransport for Record {
         fn send_raw(&mut self, b: &[u8]) -> Result<(), String> {

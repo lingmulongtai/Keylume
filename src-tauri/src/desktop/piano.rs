@@ -1,4 +1,4 @@
-use crate::instrument_fx::{Effects, InstrumentFx};
+use crate::instrument_fx::{output_sample, Effects, InstrumentFx};
 use crate::piano::{PianoSettings, PianoSynth};
 use crate::sound_library::SoundId;
 use crate::{
@@ -759,7 +759,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                             } else {
                                 0.
                             };
-                            let value = value.tanh();
+                            let value = output_sample(value);
                             peak = peak.max(value.abs());
                             *sample = T::from_sample(value);
                         }

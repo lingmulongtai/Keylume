@@ -1,10 +1,80 @@
-import { describe, it, expect } from 'vitest';
-import { compose, renderPreview, ditherImage } from './preview';
+import { describe, it, expect, vi } from 'vitest';
+import { clearPreviewInput, compose, renderPreview, ditherImage, previewInput } from './preview';
+import { keyPosition, lightingPosition } from './layout';
 import { validatePreset, validateLayout } from './api';
 import data from '../resources/presets.json';
 import layout from '../resources/layout.json';
 import type { Preset, Layout } from './types';
 describe('preview and interchange', () => {
+  it('keeps a quick DAW button tap visible, then fades without changing the preset', () => {
+    const p = structuredClone(data[0]) as Preset;
+    p.layers = [];
+    p.post = { brightness: 1, saturation: 1, temperatureK: 6500, gamma: 1 };
+    const l = layout as Layout;
+    const index = l.leds.findIndex((v) => v.id === 'btn.trackNext');
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    try {
+      clearPreviewInput();
+      previewInput([0xb0, 102, 127], 'daw', l);
+      previewInput([0xb0, 102, 0], 'daw', l);
+      expect(Math.max(...renderPreview(p, l, 1, 1)[index])).toBe(127);
+      expect(Math.max(...renderPreview(p, l, 1.2, 1)[index])).toBeGreaterThan(0);
+      expect(renderPreview(p, l, 1.4, 1)[index]).toEqual([0, 0, 0]);
+      previewInput([0xb6, 74, 127], 'daw', l);
+      expect(
+        renderPreview(p, l, 1.4, 1)
+          .flat()
+          .every((v) => v === 0),
+      ).toBe(true);
+      previewInput([0xb0, 102, 127], 'daw', l);
+      expect(Math.max(...renderPreview(p, l, 3, 1)[index])).toBe(127);
+      expect(renderPreview(p, l, 3, 0)[index]).toEqual([0, 0, 0]);
+    } finally {
+      clearPreviewInput();
+      clock.mockRestore();
+    }
+  });
+  it('fades released rainbow notes and keeps opposing notes colorful', () => {
+    const l = layout as Layout;
+    const p = structuredClone(data.find((p) => p.id === 'note-rainbow')) as Preset;
+    p.layers = [p.layers[0]];
+    p.layers[0].blend = 'normal';
+    p.post = { brightness: 1, saturation: 1, temperatureK: 6500, gamma: 1 };
+    const x = (keyPosition(l, 60) - keyPosition(l, 36)) / (keyPosition(l, 96) - keyPosition(l, 36));
+    const index = l.leds
+      .map((led, i) => ({
+        i,
+        d: Math.abs(lightingPosition(l, i) - x),
+        kind: led.kind,
+      }))
+      .filter((v) => v.kind === 'rgb')
+      .sort((a, b) => a.d - b.d)[0].i;
+    let at = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => at * 1000);
+    try {
+      previewInput([0xb0, 123, 0], 'keyboard', l);
+      previewInput([0x90, 60, 100], 'keyboard', l);
+      const held = renderPreview(p, l, at, 1)[index];
+      expect(Math.max(...held)).toBeGreaterThan(0);
+      at = 1;
+      previewInput([0x80, 60, 0], 'keyboard', l);
+      expect(renderPreview(p, l, at, 1)[index]).toEqual(held);
+      at = 1.275;
+      expect(
+        Math.abs(Math.max(...renderPreview(p, l, at, 1)[index]) - Math.max(...held) / 2),
+      ).toBeLessThanOrEqual(1);
+      at = 1.6;
+      expect(renderPreview(p, l, at, 1)[index]).toEqual([0, 0, 0]);
+      previewInput([0x90, 60, 100], 'keyboard', l);
+      previewInput([0x90, 66, 100], 'keyboard', l);
+      for (const color of renderPreview(p, l, at, 1))
+        if (Math.max(...color) > 50 && color[0] !== color[1])
+          expect(Math.min(...color)).toBeLessThan(12);
+    } finally {
+      previewInput([0xb0, 123, 0], 'keyboard', l);
+      clock.mockRestore();
+    }
+  });
   it('breathes through the selected color stops using the native phase', () => {
     const p = structuredClone(data[0]) as Preset;
     p.layers = [
