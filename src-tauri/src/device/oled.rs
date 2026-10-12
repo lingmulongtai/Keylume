@@ -10,14 +10,36 @@ pub enum Content {
     Bitmap(Vec<u8>),
 }
 impl Content {
+    fn same_display(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Feedback(a, b, _), Self::Feedback(c, d, _)) => a == c && b == d,
+            _ => self == other,
+        }
+    }
+    #[cfg(test)]
     fn messages(&self) -> Result<Vec<Vec<u8>>, String> {
-        // Always cancel the hardware's higher-priority temporary page first.
-        let mut result = vec![protocol::sysex(&[4, 0x21, 0])?];
+        self.messages_after(None)
+    }
+    fn messages_after(&self, previous: Option<&Self>) -> Result<Vec<Vec<u8>>, String> {
+        let mut result = Vec::new();
         match self {
             Self::Off => result.push(protocol::sysex(&[4, 0x20, 0])?),
             Self::Text(text) => result.extend(protocol::display_text(text, 0x20)?),
             Self::Feedback(title, value, _) => {
-                result.extend(protocol::display_lines(title, value, 0x21)?)
+                // The app owns the lifetime of operation feedback. Updating a
+                // stationary page avoids the temporary page's firmware timeout.
+                if let Some(Self::Feedback(old_title, old_value, _)) = previous {
+                    if title != old_title {
+                        result.push(protocol::display_field(title, 32, 0)?);
+                    }
+                    if value != old_value {
+                        result.push(protocol::display_field(value, 32, 1)?);
+                    }
+                    result.push(protocol::sysex(&[4, 32, 127])?);
+                } else {
+                    result.push(protocol::sysex(&[4, 33, 0])?);
+                    result.extend(protocol::display_lines(title, value, 32)?);
+                }
             }
             Self::Bitmap(bits) => result.push(protocol::bitmap(bits, 0x20)?),
         }
@@ -45,7 +67,6 @@ pub struct DisplayQueue {
     awaiting_ack: Option<f64>,
     warned: bool,
     retry_at: f64,
-    sent_at: f64,
 }
 impl Default for DisplayQueue {
     fn default() -> Self {
@@ -58,7 +79,6 @@ impl Default for DisplayQueue {
             awaiting_ack: None,
             warned: false,
             retry_at: 0.,
-            sent_at: f64::NEG_INFINITY,
         }
     }
 }
@@ -98,7 +118,6 @@ impl DisplayQueue {
             let flight = self.flight.take().unwrap();
             match result {
                 Ok(()) => {
-                    self.sent_at = now;
                     self.applied_owned = Some(flight.owned);
                     if matches!(flight.content, Content::Bitmap(_)) && !flight.early_ack && !mock {
                         self.awaiting_ack = Some(now);
@@ -119,9 +138,11 @@ impl DisplayQueue {
         }
         if self.flight.is_none()
             && now >= self.retry_at
-            && (self.last.as_ref() != Some(&self.desired)
-                || self.applied_owned != Some(self.owned)
-                || matches!(self.desired, Content::Feedback(_, _, _)) && now - self.sent_at > 0.5)
+            && (self
+                .last
+                .as_ref()
+                .is_none_or(|last| !last.same_display(&self.desired))
+                || self.applied_owned != Some(self.owned))
             && (!matches!(self.desired, Content::Bitmap(_))
                 || self.applied_owned != Some(self.owned)
                 || self.awaiting_ack.is_none()
@@ -134,7 +155,12 @@ impl DisplayQueue {
                 } else {
                     self.desired.clone()
                 };
-            let mut messages = match content.messages() {
+            let previous = if self.applied_owned == Some(self.owned) {
+                self.last.as_ref()
+            } else {
+                None
+            };
+            let mut messages = match content.messages_after(previous) {
                 Ok(messages) => messages,
                 Err(error) => {
                     progress.warning = Some(error);
@@ -176,7 +202,11 @@ mod tests {
         assert!(protocol::analogue_displays(false)
             .iter()
             .all(|m| out.batches[1].contains(m)));
-        assert!(out.batches[1].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
+        assert!(Content::Text(String::new())
+            .messages()
+            .unwrap()
+            .iter()
+            .all(|m| out.batches[1].contains(m)));
         assert!(!out.batches[1].iter().any(|m| m.get(6) == Some(&0x0a)));
     }
     #[test]
@@ -194,19 +224,17 @@ mod tests {
         q.pump(0.5, &mut out, false);
         assert_eq!(out.batches.len(), 1);
         q.pump(0.7, &mut out, false);
-        assert_eq!(out.batches[1], q.desired.messages().unwrap());
-        out.replies[1].send(Ok(())).unwrap();
-        q.pump(0.8, &mut out, false);
+        assert_eq!(out.batches.len(), 1);
         q.request(Content::Off);
         q.pump(2.5, &mut out, false);
-        assert!(out.batches[2].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
-        out.replies[2].send(Ok(())).unwrap();
+        assert_eq!(out.batches[1], vec![protocol::sysex(&[4, 32, 0]).unwrap()]);
+        out.replies[1].send(Ok(())).unwrap();
         q.pump(2.6, &mut out, false);
         q.pump(3.5, &mut out, false);
-        assert_eq!(out.batches.len(), 3);
+        assert_eq!(out.batches.len(), 2);
     }
     #[test]
-    fn repeated_operations_retrigger_feedback_and_restore_native_popups() {
+    fn repeated_values_do_not_clear_or_reconfigure_and_changed_values_update_only_the_field() {
         let mut q = DisplayQueue::default();
         let mut out = Deferred::default();
         q.ownership(true);
@@ -216,7 +244,7 @@ mod tests {
         assert!(protocol::analogue_displays(true)
             .iter()
             .all(|m| out.batches[0].contains(m)));
-        assert!(out.batches[0].contains(&protocol::sysex(&[6, 33, 1, b'5', b'3', b'%']).unwrap()));
+        assert!(out.batches[0].contains(&protocol::sysex(&[6, 32, 1, b'5', b'3', b'%']).unwrap()));
         out.replies[0].send(Ok(())).unwrap();
         q.pump(0.1, &mut out, false);
         q.request(Content::Feedback(
@@ -225,7 +253,17 @@ mod tests {
             at + std::time::Duration::from_millis(1),
         ));
         q.pump(0.2, &mut out, false);
+        assert_eq!(out.batches.len(), 1);
+        q.request(Content::Feedback("Piano Volume".into(), "54%".into(), at));
+        q.pump(0.21, &mut out, false);
         assert_eq!(out.batches.len(), 2);
+        assert_eq!(
+            out.batches[1],
+            vec![
+                protocol::display_field("54%", 32, 1).unwrap(),
+                protocol::sysex(&[4, 32, 127]).unwrap()
+            ]
+        );
         out.replies[1].send(Ok(())).unwrap();
         q.pump(0.3, &mut out, false);
         q.ownership(false);
@@ -234,7 +272,7 @@ mod tests {
         assert!(protocol::analogue_displays(false)
             .iter()
             .all(|m| out.batches[2].contains(m)));
-        assert!(out.batches[2].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
+        assert!(!out.batches[2].contains(&protocol::sysex(&[4, 33, 0]).unwrap()));
     }
     #[test]
     fn expired_feedback_clears_before_a_missing_bitmap_ack_recovers() {
@@ -250,7 +288,7 @@ mod tests {
             Instant::now(),
         ));
         q.pump(0.2, &mut out, false);
-        assert!(out.batches[1].contains(&protocol::sysex(&[6, 33, 1, b'7', b'5', b'%']).unwrap()));
+        assert!(out.batches[1].contains(&protocol::sysex(&[6, 32, 1, b'7', b'5', b'%']).unwrap()));
         out.replies[1].send(Ok(())).unwrap();
         q.pump(0.3, &mut out, false);
         q.request(image(1));
