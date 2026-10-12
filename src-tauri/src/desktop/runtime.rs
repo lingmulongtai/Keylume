@@ -299,6 +299,28 @@ struct Probe {
 pub fn spawn(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     std::thread::spawn(move || worker(app, core, actions));
 }
+fn receive_lighting_input(
+    state: &mut InputState,
+    engine: &mut Engine,
+    source: &str,
+    bytes: &[u8],
+    layout: &DeviceLayout,
+) {
+    let before = state.pulse.clone();
+    state.receive(source, bytes, layout);
+    if state.pulse != before {
+        if let Some((id, _)) = &state.pulse {
+            engine.button(id.clone());
+        }
+    }
+    if (source == "keyboard" || source == "screen")
+        && bytes.len() == 3
+        && bytes[0] & 0xf0 == 0xb0
+        && [120, 123].contains(&bytes[1])
+    {
+        engine.clear_keys();
+    }
+}
 fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let start = Instant::now();
     let (tx, rx) = bounded::<MidiPacket>(1024);
@@ -355,7 +377,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let desktop = super::desktop_actions::DesktopActions::new(app.clone(), core.clone());
     let mut edges = crate::controller::Edges::default();
     let mut feature_controls = crate::device::feature_controls::FeatureControls::default();
-    let mut last_button_pulse = None;
     let mut controls_dirty = false;
     let mut last_controls_emit = -1f32;
     let mut was_learning = false;
@@ -1000,6 +1021,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 }
             }
             let feature_input = feature_update.action.map(|id| {
+                engine.button(id.clone());
                 let mut state = core.input.lock().unwrap();
                 let serial = state.pulse.as_ref().map_or(1, |p| p.1.wrapping_add(1));
                 state.pulse = Some((id.clone(), serial));
@@ -1104,10 +1126,13 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     && !stopping
                     && !mock_disconnected)
             {
-                core.input
-                    .lock()
-                    .unwrap()
-                    .receive(&packet.source, b, &desired.layout);
+                receive_lighting_input(
+                    &mut core.input.lock().unwrap(),
+                    &mut engine,
+                    &packet.source,
+                    b,
+                    &desired.layout,
+                );
             }
             if settings.midi_log {
                 log_midi(&mut monitor, "←", b);
@@ -1198,12 +1223,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 .filter(|id| id.starts_with("btn.") || id.starts_with("fbtn."))
                 .cloned()
                 .collect();
-            if input.pulse != last_button_pulse {
-                if let Some((id, _)) = &input.pulse {
-                    engine.button(id.clone());
-                }
-                last_button_pulse = input.pulse.clone();
-            }
         }
         if settings.keyboard_reactive && !inactive {
             engine.held = core
@@ -1706,6 +1725,59 @@ fn release(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn short_buttons_in_one_batch_both_light_and_all_notes_off_clears_rainbow_release() {
+        let layout = DeviceLayout::default();
+        let mut input = InputState::default();
+        let mut engine = Engine::default();
+        for cc in [102, 77] {
+            receive_lighting_input(&mut input, &mut engine, "daw", &[0xb0, cc, 127], &layout);
+            receive_lighting_input(&mut input, &mut engine, "daw", &[0xb0, cc, 0], &layout);
+        }
+        let mut p = crate::model::builtin_presets().remove(0);
+        p.layers.clear();
+        p.post.brightness = 1.;
+        p.post.gamma = 1.;
+        let frame = engine.render(&p, &layout, 1.).1;
+        for id in ["btn.trackNext", "btn.undo"] {
+            let i = layout.leds.iter().position(|led| led.id == id).unwrap();
+            assert!(frame[i].iter().copied().max().unwrap() > 100, "{id}");
+        }
+        engine.key(60, true);
+        engine.time = 1.;
+        engine.key(60, false);
+        let rainbow = crate::model::builtin_presets()
+            .into_iter()
+            .find(|p| p.id == "note-rainbow")
+            .unwrap();
+        let pad = layout
+            .leds
+            .iter()
+            .position(|led| led.id == "pad.top.4")
+            .unwrap();
+        engine.time = 1.1;
+        assert!(engine.render(&rainbow, &layout, 1.).1[pad]
+            .iter()
+            .any(|&v| v > 0));
+        receive_lighting_input(
+            &mut input,
+            &mut engine,
+            "keyboard",
+            &[0xb0, 123, 0],
+            &layout,
+        );
+        assert_eq!(engine.render(&rainbow, &layout, 1.).1[pad], [0; 3]);
+        engine.key(60, true);
+        engine.key(60, false);
+        receive_lighting_input(
+            &mut input,
+            &mut engine,
+            "keyboard",
+            &[0xb0, 120, 0],
+            &layout,
+        );
+        assert_eq!(engine.render(&rainbow, &layout, 1.).1[pad], [0; 3]);
+    }
     struct Record(Arc<Mutex<Vec<Vec<u8>>>>);
     impl LedTransport for Record {
         fn send_raw(&mut self, b: &[u8]) -> Result<(), String> {
