@@ -10,12 +10,12 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 片手練習、左右の色分け、反対の手の自動伴奏、試聴、MIDI音量・音声タイミング調整を利用できます。固定した演奏表示は常にクリックを背面へ通し、操作パネルは独立して操作できます。Windows音量のフェーダーと、デスクトップ操作中の鍵盤演奏にも対応しています。Scale/Arp/Chord Mapの本体機能との干渉を避けるため、これらのアプリ割り当ては標準では無効です。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.0/Keylume_0.6.0_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.0/Keylume_0.6.0_windows-x64.zip)
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.1/Keylume_0.6.1_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.1/Keylume_0.6.1_windows-x64.zip)
 
 ![画面を離れずに選べるライティング](docs/images/v050-lighting.png)
 
-インストーラーはダウンロードした `Keylume_0.6.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.6.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.6.1_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.6.1_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「設定 → デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
