@@ -14,6 +14,8 @@ pub struct Hit {
 pub struct Engine {
     pub hits: Vec<Hit>,
     pub held: HashSet<u8>,
+    pub buttons: HashSet<String>,
+    button_hits: BTreeMap<String, f32>,
     released: BTreeMap<u8, f32>,
     pub bands: [f32; 8],
     pub peaks: [f32; 8],
@@ -30,6 +32,8 @@ impl Default for Engine {
         Self {
             hits: vec![],
             held: HashSet::new(),
+            buttons: HashSet::new(),
+            button_hits: BTreeMap::new(),
             released: BTreeMap::new(),
             bands: [0.; 8],
             peaks: [0.; 8],
@@ -44,6 +48,9 @@ impl Default for Engine {
     }
 }
 impl Engine {
+    pub fn button(&mut self, id: String) {
+        self.button_hits.insert(id, self.time);
+    }
     pub fn key(&mut self, note: u8, down: bool) {
         if down {
             self.held.insert(note);
@@ -98,6 +105,10 @@ impl Engine {
         }
         self.hits.retain(|h| self.time - h.at < 10.);
         self.released.retain(|_, at| self.time - *at < 8.);
+        for id in &self.buttons {
+            self.button_hits.insert(id.clone(), self.time);
+        }
+        self.button_hits.retain(|_, at| self.time - *at < 0.35);
         let mut colors = vec![[0.; 3]; layout.leds.len()];
         for layer in p.layers.iter().rev().filter(|l| l.enabled) {
             for (i, led) in layout.leds.iter().enumerate() {
@@ -123,6 +134,20 @@ impl Engine {
         if transition < 1. && self.previous.len() == colors.len() {
             for (c, old) in colors.iter_mut().zip(&self.previous) {
                 *c = mix(*old, *c, transition);
+            }
+        }
+        for (color, led) in colors.iter_mut().zip(&layout.leds) {
+            if let Some(at) = self.button_hits.get(&led.id) {
+                let strength = (1. - (self.time - at) / 0.35).clamp(0., 1.);
+                let peak = color.iter().copied().fold(0., f32::max);
+                let accent = if led.kind == "mono" {
+                    [1.; 3]
+                } else if peak > 0.001 {
+                    color.map(|v| v / peak)
+                } else {
+                    [0.1, 0.8, 1.]
+                };
+                *color = mix(*color, accent, strength);
             }
         }
         let quantized = colors
@@ -450,6 +475,38 @@ pub fn quantize(c: Color, p: &Post, master: f32, mono: bool) -> [u8; 3] {
 mod tests {
     use super::*;
     use crate::model::builtin_presets;
+    #[test]
+    fn short_and_held_buttons_light_independently_of_the_note_effect() {
+        let layout = DeviceLayout::default();
+        let mut preset = builtin_presets().remove(0);
+        preset.layers.clear();
+        preset.post.brightness = 1.;
+        preset.post.gamma = 1.;
+        let index = layout
+            .leds
+            .iter()
+            .position(|led| led.id == "btn.trackNext")
+            .unwrap();
+        let mut engine = Engine::default();
+        engine.button("btn.trackNext".into());
+        assert!(engine.render(&preset, &layout, 1.).1[index][0] > 100);
+        engine.time = 0.2;
+        let fading = engine.render(&preset, &layout, 1.).1[index][0];
+        assert!(fading > 0 && fading < 100);
+        engine.time = 0.4;
+        assert_eq!(engine.render(&preset, &layout, 1.).1[index], [0; 3]);
+        engine.buttons.insert("btn.trackNext".into());
+        engine.time = 3.;
+        assert!(engine.render(&preset, &layout, 1.).1[index][0] > 100);
+        engine.buttons.clear();
+        engine.time = 3.2;
+        assert!(engine.render(&preset, &layout, 1.).1[index][0] > 0);
+        assert!(engine
+            .render(&preset, &layout, 0.)
+            .1
+            .iter()
+            .all(|v| *v == [0; 3]));
+    }
     #[test]
     fn spectrum_spans_all_frequency_bands_in_each_hardware_bank() {
         let layout = DeviceLayout::default();

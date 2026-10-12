@@ -2,6 +2,30 @@ import { expect, test } from 'vitest';
 import { PreviewInput, hardwareColor } from './input';
 import layout from '../resources/layout.json';
 import type { Layout } from './types';
+test('captured channel-one button presses remain visible after LED address edits', () => {
+  const input = new PreviewInput(),
+    l = structuredClone(layout) as Layout;
+  l.leds.forEach((led) => delete led.address.cc);
+  for (const [cc, id] of [
+    [103, 'btn.trackPrevious'],
+    [102, 'btn.trackNext'],
+    [106, 'btn.padUp'],
+    [107, 'btn.padDown'],
+    [117, 'btn.record'],
+    [77, 'btn.undo'],
+    [76, 'btn.metronome'],
+  ] as const) {
+    input.receive('daw', [0xb0, cc, 127], l);
+    expect(input.state.held).toEqual([id]);
+    input.receive('daw', [0xb0, cc, 0], l);
+    expect(input.state.held).toEqual([]);
+    expect(input.state.pulse?.[0]).toBe(id);
+  }
+  input.receive('daw', [0xb0, 5, 127], l);
+  expect(input.state.faders[0]).toBeNull();
+  input.clearPort('daw');
+  expect(input.state.pulse).toBeNull();
+});
 test('decodes DAW controls without mistaking keyboard CCs or mode reports for faders', () => {
   const input = new PreviewInput(),
     l = layout as Layout;
@@ -86,10 +110,10 @@ test('shows real standalone button captures and gives Start/Stop a repeatable pu
     expect(input.state.held).toEqual([]);
   }
   input.receive('keyboard', [0xfa], l);
-  expect(input.state.pulse).toEqual(['btn.play', 1]);
+  expect(input.state.pulse).toEqual(['btn.play', 8]);
   input.receive('keyboard', [0xfa], l);
-  expect(input.state.pulse).toEqual(['btn.play', 2]);
+  expect(input.state.pulse).toEqual(['btn.play', 9]);
   input.receive('keyboard', [0xfc], l);
-  expect(input.state.pulse).toEqual(['btn.stop', 3]);
+  expect(input.state.pulse).toEqual(['btn.stop', 10]);
   expect(input.state.held).toEqual([]);
 });

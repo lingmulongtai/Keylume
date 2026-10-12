@@ -2,6 +2,7 @@ import type { Color, Preset, Layout, Layer } from './types';
 import { includesLed } from './types';
 import { keyPosition, keybed, lightingPosition } from './layout';
 import palette from '../resources/palette.json';
+import { PreviewInput } from './input';
 export const clamp = (n: number, min = 0, max = 1) => Math.max(min, Math.min(max, n));
 export const hex = (s: string): Color =>
   /^#[0-9a-f]{6}$/i.test(s)
@@ -43,8 +44,25 @@ interface Hit {
 const hits: Hit[] = [];
 const held = new Set<number>();
 const released = new Map<number, number>();
+const buttons = new PreviewInput();
+const buttonFlashes = new Map<string, number>();
+export function clearPreviewInput() {
+  hits.length = 0;
+  held.clear();
+  released.clear();
+  buttons.reset();
+  buttonFlashes.clear();
+}
 export function previewInput(bytes: number[], source: string, layout: Layout) {
   const time = performance.now() / 1000;
+  const before = buttons.state.held;
+  const pulse = buttons.state.pulse;
+  buttons.receive(source, bytes, layout);
+  if (buttons.state.pulse !== pulse && buttons.state.pulse)
+    buttonFlashes.set(buttons.state.pulse[0], time);
+  for (const id of before)
+    if (!buttons.state.held.includes(id) && (id.startsWith('btn.') || id.startsWith('fbtn.')))
+      buttonFlashes.set(id, time);
   const [s, n, v] = bytes;
   const on = (s & 240) === 144 && v > 0;
   const off = (s & 240) === 128 || ((s & 240) === 144 && v === 0);
@@ -258,6 +276,9 @@ export function renderPreview(
   time: number,
   master: number,
 ): Color[] {
+  for (const id of buttons.state.held)
+    if (id.startsWith('btn.') || id.startsWith('fbtn.')) buttonFlashes.set(id, time);
+  for (const [id, at] of buttonFlashes) if (time - at >= 0.35) buttonFlashes.delete(id);
   return layout.leds.map((led, i) => {
     let c: Color = [0, 0, 0];
     if (led.kind === 'none') return c;
@@ -282,6 +303,17 @@ export function renderPreview(
         l.opacity,
         l.blend,
       );
+    }
+    const at = buttonFlashes.get(led.id);
+    if (at !== undefined && time >= at) {
+      const peak = Math.max(...c);
+      const accent: Color =
+        led.kind === 'mono'
+          ? [1, 1, 1]
+          : peak > 0.001
+            ? (c.map((v) => v / peak) as Color)
+            : [0.1, 0.8, 1];
+      c = mix(c, accent, clamp(1 - (time - at) / 0.35));
     }
     c = scale(c, preset.post.brightness * master);
     const lum = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;

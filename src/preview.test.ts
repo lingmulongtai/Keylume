@@ -1,11 +1,39 @@
 import { describe, it, expect, vi } from 'vitest';
-import { compose, renderPreview, ditherImage, previewInput } from './preview';
+import { clearPreviewInput, compose, renderPreview, ditherImage, previewInput } from './preview';
 import { keyPosition, lightingPosition } from './layout';
 import { validatePreset, validateLayout } from './api';
 import data from '../resources/presets.json';
 import layout from '../resources/layout.json';
 import type { Preset, Layout } from './types';
 describe('preview and interchange', () => {
+  it('keeps a quick DAW button tap visible, then fades without changing the preset', () => {
+    const p = structuredClone(data[0]) as Preset;
+    p.layers = [];
+    p.post = { brightness: 1, saturation: 1, temperatureK: 6500, gamma: 1 };
+    const l = layout as Layout;
+    const index = l.leds.findIndex((v) => v.id === 'btn.trackNext');
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    try {
+      clearPreviewInput();
+      previewInput([0xb0, 102, 127], 'daw', l);
+      previewInput([0xb0, 102, 0], 'daw', l);
+      expect(Math.max(...renderPreview(p, l, 1, 1)[index])).toBe(127);
+      expect(Math.max(...renderPreview(p, l, 1.2, 1)[index])).toBeGreaterThan(0);
+      expect(renderPreview(p, l, 1.4, 1)[index]).toEqual([0, 0, 0]);
+      previewInput([0xb6, 74, 127], 'daw', l);
+      expect(
+        renderPreview(p, l, 1.4, 1)
+          .flat()
+          .every((v) => v === 0),
+      ).toBe(true);
+      previewInput([0xb0, 102, 127], 'daw', l);
+      expect(Math.max(...renderPreview(p, l, 3, 1)[index])).toBe(127);
+      expect(renderPreview(p, l, 3, 0)[index]).toEqual([0, 0, 0]);
+    } finally {
+      clearPreviewInput();
+      clock.mockRestore();
+    }
+  });
   it('fades released rainbow notes and keeps opposing notes colorful', () => {
     const l = layout as Layout;
     const p = structuredClone(data.find((p) => p.id === 'note-rainbow')) as Preset;

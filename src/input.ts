@@ -1,4 +1,28 @@
 import type { Color, Layout } from './types';
+export function surfaceButton(cc: number): string | undefined {
+  if (cc >= 37 && cc <= 45) return `fbtn.${cc - 36}`;
+  return (
+    {
+      51: 'btn.encoderUp',
+      52: 'btn.encoderDown',
+      63: 'btn.shift',
+      74: 'btn.capture',
+      75: 'btn.quantise',
+      76: 'btn.metronome',
+      77: 'btn.undo',
+      102: 'btn.trackNext',
+      103: 'btn.trackPrevious',
+      104: 'btn.scene',
+      105: 'btn.function',
+      106: 'btn.padUp',
+      107: 'btn.padDown',
+      115: 'btn.play',
+      116: 'btn.stop',
+      117: 'btn.record',
+      118: 'btn.loop',
+    } as Record<number, string>
+  )[cc];
+}
 export interface InputState {
   encoders: (number | null)[];
   relative: boolean[];
@@ -42,12 +66,21 @@ export class PreviewInput {
   state = emptyInput();
   private presses = new Map<string, string>();
   private pressureSource = '';
+  private button(key: string, cc: number, value: number) {
+    const id = surfaceButton(cc);
+    if (!id) return;
+    if (value) {
+      this.presses.set(key, id);
+      this.state.pulse = [id, (this.state.pulse?.[1] ?? 0) + 1];
+    } else this.presses.delete(key);
+  }
   reset() {
     this.state = emptyInput();
     this.presses.clear();
     this.pressureSource = '';
   }
   clearPort(source: string) {
+    this.state.pulse = null;
     for (const key of this.presses.keys())
       if (key.startsWith(source + ':')) this.presses.delete(key);
     const s = this.state;
@@ -149,6 +182,8 @@ export class PreviewInput {
           s.modulation = 0;
         }
       }
+    } else if (source === 'daw' && b[0] === 0xb0) {
+      this.button(key, b[1], v);
     } else if (['daw', 'keyboard'].includes(source) && b[0] === 0xbf) {
       if (b[1] >= 5 && b[1] <= 13) s.faders[b[1] - 5] = v;
       else if (b[1] >= 21 && b[1] <= 28) {
@@ -159,17 +194,12 @@ export class PreviewInput {
         s.encoders[i] = ((((s.relative[i] ? (s.encoders[i] ?? 0) : 0) + v - 64) % 128) + 128) % 128;
         s.relative[i] = true;
       } else {
-        const id = b[1] === 63 ? 'btn.shift' : layout.leds.find((l) => l.address.cc === b[1])?.id;
-        if (id) {
-          if (v) this.presses.set(key, id);
-          else this.presses.delete(key);
-        }
+        this.button(key, b[1], v);
       }
     } else if (source === 'daw' && b[0] === 0xb6) {
       s.features[b[1]] = v;
       if (b[1] === 63) {
-        if (v) this.presses.set(key, 'btn.shift');
-        else this.presses.delete(key);
+        this.button(key, b[1], v);
       }
       if (b[1] === 30) {
         if (s.encoderMode !== v) {

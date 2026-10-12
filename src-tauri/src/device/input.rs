@@ -40,6 +40,7 @@ impl InputState {
         }
     }
     pub fn clear_port(&mut self, source: &str) {
+        self.pulse = None;
         self.presses.retain(|(s, _, _), _| s != source);
         self.held = self.presses.values().cloned().collect();
         self.held.sort();
@@ -191,12 +192,7 @@ impl InputState {
             self.features.insert(b[1], v);
             match b[1] {
                 0x3f => {
-                    let key = (source.into(), ch, b[1]);
-                    if v > 0 {
-                        self.presses.insert(key, "btn.shift".into());
-                    } else {
-                        self.presses.remove(&key);
-                    }
+                    self.button(source, ch, b[1], v);
                 }
                 0x1e => {
                     if self.encoder_mode != Some(v) {

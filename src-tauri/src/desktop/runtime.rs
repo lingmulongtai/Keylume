@@ -355,6 +355,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
     let desktop = super::desktop_actions::DesktopActions::new(app.clone(), core.clone());
     let mut edges = crate::controller::Edges::default();
     let mut feature_controls = crate::device::feature_controls::FeatureControls::default();
+    let mut last_button_pulse = None;
     let mut controls_dirty = false;
     let mut last_controls_emit = -1f32;
     let mut was_learning = false;
@@ -1189,6 +1190,21 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         forward.send(destination, bytes);
                     }
                 }
+            }
+        }
+        {
+            let input = core.input.lock().unwrap();
+            engine.buttons = input
+                .held
+                .iter()
+                .filter(|id| id.starts_with("btn.") || id.starts_with("fbtn."))
+                .cloned()
+                .collect();
+            if input.pulse != last_button_pulse {
+                if let Some((id, _)) = &input.pulse {
+                    engine.button(id.clone());
+                }
+                last_button_pulse = input.pulse.clone();
             }
         }
         if settings.keyboard_reactive && !inactive {
