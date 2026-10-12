@@ -56,7 +56,18 @@ pub fn perform(
     };
     if let Some(c) = command {
         let status = core.piano.bus.loop_status();
-        core.piano.bus.loop_command(c)?;
+        if let Err(error) = core.piano.bus.loop_command(c) {
+            let state = core.piano.view().state;
+            core.show_feedback(
+                "Looper unavailable",
+                match state.as_str() {
+                    "off" => "Enable instrument",
+                    "error" => "Check audio output",
+                    _ => "Check mode / retry",
+                },
+            );
+            return Err(error);
+        }
         match c {
             LoopCommand::Tempo(bpm) => core.show_feedback("Tempo", format!("{bpm:.0} BPM")),
             LoopCommand::Metronome => {
@@ -70,7 +81,44 @@ pub fn perform(
                     "Nothing to undo"
                 },
             ),
-            _ => core.show_feedback("Looper", ""),
+            LoopCommand::Play => core.show_feedback(
+                "Looper",
+                if status.count > 0 {
+                    "Playing"
+                } else {
+                    "No recorded notes"
+                },
+            ),
+            LoopCommand::Stop => core.show_feedback("Looper", "Stopped"),
+            LoopCommand::RecordToggle => core.show_feedback(
+                "Looper",
+                match status.mode.as_str() {
+                    "countIn" | "recording" => "Stopped",
+                    "overdub" => "Playing",
+                    "playing" => "Overdub",
+                    _ if status.count > 0 => "Overdub",
+                    _ => "Record count-in",
+                },
+            ),
+            LoopCommand::Overdub => core.show_feedback(
+                "Looper",
+                match status.mode.as_str() {
+                    "playing" => "Overdub",
+                    "overdub" => "Playing",
+                    _ => "Start playback first",
+                },
+            ),
+            LoopCommand::Capture => core.show_feedback("Looper", "Capture MIDI"),
+            LoopCommand::Quantise => core.show_feedback(
+                "Looper",
+                if status.count > 0 {
+                    "16th-note grid"
+                } else {
+                    "No recorded notes"
+                },
+            ),
+            LoopCommand::Clear => core.show_feedback("Looper", "Cleared"),
+            _ => core.show_feedback("Looper", "Configured"),
         }
         return Ok(false);
     }

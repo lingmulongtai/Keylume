@@ -883,8 +883,6 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         vec![0xb6, PAD_MODE, 2],
                         vec![0xb7, 0x1e, 0],
                         vec![0xb7, 0x1f, 0],
-                        vec![0xb7, 0x49, 0],
-                        vec![0xb7, 0x4a, 0],
                         vec![0xb6, DAW_DRUM, if settings.daw_drum { 1 } else { 0 }],
                     ];
                     if settings.controller.enabled {
@@ -1518,7 +1516,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         settings.controller.display_feedback
                             && at.elapsed().as_secs_f32() < settings.controller.display_seconds
                     }) {
-                    let value = if title == "Looper" {
+                    let value = if title == "Looper" && value.is_empty() {
                         let status = core.piano.bus.loop_status();
                         format!("{} / {} events", status.mode, status.count)
                     } else {
