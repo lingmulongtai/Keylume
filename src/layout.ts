@@ -2,6 +2,16 @@ import current from '../resources/layout.json';
 import legacy from '../resources/layout-v1.json';
 import type { Layout } from './types';
 
+export function lightingPosition(layout: Layout, index: number): number {
+  const led = layout.leds[index];
+  const centers = layout.leds
+    .filter((other) => other.group === led.group && other.kind !== 'none')
+    .map((other) => other.pos.x + other.size.w / 2);
+  const left = Math.min(...centers),
+    right = Math.max(...centers);
+  return right > left ? (led.pos.x + led.size.w / 2 - left) / (right - left) : 0.5;
+}
+
 function equalGeometry(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;

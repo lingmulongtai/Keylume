@@ -440,6 +440,40 @@ export default function Editor({
                 onChange={(v) => parameter('decay', v)}
               />
             )}
+            {layer.effect === 'note_map' && (
+              <>
+                <Slider
+                  label="離鍵フェード"
+                  min={0}
+                  max={3}
+                  step={0.05}
+                  value={Number(layer.params.release ?? 0.55)}
+                  display={`${Number(layer.params.release ?? 0.55).toFixed(2)} 秒`}
+                  onChange={(v) => parameter('release', v)}
+                />
+                <label>
+                  混色
+                  <select
+                    aria-label="ノートの混色"
+                    value={String(layer.params.mix ?? 'hue')}
+                    onChange={(e) => parameter('mix', e.target.value)}
+                  >
+                    <option value="hue">色を保って混ぜる</option>
+                    <option value="add">加算で明るく混ぜる</option>
+                  </select>
+                </label>
+                <Note>色はC〜Bの12音に対応します。同じ音名はオクターブが違っても同じ色です。</Note>
+                <Slider
+                  label="ボタンの待機光"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={Number(layer.params.idle ?? 0.24)}
+                  display={`${Math.round(Number(layer.params.idle ?? 0.24) * 100)}%`}
+                  onChange={(v) => parameter('idle', v)}
+                />
+              </>
+            )}
             {layer.effect === 'starlight' && (
               <Slider
                 label="星の密度"

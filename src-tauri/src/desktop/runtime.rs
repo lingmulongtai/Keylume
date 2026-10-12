@@ -471,7 +471,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     desktop.allowed(false);
                     core.piano.bus.panic();
                     core.performance.pause();
-                    engine.held.clear();
+                    engine.clear_keys();
                     *core.input.lock().unwrap() = InputState::default();
                     for _ in rx.try_iter() {}
                 }
@@ -792,7 +792,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 );
                 daw_input_since = Instant::now();
                 forward.close();
-                engine.held.clear();
+                engine.clear_keys();
                 probe = None;
                 status.probe = None;
                 core.notify(
@@ -966,7 +966,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
             // Discard the uncertain event batch and release every note we actually sent.
             for _ in rx.try_iter() {}
             forward.release();
-            engine.held.clear();
+            engine.clear_keys();
             core.piano.bus.panic();
             core.performance.pause();
             *core.input.lock().unwrap() = InputState::default();
@@ -1159,11 +1159,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     if (packet.source == "keyboard" || packet.source == "screen")
                         && settings.keyboard_reactive
                     {
-                        if pressed {
-                            engine.held.insert(b[1]);
-                        } else {
-                            engine.held.remove(&b[1]);
-                        }
+                        engine.key(b[1], pressed);
                     }
                     if pressed && (packet.source == "daw" || settings.keyboard_reactive) {
                         engine.hit(Hit {
@@ -1205,7 +1201,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 .filter_map(|id| id.strip_prefix("key.").and_then(|n| n.parse().ok()))
                 .collect();
         } else {
-            engine.held.clear();
+            engine.clear_keys();
         }
         let audio_needed = (active_preset
             .layers

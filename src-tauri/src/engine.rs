@@ -1,5 +1,5 @@
 use crate::model::{DeviceLayout, Layer, Post, Preset};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::f32::consts::TAU;
 pub type Color = [f32; 3];
 #[derive(Clone)]
@@ -14,6 +14,7 @@ pub struct Hit {
 pub struct Engine {
     pub hits: Vec<Hit>,
     pub held: HashSet<u8>,
+    released: BTreeMap<u8, f32>,
     pub bands: [f32; 8],
     pub peaks: [f32; 8],
     pub bpm: f32,
@@ -29,6 +30,7 @@ impl Default for Engine {
         Self {
             hits: vec![],
             held: HashSet::new(),
+            released: BTreeMap::new(),
             bands: [0.; 8],
             peaks: [0.; 8],
             bpm: 120.,
@@ -42,6 +44,18 @@ impl Default for Engine {
     }
 }
 impl Engine {
+    pub fn key(&mut self, note: u8, down: bool) {
+        if down {
+            self.held.insert(note);
+            self.released.remove(&note);
+        } else if self.held.remove(&note) {
+            self.released.insert(note, self.time);
+        }
+    }
+    pub fn clear_keys(&mut self) {
+        self.held.clear();
+        self.released.clear();
+    }
     pub fn hit(&mut self, hit: Hit) {
         if self.hits.len() >= 64 {
             self.hits.remove(0);
@@ -83,6 +97,7 @@ impl Engine {
             self.advance_phase(self.time as f64);
         }
         self.hits.retain(|h| self.time - h.at < 10.);
+        self.released.retain(|_, at| self.time - *at < 8.);
         let mut colors = vec![[0.; 3]; layout.leds.len()];
         for layer in p.layers.iter().rev().filter(|l| l.enabled) {
             for (i, led) in layout.leds.iter().enumerate() {
@@ -232,14 +247,50 @@ impl Engine {
                 result
             }
             "note_map" => {
+                let x = lighting_position(layout, index);
+                let release = l.number("release", 0.55).clamp(0., 8.);
+                let mut notes: Vec<_> = self.held.iter().map(|n| (*n, 1.)).collect();
+                if release > 0. {
+                    notes.extend(self.released.iter().map(|(n, at)| {
+                        let t = ((self.time - at) / release).clamp(0., 1.);
+                        (*n, 1. - t * t * (3. - 2. * t))
+                    }));
+                }
+                notes.sort_by_key(|(note, _)| *note);
+                let mut hue = [0.; 2];
+                let mut closest = (0., 0.);
                 let mut out = [0.; 3];
-                for note in &self.held {
-                    let nx = layout.key_position(*note);
-                    if (x - nx).abs() < 0.065 {
-                        out = blend(out, hsv((*note % 12) as f32 / 12., 0.8, 1.), 1., "add");
+                for (note, fade) in notes {
+                    let key = (layout.key_position(note) - layout.key_position(36))
+                        / (layout.key_position(96) - layout.key_position(36)).max(0.001);
+                    let weight = (1. - (x - key).abs() / 0.16).max(0.) * fade;
+                    let h = (note % 12) as f32 / 12.;
+                    hue[0] += (h * TAU).cos() * weight;
+                    hue[1] += (h * TAU).sin() * weight;
+                    if weight > closest.0 {
+                        closest = (weight, h);
+                    }
+                    if l.text("mix", "hue") == "add" {
+                        out = blend(out, hsv(h, 0.96, 1.), weight, "add");
                     }
                 }
-                out
+                if l.text("mix", "hue") != "add" {
+                    let h = if hue[0].abs() + hue[1].abs() < 0.00001 {
+                        closest.1
+                    } else {
+                        hue[1].atan2(hue[0]).rem_euclid(TAU) / TAU
+                    };
+                    out = hsv(h, 0.96, closest.0);
+                }
+                if layout.leds[index].kind == "mono" {
+                    let level = out
+                        .into_iter()
+                        .fold(0., f32::max)
+                        .max(l.number("idle", 0.24).clamp(0., 1.));
+                    [level; 3]
+                } else {
+                    out
+                }
             }
             "chord_color" => {
                 if self.held.is_empty() {
@@ -336,6 +387,23 @@ impl Engine {
         }
     }
 }
+fn lighting_position(layout: &DeviceLayout, index: usize) -> f32 {
+    let led = &layout.leds[index];
+    let center = |led: &crate::model::LedDef| led.pos.x + led.size.w / 2.;
+    let (left, right) = layout
+        .leds
+        .iter()
+        .filter(|other| other.group == led.group && other.kind != "none")
+        .map(center)
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), x| {
+            (lo.min(x), hi.max(x))
+        });
+    if right > left {
+        (center(led) - left) / (right - left)
+    } else {
+        0.5
+    }
+}
 pub fn hex(s: &str) -> Color {
     let s = s.trim_start_matches('#');
     if s.len() != 6 || !s.is_ascii() {
@@ -391,6 +459,60 @@ pub fn quantize(c: Color, p: &Post, master: f32, mono: bool) -> [u8; 3] {
 mod tests {
     use super::*;
     use crate::model::builtin_presets;
+    #[test]
+    fn rainbow_release_fades_and_chords_keep_saturated_deterministic_colors() {
+        let layout = DeviceLayout::default();
+        let preset = builtin_presets()
+            .into_iter()
+            .find(|p| p.id == "note-rainbow")
+            .unwrap();
+        let layer = &preset.layers[0];
+        let mut engine = Engine::default();
+        let index = layout.leds.iter().position(|l| l.id == "fbtn.4").unwrap();
+        let color = |engine: &Engine| engine.effect(layer, 0., 0., index, "fbtn.4", &layout);
+        engine.key(60, true);
+        let held = color(&engine);
+        assert!(held[0] > 0.);
+        engine.time = 1.;
+        engine.key(60, false);
+        assert_eq!(color(&engine), held);
+        engine.time = 1.275;
+        assert!((color(&engine)[0] - held[0] * 0.5).abs() < 0.00001);
+        engine.time = 1.6;
+        assert_eq!(color(&engine), [0.; 3]);
+        engine.clear_keys();
+        engine.key(24, true);
+        engine.key(30, true);
+        let edge = |engine: &Engine| engine.effect(layer, 0., 0., 0, "pad.top.1", &layout);
+        let chord = edge(&engine);
+        assert!(chord.into_iter().fold(0., f32::max) > 0.3);
+        assert!(chord.into_iter().fold(1., f32::min) < 0.05);
+        engine.clear_keys();
+        engine.key(30, true);
+        engine.key(24, true);
+        assert_eq!(edge(&engine), chord);
+        engine.clear_keys();
+        engine.key(36, true);
+        let low = engine.render(&preset, &layout, 1.).1;
+        assert!(low[0].into_iter().max().unwrap() > low[7].into_iter().max().unwrap());
+        engine.clear_keys();
+        engine.key(96, true);
+        let high = engine.render(&preset, &layout, 1.).1;
+        assert!(high[7].into_iter().max().unwrap() > high[0].into_iter().max().unwrap());
+        engine.clear_keys();
+        let (_, frame) = engine.render(&preset, &layout, 1.);
+        assert!(layout
+            .leds
+            .iter()
+            .zip(frame)
+            .filter(|(led, _)| led.kind == "mono")
+            .all(|(_, v)| v[0] > 0));
+        assert!(engine
+            .render(&preset, &layout, 0.)
+            .1
+            .iter()
+            .all(|v| *v == [0; 3]));
+    }
     #[test]
     fn hardware_phase_is_continuous_after_long_running_clock_changes() {
         let mut e = Engine::default();
