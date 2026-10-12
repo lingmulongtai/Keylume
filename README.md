@@ -6,9 +6,9 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 起動
 
-[GitHub Releases — v0.6.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.6.0) からダウンロードできます。
+[GitHub Releases — v0.6.1 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.6.1) からダウンロードできます。
 
-片手練習、左右の色分け、反対の手の自動伴奏、試聴、MIDI音量・音声タイミング調整を追加しました。固定した演奏表示は常にクリックを背面へ通し、操作パネルは独立して操作できます。Windows音量のフェーダー、デスクトップ操作中の鍵盤演奏、Scale/Arp/Chord Mapの割り当てとOLED表示の安定化も含みます。
+片手練習、左右の色分け、反対の手の自動伴奏、試聴、MIDI音量・音声タイミング調整を利用できます。固定した演奏表示は常にクリックを背面へ通し、操作パネルは独立して操作できます。Windows音量のフェーダーと、デスクトップ操作中の鍵盤演奏にも対応しています。Scale/Arp/Chord Mapの本体機能との干渉を避けるため、これらのアプリ割り当ては標準では無効です。
 
 - [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.0/Keylume_0.6.0_x64-setup.exe)
 - [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.0/Keylume_0.6.0_windows-x64.zip)
