@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::f32::consts::TAU;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+mod drive;
 
 /// Preserve normal audio exactly; soften only overloads before device conversion.
 pub fn output_sample(value: f32) -> f32 {
@@ -114,6 +115,7 @@ pub struct Effects {
     echoes: [Delay; 2],
     reverbs: [Delay; 8],
     chorus: [Delay; 2],
+    drives: [drive::Drive; 2],
     phase: f32,
 }
 impl Effects {
@@ -136,12 +138,16 @@ impl Effects {
                 )
             }),
             chorus: std::array::from_fn(|_| Delay::new((rate * 0.04) as usize)),
+            drives: std::array::from_fn(|_| drive::Drive::new()),
             phase: 0.,
         }
     }
     pub fn reset(&mut self) {
         self.filters = [[0.; 2]; 2];
         self.phase = 0.;
+        for drive in &mut self.drives {
+            drive.reset();
+        }
         for d in self
             .echoes
             .iter_mut()
@@ -205,10 +211,7 @@ impl Effects {
                 if cutoff < 0.999 || resonance > 0.001 {
                     *sample = v2;
                 }
-                if drive > 0.001 {
-                    let gain = 1. + drive * 15.;
-                    *sample = (*sample * gain).tanh() / gain.sqrt();
-                }
+                *sample = self.drives[channel].process(*sample, drive);
                 let modulated = self.chorus[channel].read(
                     self.rate
                         * (0.018 + 0.005 * (self.phase * TAU * 0.31 + channel as f32 * 1.5).sin()),
@@ -235,6 +238,38 @@ impl Effects {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn effects_preserve_oversampling_history_across_irregular_audio_blocks() {
+        let settings = InstrumentFx {
+            drive: 0.638,
+            chorus: 0.4,
+            ..InstrumentFx::default()
+        };
+        let mut whole = Effects::new(48000, settings);
+        let mut stream = Effects::new(48000, settings);
+        let mut left: Vec<_> = (0..4096).map(|i| (i as f32 * 0.37).sin() * 0.3).collect();
+        let mut right: Vec<_> = left.iter().map(|v| -v * 0.4).collect();
+        let mut chunks_l = left.clone();
+        let mut chunks_r = right.clone();
+        assert!(whole.process(&mut left, &mut right, settings));
+        let mut at = 0;
+        for size in [1, 17, 128, 3, 2048, 1899] {
+            assert!(stream.process(
+                &mut chunks_l[at..at + size],
+                &mut chunks_r[at..at + size],
+                settings
+            ));
+            at += size;
+        }
+        assert_eq!(at, left.len());
+        assert_eq!(left, chunks_l);
+        assert_eq!(right, chunks_r);
+        stream.reset();
+        chunks_l.fill(0.);
+        chunks_r.fill(0.);
+        assert!(stream.process(&mut chunks_l, &mut chunks_r, settings));
+        assert!(chunks_l.iter().chain(&chunks_r).all(|v| *v == 0.));
+    }
     #[test]
     fn output_protection_is_linear_below_overload_and_contains_invalid_audio() {
         for value in [-0.9, -0.25, 0., 0.25, 0.9] {
@@ -367,7 +402,9 @@ mod tests {
         let mut l = vec![0.25; 480];
         let mut r = vec![-0.1; 480];
         fx.process(&mut l, &mut r, dry);
-        assert!(l.iter().all(|n| (*n - 0.25).abs() < 0.000001));
+        assert!(l[..32].iter().all(|n| *n == 0.));
+        assert!(l[32..].iter().all(|n| (*n - 0.25).abs() < 0.000001));
+        assert!(r[32..].iter().all(|n| (*n + 0.1).abs() < 0.000001));
         let wet = InstrumentFx {
             reverb: 1.,
             delay: 1.,
