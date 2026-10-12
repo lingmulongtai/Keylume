@@ -307,16 +307,7 @@ impl Engine {
                 }
             }
             "audio_spectrum" => {
-                let band = if id.starts_with("pad.") {
-                    id.rsplit('.')
-                        .next()
-                        .and_then(|n| n.parse::<usize>().ok())
-                        .unwrap_or(1)
-                        .saturating_sub(1)
-                        .min(7)
-                } else {
-                    ((x - 0.64) * 24.).clamp(0., 7.) as usize
-                };
+                let band = (lighting_position(layout, index) * 8.).min(7.) as usize;
                 let level = if id.starts_with("pad.top") {
                     self.peaks[band]
                 } else {
@@ -459,6 +450,32 @@ pub fn quantize(c: Color, p: &Post, master: f32, mono: bool) -> [u8; 3] {
 mod tests {
     use super::*;
     use crate::model::builtin_presets;
+    #[test]
+    fn spectrum_spans_all_frequency_bands_in_each_hardware_bank() {
+        let layout = DeviceLayout::default();
+        let preset = builtin_presets()
+            .into_iter()
+            .find(|p| p.id == "audio-bars")
+            .unwrap();
+        let mut engine = Engine::default();
+        let fader = |id: &str| layout.leds.iter().position(|led| led.id == id).unwrap();
+        engine.bands[0] = 1.;
+        engine.peaks[0] = 1.;
+        let frame = engine.render(&preset, &layout, 1.).1;
+        assert!(frame[0].iter().any(|v| *v > 0));
+        assert_eq!(frame[7], [0; 3]);
+        assert!(frame[fader("fbtn.1")].iter().any(|v| *v > 0));
+        assert_eq!(frame[fader("fbtn.9")], [0; 3]);
+        engine.bands.fill(0.);
+        engine.peaks.fill(0.);
+        engine.bands[7] = 1.;
+        engine.peaks[7] = 1.;
+        let frame = engine.render(&preset, &layout, 1.).1;
+        assert_eq!(frame[0], [0; 3]);
+        assert!(frame[7].iter().any(|v| *v > 0));
+        assert_eq!(frame[fader("fbtn.1")], [0; 3]);
+        assert!(frame[fader("fbtn.9")].iter().any(|v| *v > 0));
+    }
     #[test]
     fn rainbow_release_fades_and_chords_keep_saturated_deterministic_colors() {
         let layout = DeviceLayout::default();
