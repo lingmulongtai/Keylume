@@ -71,8 +71,8 @@ export default function ControllerMap({
               width={a.w + 2}
               height={a.h + 2}
               rx="2"
-              fill={selected === a.id ? '#e8c48e26' : 'transparent'}
-              stroke={selected === a.id ? '#e8c48e' : 'transparent'}
+              fill={selected === a.id ? '#72edc326' : 'transparent'}
+              stroke={selected === a.id ? '#72edc3' : 'transparent'}
               strokeWidth="1.4"
             />
           </g>

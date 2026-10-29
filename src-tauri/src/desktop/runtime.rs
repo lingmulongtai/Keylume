@@ -1320,6 +1320,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 let power_save = hardware_layer.len() == 1
                     && hardware_layer[0].effect == "hardware_fx"
                     && probe.is_none()
+                    && !inactive
                     && brightness >= 0.999
                     && active_preset.post.brightness >= 0.999
                     && active_preset.post.saturation == 1.
@@ -1333,7 +1334,16 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     );
                 }
                 let changed: Vec<_> = if power_save {
-                    frame.iter().copied().enumerate().collect()
+                    frame
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .filter(|(i, color)| {
+                            !crate::engine::idle_button(&desired.layout.leds[*i].id)
+                                || full
+                                || last_frame.get(*i) != Some(color)
+                        })
+                        .collect()
                 } else {
                     differences(&last_frame, &frame, full || was_native_fx).collect()
                 };
@@ -1359,7 +1369,10 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         } else {
                             protocol::rgb(&candidate, color, status.pad_mode == 15)
                         }
-                    } else if power_save && led.kind == "rgb" {
+                    } else if power_save
+                        && led.kind == "rgb"
+                        && !crate::engine::idle_button(&led.id)
+                    {
                         let layer = hardware_layer[0];
                         protocol::palette(
                             led,
@@ -1381,7 +1394,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         protocol::rgb(led, color, status.pad_mode == 15)
                     };
                     if let Ok(msg) = msg {
-                        if power_save && led.kind == "rgb" {
+                        if power_save && led.kind == "rgb" && !crate::engine::idle_button(&led.id) {
                             if native_fx.get(&led.id) == Some(&msg) {
                                 continue;
                             }
@@ -1410,7 +1423,10 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         {
                             errors += 1;
                         } else {
-                            if power_save && led.kind == "rgb" {
+                            if power_save
+                                && led.kind == "rgb"
+                                && !crate::engine::idle_button(&led.id)
+                            {
                                 native_fx.insert(led.id.clone(), msg);
                             }
                             errors = 0;

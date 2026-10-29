@@ -85,8 +85,12 @@ impl Storage {
     pub fn presets(&mut self) -> Vec<Preset> {
         let mut presets = builtin_presets();
         for file in self.json_files("presets") {
-            if let Some(p) = self.load::<Preset>(&file, Preset::validate) {
-                if !presets.iter().any(|b| b.id == p.id) {
+            if let Some(mut p) = self.load::<Preset>(&file, Preset::validate) {
+                // A newly bundled ID must not hide a user's existing preset.
+                p.builtin = false;
+                if let Some(index) = presets.iter().position(|b| b.id == p.id) {
+                    presets[index] = p;
+                } else {
                     presets.push(p);
                 }
             }
@@ -216,6 +220,27 @@ mod tests {
         assert_eq!(backup.leds[20].address.sysex_id, Some(65));
         old.leds[0].pos.x += 1.;
         assert!(!old.upgrade_geometry());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn user_preset_remains_accessible_when_a_new_builtin_uses_its_id() {
+        let root = std::env::temp_dir().join(format!(
+            "keylume-preset-collision-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let mut storage = Storage::new(root.clone()).unwrap();
+        let mut custom = builtin_presets().last().unwrap().clone();
+        custom.name = "My existing preset".into();
+        custom.builtin = false;
+        storage
+            .save(&format!("presets/{}.json", custom.id), &custom)
+            .unwrap();
+        let presets = storage.presets();
+        let restored = presets.iter().find(|p| p.id == custom.id).unwrap();
+        assert_eq!(restored.name, custom.name);
+        assert!(!restored.builtin);
+        assert_eq!(presets.iter().filter(|p| p.id == custom.id).count(), 1);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]

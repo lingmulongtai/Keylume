@@ -201,7 +201,8 @@ impl Effects {
             let mut pair = [*left, *right];
             let frequency = (60. * 300f32.powf(cutoff)).min(self.rate * 0.42);
             let g = (std::f32::consts::PI * frequency / self.rate).tan();
-            let k = 2. - resonance * 1.85;
+            // Limit the resonant peak without attenuating the filter's passband.
+            let k = 2. - resonance * 1.5;
             let a = 1. / (1. + g * (g + k));
             for (channel, sample) in pair.iter_mut().enumerate() {
                 let [s1, s2] = self.filters[channel];
@@ -217,14 +218,15 @@ impl Effects {
                         * (0.018 + 0.005 * (self.phase * TAU * 0.31 + channel as f32 * 1.5).sin()),
                 );
                 self.chorus[channel].write(*sample);
-                *sample += modulated * chorus * 0.45;
+                *sample += modulated * chorus * 0.25;
                 let echo = self.echoes[channel].tick(*sample * delay, 0.4);
                 let mut room = 0.;
                 for i in 0..4 {
                     room += self.reverbs[channel * 4 + i]
-                        .tick(*sample * reverb * 0.14, 0.74 - i as f32 * 0.013);
+                        .tick(*sample * reverb * 0.06, 0.74 - i as f32 * 0.013);
                 }
-                *sample += echo * 0.65 + room;
+                // Keep the dry attack intact while leaving room for wet returns.
+                *sample += echo * 0.25 + room;
             }
             let mid = (pair[0] + pair[1]) * 0.5;
             let side = (pair[0] - pair[1]) * width;
@@ -422,6 +424,62 @@ mod tests {
         r.fill(0.);
         fx.process(&mut l, &mut r, wet);
         assert!(l.iter().all(|x| *x == 0.));
+    }
+    #[test]
+    fn combined_effects_keep_more_headroom_than_uncompensated_returns() {
+        let settings = InstrumentFx {
+            chorus: 1.,
+            delay: 1.,
+            reverb: 1.,
+            ..InstrumentFx::default()
+        };
+        let mut fx = Effects::new(48000, settings);
+        let mut left = vec![0.3; 48000];
+        let mut right = left.clone();
+        assert!(fx.process(&mut left, &mut right, settings));
+        let peak = left
+            .iter()
+            .chain(&right)
+            .fold(0_f32, |peak, v| peak.max(v.abs()));
+        assert!(
+            peak < 0.9,
+            "combined wet returns exceeded output headroom: {peak}"
+        );
+        assert!(left[40000..].iter().any(|v| v.abs() > 0.1));
+    }
+    #[test]
+    fn wet_effects_preserve_the_initial_dry_attack() {
+        let settings = InstrumentFx {
+            chorus: 1.,
+            delay: 1.,
+            reverb: 1.,
+            ..InstrumentFx::default()
+        };
+        let mut fx = Effects::new(48000, settings);
+        let mut left = vec![0.; 4800];
+        let mut right = left.clone();
+        left[0] = 0.4;
+        right[0] = 0.4;
+        assert!(fx.process(&mut left, &mut right, settings));
+        assert!((left[32] - 0.4).abs() < 0.000001);
+        assert!(left[33..].iter().any(|v| v.abs() > 0.001));
+    }
+    #[test]
+    fn resonant_filter_reserves_headroom_at_its_cutoff() {
+        let settings = InstrumentFx {
+            cutoff: 0.6,
+            resonance: 1.,
+            ..InstrumentFx::default()
+        };
+        let mut fx = Effects::new(48000, settings);
+        let frequency = 60. * 300f32.powf(settings.cutoff);
+        let mut left: Vec<_> = (0..48000)
+            .map(|i| (TAU * frequency * i as f32 / 48000.).sin() * 0.3)
+            .collect();
+        let mut right = left.clone();
+        assert!(fx.process(&mut left, &mut right, settings));
+        let peak = left[1000..].iter().fold(0_f32, |peak, v| peak.max(v.abs()));
+        assert!(peak < 0.9, "resonance exceeded output headroom: {peak}");
     }
     #[test]
     fn controls_are_bounded_and_maximum_settings_stay_finite() {

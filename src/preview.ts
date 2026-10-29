@@ -315,6 +315,13 @@ export function renderPreview(
             : [0.1, 0.8, 1];
       c = mix(c, accent, clamp(1 - (time - at) / 0.35));
     }
+    if (
+      ['btn.encoderUp', 'btn.encoderDown', 'btn.scene', 'btn.function'].includes(led.id) ||
+      /^fbtn\.[1-9]$/.test(led.id)
+    ) {
+      const peak = Math.max(...c);
+      if (peak < 0.24) c = peak > 0.001 ? scale(c, 0.24 / peak) : [0.24, 0.24, 0.24];
+    }
     c = scale(c, preset.post.brightness * master);
     const lum = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
     c = c.map((v) => clamp(lum + (v - lum) * preset.post.saturation)) as Color;
@@ -326,7 +333,13 @@ export function renderPreview(
     c = c.map((v) => v ** preset.post.gamma) as Color;
     if (led.kind === 'mono')
       c = Array(3).fill(c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722) as Color;
-    return c.map((v) => Math.round(v * 127)) as Color;
+    const quantized = c.map((v) => Math.round(v * 127)) as Color;
+    const idle =
+      ['btn.encoderUp', 'btn.encoderDown', 'btn.scene', 'btn.function'].includes(led.id) ||
+      /^fbtn\.[1-9]$/.test(led.id);
+    return idle && master > 0 && preset.post.brightness > 0 && quantized.every((v) => v === 0)
+      ? [1, 1, 1]
+      : quantized;
   });
 }
 export function ditherImage(data: Uint8ClampedArray, width = 128, height = 64): number[] {

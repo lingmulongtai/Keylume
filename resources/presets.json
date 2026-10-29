@@ -438,5 +438,816 @@
       "showOnPresetChange": true
     },
     "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-rainbow-cycle",
+    "name": "レインボーサイクル",
+    "layers": [
+      {
+        "id": "6afe1b1d-9a8f-516f-945b-8246bcfd7456",
+        "effect": "spectrum_cycle",
+        "params": {
+          "period": 9
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-rainbow-fast",
+    "name": "レインボーラッシュ",
+    "layers": [
+      {
+        "id": "f606ee96-84c7-5ec0-8447-a59eb1191b10",
+        "effect": "wave",
+        "params": {
+          "speed": 1.7,
+          "wavelength": 0.35,
+          "direction": "left"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-rainbow-vertical",
+    "name": "レインボーカーテン",
+    "layers": [
+      {
+        "id": "a0134d1d-197b-5035-a12b-0df3f3ed8a2f",
+        "effect": "wave",
+        "params": {
+          "speed": 0.6,
+          "wavelength": 0.55,
+          "direction": "down"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-rainbow-outward",
+    "name": "レインボーアウト",
+    "layers": [
+      {
+        "id": "70e3e043-51e9-530e-ab54-6e04dde9a24f",
+        "effect": "wave",
+        "params": {
+          "speed": 0.9,
+          "wavelength": 0.5,
+          "direction": "out"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-ocean-breath",
+    "name": "オーシャンブレス",
+    "layers": [
+      {
+        "id": "a8e4a228-55c2-5c1c-9ce3-de4f48aae073",
+        "effect": "breathing",
+        "params": {
+          "colors": [
+            "#0068a8",
+            "#00d9d0",
+            "#3458e8"
+          ],
+          "period": 5
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-violet-breath",
+    "name": "バイオレットブレス",
+    "layers": [
+      {
+        "id": "5b731f74-af2a-54b0-9d05-e76f6b8f83dc",
+        "effect": "breathing",
+        "params": {
+          "colors": [
+            "#a65cff",
+            "#ed70cf"
+          ],
+          "period": 8
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-ice-gradient",
+    "name": "アイスグラデーション",
+    "layers": [
+      {
+        "id": "d95a71c0-ad23-54b8-9239-a64fca90ce56",
+        "effect": "gradient",
+        "params": {
+          "colors": [
+            "#053d8a",
+            "#61efff",
+            "#ecffff"
+          ],
+          "angle": 0
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-sakura-gradient",
+    "name": "さくらグラデーション",
+    "layers": [
+      {
+        "id": "a03d686c-9152-514f-b22a-e54eff7b54a1",
+        "effect": "gradient",
+        "params": {
+          "colors": [
+            "#e849a4",
+            "#ffb6dc",
+            "#f7e7ff"
+          ],
+          "angle": 0
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-forest-aurora",
+    "name": "フォレストオーロラ",
+    "layers": [
+      {
+        "id": "d23e6075-2bbe-5668-a5c2-d96f790807c5",
+        "effect": "aurora",
+        "params": {
+          "colors": [
+            "#03502c",
+            "#44f69c",
+            "#01abb8"
+          ],
+          "speed": 0.45
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-cosmic-aurora",
+    "name": "コズミックオーロラ",
+    "layers": [
+      {
+        "id": "9dd079ae-c763-583b-9a29-31c2acd41be5",
+        "effect": "aurora",
+        "params": {
+          "colors": [
+            "#3929a5",
+            "#a342e8",
+            "#26bee5"
+          ],
+          "speed": 0.8
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-blue-stars",
+    "name": "ブルースター",
+    "layers": [
+      {
+        "id": "aab2299f-c465-53fc-9134-d005473ca7a7",
+        "effect": "starlight",
+        "params": {
+          "color": "#55cfff",
+          "density": 0.22,
+          "speed": 0.65
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "63373f94-c593-5fc0-9995-75e5e5e4d94a",
+        "effect": "static",
+        "params": {
+          "color": "#04142c"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-gold-stars",
+    "name": "ゴールドスター",
+    "layers": [
+      {
+        "id": "3c0ccdf9-ff07-524e-a2ed-8b7a8c120548",
+        "effect": "starlight",
+        "params": {
+          "color": "#ffd36b",
+          "density": 0.45,
+          "speed": 1.1
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "cab03fea-ab36-5db7-a500-11468cdbb3d1",
+        "effect": "static",
+        "params": {
+          "color": "#1b0d04"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-cyan-ripple",
+    "name": "シアンリップル",
+    "layers": [
+      {
+        "id": "7b7cfba7-6b5b-53ff-acf1-a3f8d4d19515",
+        "effect": "ripple",
+        "params": {
+          "color": "#39eaff",
+          "decay": 2.5,
+          "speed": 0.7
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "4fdf5b62-27ce-5d85-8d0d-44b16acb92f3",
+        "effect": "static",
+        "params": {
+          "color": "#04101b"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-pink-reactive",
+    "name": "ピンクリアクティブ",
+    "layers": [
+      {
+        "id": "df200807-b307-57c5-94d7-8cbfe022eb17",
+        "effect": "reactive",
+        "params": {
+          "color": "#ff59ad",
+          "decay": 1.2,
+          "speed": 1
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "49b54ce0-5e22-523e-9aaf-ef0c86cc0450",
+        "effect": "static",
+        "params": {
+          "color": "#160413"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-ice-reactive",
+    "name": "アイスリアクティブ",
+    "layers": [
+      {
+        "id": "1cd7cd46-edfa-5fc1-9db9-8e9decccecac",
+        "effect": "reactive",
+        "params": {
+          "color": "#a2f9ff",
+          "decay": 0.55,
+          "speed": 1
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "9901a126-621c-5987-86e1-760006b1f718",
+        "effect": "static",
+        "params": {
+          "color": "#041321"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-chord-glow",
+    "name": "コードグロウ",
+    "layers": [
+      {
+        "id": "cfa7195b-1d16-5853-a89e-a23247d27b90",
+        "effect": "chord_color",
+        "params": {},
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "588408af-9f2f-5c79-a644-890e7ccb0711",
+        "effect": "static",
+        "params": {
+          "color": "#080b17"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-tempo-cyan",
+    "name": "テンポシアン",
+    "layers": [
+      {
+        "id": "5f6f5b30-3cba-5918-84d7-398906f6222b",
+        "effect": "tempo_pulse",
+        "params": {
+          "color": "#40eaff",
+          "bpm": 120
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "4cde5eeb-8af1-5b1d-9775-a043315bf34b",
+        "effect": "static",
+        "params": {
+          "color": "#04131a"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-metronome-rose",
+    "name": "メトロノームローズ",
+    "layers": [
+      {
+        "id": "61e80341-9a80-583c-b9ce-52656fe4f3b8",
+        "effect": "metronome",
+        "params": {
+          "color": "#ff6caa",
+          "bpm": 100,
+          "beats": 4
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "8facbe53-a240-5782-8745-62dffb59a12c",
+        "effect": "static",
+        "params": {
+          "color": "#190512"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-audio-violet",
+    "name": "オーディオバイオレット",
+    "layers": [
+      {
+        "id": "4f08ebcb-8466-508f-9f73-c706fdf6b329",
+        "effect": "audio_pulse",
+        "params": {
+          "color": "#ab68ff",
+          "sensitivity": 1.5
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "add",
+        "enabled": true
+      },
+      {
+        "id": "4754a5d6-95a3-5e23-865d-8c0b22366807",
+        "effect": "static",
+        "params": {
+          "color": "#0d071a"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-deep-blue",
+    "name": "ディープブルー",
+    "layers": [
+      {
+        "id": "af776c4e-e760-5dfb-99a0-08626eb28ff0",
+        "effect": "static",
+        "params": {
+          "color": "#006dc9"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-mint-static",
+    "name": "ミント",
+    "layers": [
+      {
+        "id": "b5c0b6ae-7ee1-5a15-aa7f-a24bdb9a7070",
+        "effect": "static",
+        "params": {
+          "color": "#72edc3"
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
+  },
+  {
+    "schema": 1,
+    "id": "keylume-v070-warm-ember",
+    "name": "エンバー",
+    "layers": [
+      {
+        "id": "9e3dfba3-fd3c-508c-9108-cd1dcc45adb3",
+        "effect": "aurora",
+        "params": {
+          "colors": [
+            "#7e0e10",
+            "#f55311",
+            "#ffd35c"
+          ],
+          "speed": 1.1
+        },
+        "zone": "all",
+        "opacity": 1,
+        "blend": "normal",
+        "enabled": true
+      }
+    ],
+    "post": {
+      "brightness": 0.8,
+      "saturation": 1,
+      "temperatureK": 6500,
+      "gamma": 2.2
+    },
+    "display": {
+      "enabled": false,
+      "widget": "presetName",
+      "showOnPresetChange": true
+    },
+    "builtin": true
   }
 ]

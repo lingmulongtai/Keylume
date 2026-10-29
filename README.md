@@ -2,20 +2,20 @@
 
 Launchkey MK4 61 向けの非公式ライティングコントローラー＆常駐演奏アプリ。Tauri 2 + Rust + React で、ウィンドウを閉じても演奏とライティングを続けます。
 
-**v0.6 は実機受け入れ未完了のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
+**v0.7 は実機受け入れ未完了のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
 
 ## 起動
 
-[GitHub Releases — v0.6.1 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.6.1) からダウンロードできます。
+[GitHub Releases — v0.7.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.7.0) からダウンロードできます。
 
 片手練習、左右の色分け、反対の手の自動伴奏、試聴、MIDI音量・音声タイミング調整を利用できます。固定した演奏表示は常にクリックを背面へ通し、操作パネルは独立して操作できます。Windows音量のフェーダーと、デスクトップ操作中の鍵盤演奏にも対応しています。Scale/Arp/Chord Mapの本体機能との干渉を避けるため、これらのアプリ割り当ては標準では無効です。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.1/Keylume_0.6.1_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.6.1/Keylume_0.6.1_windows-x64.zip)
+- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.7.0/Keylume_0.7.0_x64-setup.exe)
+- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.7.0/Keylume_0.7.0_windows-x64.zip)
 
 ![画面を離れずに選べるライティング](docs/images/v050-lighting.png)
 
-インストーラーはダウンロードした `Keylume_0.6.1_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.6.1_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+インストーラーはダウンロードした `Keylume_0.7.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.7.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
 
 1. 起動してデバイスプレビューを確認します。
 2. 「設定 → デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
@@ -59,7 +59,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 - 装飾を抑えた編集UI、上部ナビゲーション、エディターとプリセット一覧の共通本体図。
 - 起動時と12時間ごとの更新確認、手動確認、新バージョンの案内。Preview版の通知と自動確認を設定可能。
 - 18 エフェクト、5 ブレンド、ゾーン、不透明度、輝度・彩度・色温度・ガンマ、0.5 秒の切替。
-- 13 プリセット定義、複製・保存・削除・検索、`.keylume.json` 入出力、schema 0 → 1 移行。
+- 35 プリセット定義（34種類の通常ライティングと本体デモ）、複製・保存・削除・検索、`.keylume.json` 入出力、schema 0 → 1 移行。
 - Rust の常駐描画、差分送信、LED アドレスごとの最新値を保つ送信スレッド、トレイ、単一インスタンス、自動起動。
 - DAW プロセス監視、ハンドオフ、入力転送、ノート / CC / チャンネルの変換、ポート再接続、転送停止時のノート解放。
 - 前面アプリ / プロセス / 時間帯 / アイドルのプロファイル、手動固定、夜間・ロック時の減光。
@@ -71,7 +71,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 更新
 
-**v0.1.0からはv0.6.1を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
+**v0.1.0からはv0.7.0を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
 
 プリセットと設定はそのまま保持します。旧既定レイアウトは61鍵モデルの配置へ移行し、LEDアドレス・種類・検証状態を保持します。座標を編集したカスタムレイアウトは維持します。[本体図と移行仕様](docs/device-layout.md)
 
@@ -101,7 +101,7 @@ npm run package      # Windows NSIS インストーラー
 
 ## 検証
 
-今回の確認範囲は [v0.6.1検証記録](docs/verification-v0.6.1.md)、前回の確認とコミット一覧は [v0.6.0検証記録](docs/verification-v0.6.0.md)、機能全体の記録は [v0.5.0検証記録](docs/verification-v0.5.0.md) にまとめています。掲載画像はv0.5.0のUIのブラウザープレビューです。
+前回の確認範囲は [v0.6.1検証記録](docs/verification-v0.6.1.md)、その前の確認とコミット一覧は [v0.6.0検証記録](docs/verification-v0.6.0.md)、機能全体の記録は [v0.5.0検証記録](docs/verification-v0.5.0.md) にまとめています。掲載画像はv0.5.0のUIのブラウザープレビューです。
 
 GitHub Actions は PR と `main` で Windows のテスト・インストーラー生成・ネイティブ自己テストを実行します。`main` に含まれる `v*` タグから同じ検証を行い、成功した成果物だけを Preview Release に公開します。Release には SHA-256、ビルド元コミット、Mock 検証結果を添付します。
 

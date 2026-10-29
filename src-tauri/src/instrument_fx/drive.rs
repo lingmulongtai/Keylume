@@ -78,7 +78,7 @@ impl Drive {
             self.active = false;
         }
         self.input_at = (self.input_at + 1) % INPUT;
-        let blend = ((drive - 0.001) / 0.019).clamp(0., 1.);
+        let blend = ((drive - 0.001) / 0.999).clamp(0., 1.);
         dry + (wet - dry) * blend
     }
 }
@@ -113,6 +113,29 @@ mod tests {
             imag += *sample as f64 * phase.sin();
         }
         real.hypot(imag) * 2. / samples.len() as f64
+    }
+    #[test]
+    fn low_drive_stays_close_to_dry_and_increases_gradually() {
+        fn difference(drive: f32) -> f32 {
+            let mut stage = Drive::new();
+            let mut sum = 0.;
+            for i in 0..5000 {
+                let input = (i as f32 * 0.13).sin() * 0.4;
+                let out = stage.process(input, drive);
+                if i >= 1000 {
+                    let dry = ((i - LATENCY) as f32 * 0.13).sin() * 0.4;
+                    sum += (out - dry).powi(2);
+                }
+            }
+            (sum / 4000.).sqrt()
+        }
+        let gentle = difference(0.02);
+        let medium = difference(0.5);
+        assert!(
+            gentle < 0.005,
+            "low drive changed the sound too abruptly: {gentle}"
+        );
+        assert!(medium > gentle * 2., "drive should increase gradually");
     }
     #[test]
     fn high_note_foldover_is_reduced_by_at_least_twenty_decibels() {

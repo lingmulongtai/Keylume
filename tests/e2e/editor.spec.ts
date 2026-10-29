@@ -135,3 +135,12 @@ test('hardware face and clickable controls stay aligned at full zoom', async ({ 
   await page.getByRole('button', { name: '一覧・管理', exact: true }).click();
   await expect(page.locator('.preset-card').first().locator('[data-key]')).toHaveCount(61);
 });
+
+test('selects a new lighting preset and keeps it after reload', async ({ page }) => {
+  await page.getByLabel('適用するプリセット').click();
+  await expect(page.locator('.lighting-picker-grid > button')).toHaveCount(35);
+  await page.getByRole('button', { name: 'ライティング アイスリアクティブ', exact: true }).click();
+  await expect(page.getByLabel('適用するプリセット')).toContainText('アイスリアクティブ');
+  await page.reload();
+  await expect(page.getByLabel('適用するプリセット')).toContainText('アイスリアクティブ');
+});
