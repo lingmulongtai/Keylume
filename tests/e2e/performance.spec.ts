@@ -37,7 +37,7 @@ test('live hardware controls, pedal and snapshots survive navigating the editor'
   await page.getByRole('button', { name: '設定', exact: true }).click();
   await page.getByRole('button', { name: 'ホーム', exact: true }).click();
   await expect(fader).toHaveAttribute('data-value', '127');
-  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#72edc3');
   await page.getByRole('button', { name: '一時停止', exact: true }).click();
   await expect(fader).toHaveAttribute('data-value', 'unknown');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain —');
@@ -72,9 +72,9 @@ test('piano preferences persist and screen keys release on focus loss', async ({
   const key = page.getByRole('button', { name: '鍵盤 60（ピアノ）', exact: true });
   await key.focus();
   await page.keyboard.down('Space');
-  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#72edc3');
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  await expect(page.locator('.device-base [data-key="60"]')).not.toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).not.toHaveAttribute('fill', '#72edc3');
   await page.keyboard.up('Space');
   await page.getByRole('button', { name: '全音停止', exact: true }).click();
 });
@@ -103,10 +103,10 @@ test('lighting pause and resume retain playing keys and pedal with piano enabled
     'data-value',
     'unknown',
   );
-  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#72edc3');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
   await page.getByRole('button', { name: '再開', exact: true }).click();
-  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#e8c48e');
+  await expect(page.locator('.device-base [data-key="60"]')).toHaveAttribute('fill', '#72edc3');
   await expect(page.getByTestId('sustain-state')).toHaveText('Sustain ON');
 });
 
@@ -178,3 +178,4 @@ test('settings offers a persistent output choice and Windows default following',
   await page.getByText('音声と演奏の設定', { exact: true }).click();
   await expect(page.getByLabel('ピアノの出力先', { exact: true })).toHaveValue('');
 });
+
