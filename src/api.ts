@@ -133,6 +133,12 @@ try {
     mock = {
       ...mock,
       ...saved,
+      presets: [
+        ...(structuredClone(presets) as Preset[]),
+        ...saved.presets.filter(
+          (p: Preset) => !presets.some((builtin) => builtin.id === p.id) && !p.builtin,
+        ),
+      ],
       settings: {
         ...defaults,
         ...saved.settings,

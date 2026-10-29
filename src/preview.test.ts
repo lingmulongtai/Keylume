@@ -159,6 +159,8 @@ describe('preview and interchange', () => {
     expect(f[1][1]).toBeGreaterThan(0);
   });
   it('generates safe 7-bit frames for every bundled preset', () => {
+    expect(data.filter((p) => p.layers.length > 0).length).toBeGreaterThanOrEqual(30);
+    expect(new Set(data.map((p) => p.id)).size).toBe(data.length);
     for (const p of data)
       for (const time of [0, 1, 1000]) {
         const frame = renderPreview(p as Preset, layout as Layout, time, 1);
