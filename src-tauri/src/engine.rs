@@ -11,6 +11,12 @@ pub struct Hit {
     pub led: Option<String>,
     pub note: u8,
 }
+pub(crate) fn idle_button(id: &str) -> bool {
+    matches!(
+        id,
+        "btn.encoderUp" | "btn.encoderDown" | "btn.scene" | "btn.function"
+    ) || (id.starts_with("fbtn.") && id[5..].parse::<u8>().is_ok_and(|n| (1..=9).contains(&n)))
+}
 pub struct Engine {
     pub hits: Vec<Hit>,
     pub held: HashSet<u8>,
@@ -148,6 +154,20 @@ impl Engine {
                     [0.1, 0.8, 1.]
                 };
                 *color = mix(*color, accent, strength);
+            }
+        }
+        // Keep the otherwise unlit navigation and fader buttons discoverable.
+        // Apply before post-processing so master brightness and blackout still work.
+        for (color, led) in colors.iter_mut().zip(&layout.leds) {
+            if idle_button(&led.id) && led.kind != "none" {
+                let peak = color.iter().copied().fold(0., f32::max);
+                if peak < 0.24 {
+                    *color = if peak > 0.001 {
+                        color.map(|v| v * 0.24 / peak)
+                    } else {
+                        [0.24; 3]
+                    };
+                }
             }
         }
         let quantized = colors
@@ -508,6 +528,28 @@ mod tests {
             .all(|v| *v == [0; 3]));
     }
     #[test]
+    fn idle_buttons_remain_dim_and_respect_master_blackout() {
+        let layout = DeviceLayout::default();
+        let mut preset = builtin_presets().remove(0);
+        preset.layers.clear();
+        preset.post.brightness = 1.;
+        preset.post.gamma = 1.;
+        let mut engine = Engine::default();
+        let (_, on) = engine.render(&preset, &layout, 1.);
+        let (_, off) = engine.render(&preset, &layout, 0.);
+        let mut count = 0;
+        for (i, led) in layout.leds.iter().enumerate() {
+            if idle_button(&led.id) {
+                count += 1;
+                assert_eq!(on[i], [30; 3]);
+            } else {
+                assert_eq!(on[i], [0; 3]);
+            }
+            assert_eq!(off[i], [0; 3]);
+        }
+        assert_eq!(count, 13);
+    }
+    #[test]
     fn spectrum_spans_all_frequency_bands_in_each_hardware_bank() {
         let layout = DeviceLayout::default();
         let preset = builtin_presets()
@@ -521,8 +563,8 @@ mod tests {
         let frame = engine.render(&preset, &layout, 1.).1;
         assert!(frame[0].iter().any(|v| *v > 0));
         assert_eq!(frame[7], [0; 3]);
-        assert!(frame[fader("fbtn.1")].iter().any(|v| *v > 0));
-        assert_eq!(frame[fader("fbtn.9")], [0; 3]);
+        assert!(frame[fader("fbtn.1")].iter().any(|v| *v > 3));
+        assert_eq!(frame[fader("fbtn.9")], [3; 3]);
         engine.bands.fill(0.);
         engine.peaks.fill(0.);
         engine.bands[7] = 1.;
@@ -530,8 +572,8 @@ mod tests {
         let frame = engine.render(&preset, &layout, 1.).1;
         assert_eq!(frame[0], [0; 3]);
         assert!(frame[7].iter().any(|v| *v > 0));
-        assert_eq!(frame[fader("fbtn.1")], [0; 3]);
-        assert!(frame[fader("fbtn.9")].iter().any(|v| *v > 0));
+        assert_eq!(frame[fader("fbtn.1")], [3; 3]);
+        assert!(frame[fader("fbtn.9")].iter().any(|v| *v > 3));
     }
     #[test]
     fn rainbow_release_fades_and_chords_keep_saturated_deterministic_colors() {
@@ -656,6 +698,10 @@ mod tests {
         let mut p = builtin_presets().remove(0);
         p.layers[0].zone = crate::model::Zone::Named("pads.top".into());
         let (_, q) = Engine::default().render(&p, &DeviceLayout::default(), 1.);
-        assert!(q[8..].iter().all(|v| *v == [0; 3]));
+        for (led, color) in DeviceLayout::default().leds.iter().zip(q) {
+            if !led.id.starts_with("pad.top.") && !idle_button(&led.id) {
+                assert_eq!(color, [0; 3]);
+            }
+        }
     }
 }

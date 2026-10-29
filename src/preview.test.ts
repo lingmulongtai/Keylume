@@ -22,9 +22,14 @@ describe('preview and interchange', () => {
       expect(renderPreview(p, l, 1.4, 1)[index]).toEqual([0, 0, 0]);
       previewInput([0xb6, 74, 127], 'daw', l);
       expect(
-        renderPreview(p, l, 1.4, 1)
-          .flat()
-          .every((v) => v === 0),
+        renderPreview(p, l, 1.4, 1).every(
+          (color, i) =>
+            /^fbtn\.[1-9]$/.test(l.leds[i].id) ||
+            ['btn.encoderUp', 'btn.encoderDown', 'btn.scene', 'btn.function'].includes(
+              l.leds[i].id,
+            ) ||
+            color.every((v) => v === 0),
+        ),
       ).toBe(true);
       previewInput([0xb0, 102, 127], 'daw', l);
       expect(Math.max(...renderPreview(p, l, 3, 1)[index])).toBe(127);
@@ -33,6 +38,29 @@ describe('preview and interchange', () => {
       clearPreviewInput();
       clock.mockRestore();
     }
+  });
+  it('keeps the requested buttons dim while respecting blackout and flashes', () => {
+    const p = structuredClone(data[0]) as Preset;
+    p.layers = [];
+    p.post = { brightness: 1, saturation: 1, temperatureK: 6500, gamma: 1 };
+    const l = layout as Layout;
+    clearPreviewInput();
+    const ids = [
+      'btn.encoderUp',
+      'btn.encoderDown',
+      'btn.scene',
+      'btn.function',
+      ...Array.from({ length: 9 }, (_, i) => `fbtn.${i + 1}`),
+    ];
+    const frame = renderPreview(p, l, 10, 1);
+    for (const id of ids) {
+      const index = l.leds.findIndex((led) => led.id === id);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(frame[index]).toEqual([30, 30, 30]);
+      expect(renderPreview(p, l, 10, 0)[index]).toEqual([0, 0, 0]);
+    }
+    const ordinary = l.leds.findIndex((led) => led.id === 'btn.trackNext');
+    expect(frame[ordinary]).toEqual([0, 0, 0]);
   });
   it('fades released rainbow notes and keeps opposing notes colorful', () => {
     const l = layout as Layout;
@@ -47,7 +75,7 @@ describe('preview and interchange', () => {
         d: Math.abs(lightingPosition(l, i) - x),
         kind: led.kind,
       }))
-      .filter((v) => v.kind === 'rgb')
+      .filter((v) => v.kind === 'rgb' && l.leds[v.i].id.startsWith('pad.'))
       .sort((a, b) => a.d - b.d)[0].i;
     let at = 0;
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => at * 1000);

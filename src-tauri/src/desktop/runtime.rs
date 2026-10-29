@@ -1359,7 +1359,10 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         } else {
                             protocol::rgb(&candidate, color, status.pad_mode == 15)
                         }
-                    } else if power_save && led.kind == "rgb" {
+                    } else if power_save
+                        && led.kind == "rgb"
+                        && !crate::engine::idle_button(&led.id)
+                    {
                         let layer = hardware_layer[0];
                         protocol::palette(
                             led,
@@ -1381,7 +1384,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         protocol::rgb(led, color, status.pad_mode == 15)
                     };
                     if let Ok(msg) = msg {
-                        if power_save && led.kind == "rgb" {
+                        if power_save && led.kind == "rgb" && !crate::engine::idle_button(&led.id) {
                             if native_fx.get(&led.id) == Some(&msg) {
                                 continue;
                             }
@@ -1410,7 +1413,10 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                         {
                             errors += 1;
                         } else {
-                            if power_save && led.kind == "rgb" {
+                            if power_save
+                                && led.kind == "rgb"
+                                && !crate::engine::idle_button(&led.id)
+                            {
                                 native_fx.insert(led.id.clone(), msg);
                             }
                             errors = 0;
