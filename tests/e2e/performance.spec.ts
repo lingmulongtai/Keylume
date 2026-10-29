@@ -178,4 +178,3 @@ test('settings offers a persistent output choice and Windows default following',
   await page.getByText('音声と演奏の設定', { exact: true }).click();
   await expect(page.getByLabel('ピアノの出力先', { exact: true })).toHaveValue('');
 });
-
