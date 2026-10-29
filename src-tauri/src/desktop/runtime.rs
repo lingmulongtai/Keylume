@@ -1320,6 +1320,7 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                 let power_save = hardware_layer.len() == 1
                     && hardware_layer[0].effect == "hardware_fx"
                     && probe.is_none()
+                    && !inactive
                     && brightness >= 0.999
                     && active_preset.post.brightness >= 0.999
                     && active_preset.post.saturation == 1.
@@ -1333,7 +1334,16 @@ fn worker(app: AppHandle, core: Arc<Core>, actions: Receiver<Action>) {
                     );
                 }
                 let changed: Vec<_> = if power_save {
-                    frame.iter().copied().enumerate().collect()
+                    frame
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .filter(|(i, color)| {
+                            !crate::engine::idle_button(&desired.layout.leds[*i].id)
+                                || full
+                                || last_frame.get(*i) != Some(color)
+                        })
+                        .collect()
                 } else {
                     differences(&last_frame, &frame, full || was_native_fx).collect()
                 };

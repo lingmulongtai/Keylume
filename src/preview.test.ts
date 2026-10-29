@@ -58,6 +58,8 @@ describe('preview and interchange', () => {
       expect(index).toBeGreaterThanOrEqual(0);
       expect(frame[index]).toEqual([30, 30, 30]);
       expect(renderPreview(p, l, 10, 0)[index]).toEqual([0, 0, 0]);
+      const dim = { ...p, post: { ...p.post, brightness: 0.15, gamma: 2.2 } };
+      expect(renderPreview(dim, l, 10, 0.2)[index]).toEqual([1, 1, 1]);
     }
     const ordinary = l.leds.findIndex((led) => led.id === 'btn.trackNext');
     expect(frame[ordinary]).toEqual([0, 0, 0]);

@@ -177,7 +177,15 @@ impl Engine {
                 if l.kind == "none" {
                     [0; 3]
                 } else {
-                    quantize(*c, &p.post, brightness, l.kind == "mono")
+                    let mut q = quantize(*c, &p.post, brightness, l.kind == "mono");
+                    if idle_button(&l.id)
+                        && brightness > 0.
+                        && p.post.brightness > 0.
+                        && q == [0; 3]
+                    {
+                        q = [1; 3];
+                    }
+                    q
                 }
             })
             .collect();
@@ -537,11 +545,15 @@ mod tests {
         let mut engine = Engine::default();
         let (_, on) = engine.render(&preset, &layout, 1.);
         let (_, off) = engine.render(&preset, &layout, 0.);
+        preset.post.brightness = 0.15;
+        preset.post.gamma = 2.2;
+        let (_, dim) = engine.render(&preset, &layout, 0.2);
         let mut count = 0;
         for (i, led) in layout.leds.iter().enumerate() {
             if idle_button(&led.id) {
                 count += 1;
                 assert_eq!(on[i], [30; 3]);
+                assert_eq!(dim[i], [1; 3]);
             } else {
                 assert_eq!(on[i], [0; 3]);
             }

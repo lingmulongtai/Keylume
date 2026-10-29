@@ -333,7 +333,13 @@ export function renderPreview(
     c = c.map((v) => v ** preset.post.gamma) as Color;
     if (led.kind === 'mono')
       c = Array(3).fill(c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722) as Color;
-    return c.map((v) => Math.round(v * 127)) as Color;
+    const quantized = c.map((v) => Math.round(v * 127)) as Color;
+    const idle =
+      ['btn.encoderUp', 'btn.encoderDown', 'btn.scene', 'btn.function'].includes(led.id) ||
+      /^fbtn\.[1-9]$/.test(led.id);
+    return idle && master > 0 && preset.post.brightness > 0 && quantized.every((v) => v === 0)
+      ? [1, 1, 1]
+      : quantized;
   });
 }
 export function ditherImage(data: Uint8ClampedArray, width = 128, height = 64): number[] {
