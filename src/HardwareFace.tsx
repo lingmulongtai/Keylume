@@ -75,7 +75,7 @@ function HardwareFace({
             rx="1.7"
             stroke="#535356"
             strokeWidth=".5"
-            fill={held?.has('key.' + k.note) ? '#e8c48e' : `url(#${id}-white)`}
+            fill={held?.has('key.' + k.note) ? '#72edc3' : `url(#${id}-white)`}
           />
         ))}
       {layout.decor.keys
@@ -96,7 +96,7 @@ function HardwareFace({
               width={k.w}
               height={bed.blackHeight}
               rx="1"
-              fill={held?.has('key.' + k.note) ? '#b99359' : `url(#${id}-black)`}
+              fill={held?.has('key.' + k.note) ? '#388a79' : `url(#${id}-black)`}
             />
             <path
               d={`M${k.x + 2} ${bed.y + 5}v${bed.blackHeight - 12}`}
@@ -152,7 +152,7 @@ function HardwareFace({
           {(i ? input?.modulation : input?.pitch) != null && (
             <path
               d={`M${wheel.x + 1} ${wheel.y + 4 + (1 - (i ? input!.modulation! / 127 : input!.pitch! / 16383)) * (wheel.h - 8)}h${wheel.w - 2}`}
-              stroke="#e8c48e"
+              stroke="#72edc3"
               strokeWidth="2"
             />
           )}
@@ -187,14 +187,14 @@ function HardwareFace({
               width="2.8"
               height={(fader.h * input.faders[i]!) / 127}
               rx="1.4"
-              fill="#e8c48e"
+              fill="#72edc3"
             />
           )}
           <text
             x={fader.x}
             y={fader.y + fader.h + 7}
             textAnchor="middle"
-            fill="#f1d5ac"
+            fill="#b2ffea"
             fontSize="5.2"
             fontFamily="Arial, sans-serif"
           >
@@ -225,7 +225,7 @@ function HardwareFace({
             height="6.5"
             rx="1.2"
             fill="#101013"
-            stroke={held?.has(`fader-${i + 1}`) ? '#e8c48e' : '#505056'}
+            stroke={held?.has(`fader-${i + 1}`) ? '#72edc3' : '#505056'}
             strokeWidth=".7"
           />
           <path
@@ -292,7 +292,7 @@ function HardwareFace({
               data-meter={`encoder-${i + 1}`}
               d={arc(encoder.x, encoder.y, encoder.r + 3, input.encoders[i]! / 127)}
               fill="none"
-              stroke="#e8c48e"
+              stroke="#72edc3"
               strokeWidth="2.2"
               strokeLinecap="round"
             />
@@ -301,7 +301,7 @@ function HardwareFace({
             x={encoder.x}
             y={encoder.y + encoder.r + 9}
             textAnchor="middle"
-            fill="#f1d5ac"
+            fill="#b2ffea"
             fontSize="5.2"
             fontFamily="Arial, sans-serif"
           >
@@ -316,7 +316,7 @@ function HardwareFace({
             cy={encoder.y}
             r={encoder.r}
             fill="#333337"
-            stroke={held?.has(`encoder-${i + 1}`) ? '#e8c48e' : '#525257'}
+            stroke={held?.has(`encoder-${i + 1}`) ? '#72edc3' : '#525257'}
             strokeWidth=".7"
           />
           <path
@@ -349,7 +349,7 @@ function HardwareFace({
               held?.has(control.id) ||
               (control.id === 'arp' && input?.features['73']) ||
               (control.id === 'scale' && input?.features['74'])
-                ? '#73634b'
+                ? '#28564e'
                 : '#1b1b1e'
             }
             stroke="#0d0d10"
@@ -379,7 +379,7 @@ function HardwareFace({
                   ? ledColor(hardwareColor(led.id, colors[i] ?? [0, 0, 0]), gamma)
                   : '#505057'
                 : held?.has(led.id)
-                  ? '#73634b'
+                  ? '#28564e'
                   : '#1a1a1d'
             }
             stroke="#101013"

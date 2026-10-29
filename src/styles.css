@@ -2168,7 +2168,7 @@ code,
 }
 .controller-map svg [role='button']:hover rect,
 .controller-map svg [role='button']:focus-visible rect {
-  stroke: #f1d5ac;
+  stroke: #b2ffea;
   stroke-width: 1.5;
 }
 .controller-map > small {
