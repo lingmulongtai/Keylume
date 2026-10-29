@@ -134,10 +134,12 @@ try {
       ...mock,
       ...saved,
       presets: [
-        ...(structuredClone(presets) as Preset[]),
-        ...saved.presets.filter(
-          (p: Preset) => !presets.some((builtin) => builtin.id === p.id) && !p.builtin,
+        ...(structuredClone(presets) as Preset[]).filter(
+          (builtin) => !saved.presets.some((p: Preset) => p.id === builtin.id && !p.builtin),
         ),
+        ...saved.presets
+          .filter((p: Preset) => !p.builtin || !presets.some((builtin) => builtin.id === p.id))
+          .map((p: Preset) => ({ ...p, builtin: false })),
       ],
       settings: {
         ...defaults,
@@ -411,6 +413,7 @@ export async function command<T = unknown>(
       if (typeof args.json !== 'string' || args.json.length > 2_000_000)
         throw Error('プリセットは 2 MB 以下にしてください');
       const p = validatePreset(JSON.parse(args.json));
+      p.builtin = false;
       if (mock.presets.some((v) => v.id === p.id)) p.id = uid();
       mock.presets.push(p);
       break;

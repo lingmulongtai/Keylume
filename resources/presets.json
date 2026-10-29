@@ -441,7 +441,7 @@
   },
   {
     "schema": 1,
-    "id": "rainbow-cycle",
+    "id": "keylume-v070-rainbow-cycle",
     "name": "レインボーサイクル",
     "layers": [
       {
@@ -471,7 +471,7 @@
   },
   {
     "schema": 1,
-    "id": "rainbow-fast",
+    "id": "keylume-v070-rainbow-fast",
     "name": "レインボーラッシュ",
     "layers": [
       {
@@ -503,7 +503,7 @@
   },
   {
     "schema": 1,
-    "id": "rainbow-vertical",
+    "id": "keylume-v070-rainbow-vertical",
     "name": "レインボーカーテン",
     "layers": [
       {
@@ -535,7 +535,7 @@
   },
   {
     "schema": 1,
-    "id": "rainbow-outward",
+    "id": "keylume-v070-rainbow-outward",
     "name": "レインボーアウト",
     "layers": [
       {
@@ -567,7 +567,7 @@
   },
   {
     "schema": 1,
-    "id": "ocean-breath",
+    "id": "keylume-v070-ocean-breath",
     "name": "オーシャンブレス",
     "layers": [
       {
@@ -602,7 +602,7 @@
   },
   {
     "schema": 1,
-    "id": "violet-breath",
+    "id": "keylume-v070-violet-breath",
     "name": "バイオレットブレス",
     "layers": [
       {
@@ -636,7 +636,7 @@
   },
   {
     "schema": 1,
-    "id": "ice-gradient",
+    "id": "keylume-v070-ice-gradient",
     "name": "アイスグラデーション",
     "layers": [
       {
@@ -671,7 +671,7 @@
   },
   {
     "schema": 1,
-    "id": "sakura-gradient",
+    "id": "keylume-v070-sakura-gradient",
     "name": "さくらグラデーション",
     "layers": [
       {
@@ -706,7 +706,7 @@
   },
   {
     "schema": 1,
-    "id": "forest-aurora",
+    "id": "keylume-v070-forest-aurora",
     "name": "フォレストオーロラ",
     "layers": [
       {
@@ -741,7 +741,7 @@
   },
   {
     "schema": 1,
-    "id": "cosmic-aurora",
+    "id": "keylume-v070-cosmic-aurora",
     "name": "コズミックオーロラ",
     "layers": [
       {
@@ -776,7 +776,7 @@
   },
   {
     "schema": 1,
-    "id": "blue-stars",
+    "id": "keylume-v070-blue-stars",
     "name": "ブルースター",
     "layers": [
       {
@@ -819,7 +819,7 @@
   },
   {
     "schema": 1,
-    "id": "gold-stars",
+    "id": "keylume-v070-gold-stars",
     "name": "ゴールドスター",
     "layers": [
       {
@@ -862,7 +862,7 @@
   },
   {
     "schema": 1,
-    "id": "cyan-ripple",
+    "id": "keylume-v070-cyan-ripple",
     "name": "シアンリップル",
     "layers": [
       {
@@ -905,7 +905,7 @@
   },
   {
     "schema": 1,
-    "id": "pink-reactive",
+    "id": "keylume-v070-pink-reactive",
     "name": "ピンクリアクティブ",
     "layers": [
       {
@@ -948,7 +948,7 @@
   },
   {
     "schema": 1,
-    "id": "ice-reactive",
+    "id": "keylume-v070-ice-reactive",
     "name": "アイスリアクティブ",
     "layers": [
       {
@@ -991,7 +991,7 @@
   },
   {
     "schema": 1,
-    "id": "chord-glow",
+    "id": "keylume-v070-chord-glow",
     "name": "コードグロウ",
     "layers": [
       {
@@ -1030,7 +1030,7 @@
   },
   {
     "schema": 1,
-    "id": "tempo-cyan",
+    "id": "keylume-v070-tempo-cyan",
     "name": "テンポシアン",
     "layers": [
       {
@@ -1072,7 +1072,7 @@
   },
   {
     "schema": 1,
-    "id": "metronome-rose",
+    "id": "keylume-v070-metronome-rose",
     "name": "メトロノームローズ",
     "layers": [
       {
@@ -1115,7 +1115,7 @@
   },
   {
     "schema": 1,
-    "id": "audio-violet",
+    "id": "keylume-v070-audio-violet",
     "name": "オーディオバイオレット",
     "layers": [
       {
@@ -1157,7 +1157,7 @@
   },
   {
     "schema": 1,
-    "id": "deep-blue",
+    "id": "keylume-v070-deep-blue",
     "name": "ディープブルー",
     "layers": [
       {
@@ -1187,7 +1187,7 @@
   },
   {
     "schema": 1,
-    "id": "mint-static",
+    "id": "keylume-v070-mint-static",
     "name": "ミント",
     "layers": [
       {
@@ -1217,7 +1217,7 @@
   },
   {
     "schema": 1,
-    "id": "warm-ember",
+    "id": "keylume-v070-warm-ember",
     "name": "エンバー",
     "layers": [
       {

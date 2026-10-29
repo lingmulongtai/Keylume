@@ -33,3 +33,22 @@ it('replaces every active-preset reference when deleting the active custom prese
   expect(restored.settings.activePreset).toBe(restored.preset.id);
   expect(restored.status.activePreset).toBe(restored.preset.id);
 });
+
+it('keeps imported and colliding user presets when restoring preview storage', async () => {
+  const api = await import('./api');
+  await api.command('import_preset', { json: JSON.stringify(presets[0]) });
+  const state = await api.getState();
+  const imported = state.presets.find((p) => p.id !== presets[0].id && p.name === presets[0].name)!;
+  expect(imported.builtin).toBe(false);
+  const saved = JSON.parse(localStorage.getItem('keylume-preview-v1')!);
+  saved.presets.push({ ...presets.at(-1), name: 'My existing preset', builtin: false });
+  saved.presets.push({ ...presets[0], id: 'legacy-import', builtin: true });
+  localStorage.setItem('keylume-preview-v1', JSON.stringify(saved));
+  vi.resetModules();
+  const restored = await (await import('./api')).getState();
+  expect(restored.presets.find((p) => p.id === presets.at(-1)!.id)?.name).toBe(
+    'My existing preset',
+  );
+  expect(restored.presets.find((p) => p.id === 'legacy-import')?.builtin).toBe(false);
+  expect(restored.presets.some((p) => p.id === imported.id)).toBe(true);
+});
