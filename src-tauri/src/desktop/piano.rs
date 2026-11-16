@@ -44,6 +44,7 @@ struct Shared {
     blocked: AtomicBool,
     performing: AtomicBool,
     volume: AtomicU32,
+    gain_db: AtomicU32,
     octave: AtomicI8,
     peak: AtomicU32,
     frames: AtomicU32,
@@ -245,6 +246,7 @@ impl Piano {
             blocked: AtomicBool::new(false),
             performing: AtomicBool::new(true),
             volume: AtomicU32::new(0.5f32.to_bits()),
+            gain_db: AtomicU32::new(0f32.to_bits()),
             octave: AtomicI8::new(0),
             peak: AtomicU32::new(0),
             frames: AtomicU32::new(0),
@@ -440,6 +442,10 @@ impl Piano {
             .store(settings.volume.to_bits(), Ordering::Release);
         self.bus
             .shared
+            .gain_db
+            .store(settings.gain_db.to_bits(), Ordering::Release);
+        self.bus
+            .shared
             .octave
             .store(settings.octave, Ordering::Release);
         if let Ok(id) = SoundId::parse(&settings.sound) {
@@ -630,6 +636,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     let mut loop_events = Vec::with_capacity(8193);
     let mut loop_left = [0.; 256];
     let mut loop_right = [0.; 256];
+    let mut gain = crate::piano::PianoGain::new(config.sample_rate.0);
     let rate = config.sample_rate.0 as f64;
     let mut generation = shared.generation.load(Ordering::Acquire);
     let mut left = [0.; 256];
@@ -706,6 +713,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 let effect_settings = InstrumentFx::from_values(std::array::from_fn(|i| {
                     f32::from_bits(shared.effects[i].load(Ordering::Relaxed))
                 }));
+                gain.set_db(f32::from_bits(shared.gain_db.load(Ordering::Relaxed)));
                 let mut peak = 0f32;
                 for chunk in data.chunks_mut(64 * channels) {
                     let frames = chunk.len() / channels;
@@ -730,8 +738,9 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                         for i in 0..frames {
                             let (dl, dr) = drums.stereo();
                             let (ll, lr) = loop_drums.stereo();
-                            left[i] = left[i] * volume + (dl + ll) * drum_volume;
-                            right[i] = right[i] * volume + (dr + lr) * drum_volume;
+                            let boost = gain.next();
+                            left[i] = left[i] * volume * boost + (dl + ll) * drum_volume;
+                            right[i] = right[i] * volume * boost + (dr + lr) * drum_volume;
                         }
                     }
                     if !active {

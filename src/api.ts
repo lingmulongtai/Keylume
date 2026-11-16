@@ -84,6 +84,7 @@ export const defaults: Settings = {
     drumKit: defaultDrumKit(),
     drumVolume: 0.7,
     volume: 0.5,
+    gainDb: 0,
     volumeFader: 9,
     octave: 0,
     outputDevice: '',
