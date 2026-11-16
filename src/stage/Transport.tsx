@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Upload, Play, Pause, Square } from 'lucide-react';
 import { stageCommand } from './api';
 import { importMidi } from './import-midi';
@@ -23,6 +23,8 @@ export default function StageTransport({
 }) {
   const input = useRef<HTMLInputElement>(null),
     [busy, setBusy] = useState(false);
+  const importing = useRef<AbortController | null>(null);
+  useEffect(() => () => importing.current?.abort(), []);
   const run = async (name: string, args: Record<string, unknown> = {}) => {
     setBusy(true);
     try {
@@ -36,14 +38,23 @@ export default function StageTransport({
     }
   };
   const load = async (file: File) => {
+    importing.current?.abort();
+    const controller = new AbortController();
+    importing.current = controller;
     setBusy(true);
     try {
-      await stageCommand('load', { song: await importMidi(file) });
-      await stageCommand('settings', { patch: { mode: 'practice' } });
+      const loaded = await importMidi(file, controller.signal);
+      controller.signal.throwIfAborted();
+      await stageCommand('load', { song: loaded });
+      if (!controller.signal.aborted)
+        await stageCommand('settings', { patch: { mode: 'practice' } });
     } catch (e) {
-      error(String(e));
+      if (!controller.signal.aborted) error(String(e));
     } finally {
-      setBusy(false);
+      if (importing.current === controller && !controller.signal.aborted) {
+        importing.current = null;
+        setBusy(false);
+      }
     }
   };
   return (
