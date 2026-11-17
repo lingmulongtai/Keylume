@@ -253,6 +253,29 @@ mod tests {
         assert!(import_preset(&v.to_string()).is_err());
     }
     #[test]
+    fn piano_gain_survives_native_storage_reload() {
+        let root = std::env::temp_dir().join(format!(
+            "keylume-gain-test-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let settings = Settings {
+            piano: crate::piano::PianoSettings {
+                gain_db: 6.,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        Storage::new(root.clone())
+            .unwrap()
+            .save("settings.json", &settings)
+            .unwrap();
+        let restored = Storage::new(root.clone()).unwrap().settings();
+        assert_eq!(restored.piano.gain_db, 6.);
+        assert_eq!(restored.piano.volume, settings.piano.volume);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn corrupt_settings_recover_from_backup() {
         let root = std::env::temp_dir().join(format!(
             "keylume-test-{}-{}",

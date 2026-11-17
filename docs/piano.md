@@ -66,3 +66,23 @@
 独自に割り当てたCustomモードのCC/NRPNを、どの物理操作子か自動判定することはできません。受信メッセージは入力欄とMIDIモニターに表示します。Octave/Transposeボタン自体の状態は公開仕様に報告がないため推測しません。図の鍵盤はC2〜C7の受信ノートを表示し、範囲外のノートは上部のNote欄で確認できます。鍵盤・ホイール・つまみ自体が実機で発光する機能ではありません。
 
 根拠: [Novation DAW mode](https://userguides.novationmusic.com/hc/en-gb/articles/23754923378066-Launchkey-Programmer-s-DAW-mode)、[Feature controls](https://userguides.novationmusic.com/hc/en-gb/articles/23754916107922-Launchkey-feature-controls)、[Components](https://support.novationmusic.com/hc/en-gb/articles/20229018847506-Launchkey-MK4-Components-Guide)。実機の受信ログと物理ペダルでの確認は今後の受け入れ対象です。
+
+## 音源の音量が小さいとき
+
+「音声と演奏の設定」の「音源ゲイン」で 0〜+12 dB の補正ができます。既定値は 0 dB で、既存の音量は変わりません。まず +3 dB 程度から、音量を下げた状態で調整してください。グランドピアノなど音源ごとの録音レベル差を補うための機能です。
+
+ゲイン変更は 20 ms で滑らかに反映します。演奏とピアノルーパーに適用し、ドラム・お手本 MIDI 再生には適用しません。最終出力の過大信号保護は維持していますが、大きく増幅した強奏・和音はソフトリミットにより歪み得ます。出力メーターが上限付近なら下げてください。音源サンプルの質やベロシティによる音色変化そのものを高品質化する機能ではありません。
+
+音源の客観的なレベルを音を鳴らさず調べる場合:
+
+```powershell
+cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --example piano_levels -- '<ローカルのGeneralUser-GS-2.0.3.sf2>'
+```
+
+同じ 6 音和音をベロシティ 35 / 80 / 110 / 127 で 1 秒レンダリングし、ピークと RMS を表示します。OS やスピーカーの音量、主観的な迫力は測定しません。
+
+### オフライン比較（2026-11-17）
+
+48 kHz、bank 0/program 0、MIDIノート 48/55/60/64/67/72、エフェクトなし、Synth master 0.7、1秒の比較です。アプリ音量とOS音量は含みません。ベロシティ110では、同梱 Upright がピーク −3.8 dBFS / RMS −19.8 dBFS、GeneralUser GS 2.0.3 の Grand が −9.8 / −22.2 dBFS でした。Grand はピーク約6 dB、RMS約2.4 dB小さく、既定のアプリ音量0.5ではさらに約6 dB下がります。ベロシティ35から127へのGrandのRMS差は約20 dBでした。
+
+この結果は限定した和音の音量差であり、全音域の比較や実聴による音質評価ではありません。入力ベロシティは変更せず、強弱を維持しています。+3〜6 dB は比較の出発点にできますが、常に必要な補正値でも、迫力の改善を保証する値でもありません。

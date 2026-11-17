@@ -86,6 +86,7 @@ export interface PianoSettings {
   drumKit: import('./drum-kits').DrumSettings;
   drumVolume: number;
   volume: number;
+  gainDb: number;
   volumeFader: number;
   octave: number;
   outputDevice: string;

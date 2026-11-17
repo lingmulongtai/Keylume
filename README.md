@@ -135,3 +135,5 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 - `docs/`: 受け入れ手順、実装状況
 
 パレットのプレビューは近似値です。実測パレットや検証済み機器アドレスとして扱わないでください。外部 SDK のソースコードはコピーしていません。フォントのライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に記載しています。
+
+OneDrive内のチェックアウトでPDB書込みに失敗する場合は、[Windowsのローカルビルド出力](docs/windows-build.md)を参照してください。

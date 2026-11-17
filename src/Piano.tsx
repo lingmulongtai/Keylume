@@ -133,6 +133,22 @@ export default function Piano({
         <summary>音声と演奏の設定</summary>
         <div className="piano-options">
           <label className="field">
+            <span>音源ゲイン: +{p.gainDb ?? 0} dB</span>
+            <input
+              aria-label="音源ゲイン"
+              type="range"
+              min={0}
+              max={12}
+              step={1}
+              value={p.gainDb ?? 0}
+              onChange={(e) => update({ gainDb: Number(e.target.value) })}
+            />
+            <small>
+              小さい音源を補正します。まず +3 dB
+              から。上げすぎると強い和音が歪むため、出力メーターを確認してください。
+            </small>
+          </label>
+          <label className="field">
             <span>音量を操作するフェーダー</span>
             <select
               aria-label="音量を操作するフェーダー"

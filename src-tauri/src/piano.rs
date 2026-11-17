@@ -11,6 +11,7 @@ pub struct PianoSettings {
     pub drum_kit: crate::drums::DrumSettings,
     pub drum_volume: f32,
     pub volume: f32,
+    pub gain_db: f32,
     pub volume_fader: u8,
     pub octave: i8,
     pub output_device: String,
@@ -28,6 +29,7 @@ impl Default for PianoSettings {
             drum_kit: Default::default(),
             drum_volume: 0.7,
             volume: 0.5,
+            gain_db: 0.,
             volume_fader: 9,
             octave: 0,
             output_device: String::new(),
@@ -63,7 +65,8 @@ impl PianoSettings {
             return Err("音源のお気に入りが不正です".into());
         }
         crate::sound_library::SoundId::parse(&self.sound)?;
-        if !(0.0..=1.0).contains(&self.volume)
+        if !(0.0..=12.0).contains(&self.gain_db)
+            || !(0.0..=1.0).contains(&self.volume)
             || !(0.0..=1.0).contains(&self.drum_volume)
             || self.volume_fader > 9
             || !(-3..=3).contains(&self.octave)
@@ -299,5 +302,86 @@ mod tests {
         s.midi(true, [0, 0, 0]);
         energy(&mut s, 88200);
         assert!(energy(&mut s, 4096) < 0.0000001);
+    }
+}
+
+/// Opt-in piano gain, smoothed over 20 ms to avoid abrupt level jumps.
+/// Drums and reference MIDI playback keep their independent levels.
+pub struct PianoGain {
+    current: f32,
+    target: f32,
+    step: f32,
+    remaining: u32,
+    ramp: u32,
+}
+impl PianoGain {
+    pub fn new(rate: u32) -> Self {
+        Self {
+            current: 1.,
+            target: 1.,
+            step: 0.,
+            remaining: 0,
+            ramp: (rate / 50).max(1),
+        }
+    }
+    pub fn set_db(&mut self, db: f32) {
+        let db = if db.is_finite() {
+            db.clamp(0., 12.)
+        } else {
+            0.
+        };
+        let target = 10f32.powf(db / 20.);
+        if target != self.target {
+            self.target = target;
+            self.remaining = self.ramp;
+            self.step = (target - self.current) / self.ramp as f32;
+        }
+    }
+    pub fn next_gain(&mut self) -> f32 {
+        if self.remaining > 0 {
+            self.current += self.step;
+            self.remaining -= 1;
+            if self.remaining == 0 {
+                self.current = self.target;
+            }
+        }
+        self.current
+    }
+}
+#[cfg(test)]
+mod gain_tests {
+    use super::*;
+    #[test]
+    fn gain_is_opt_in_validated_and_backwards_compatible() {
+        let old: PianoSettings = serde_json::from_str(r#"{"volume":0.3}"#).unwrap();
+        assert_eq!(old.gain_db, 0.);
+        for invalid in [-1., 13., f32::NAN, f32::INFINITY] {
+            let settings = PianoSettings {
+                gain_db: invalid,
+                ..Default::default()
+            };
+            assert!(settings.validate().is_err());
+        }
+    }
+    #[test]
+    fn gain_is_smooth_bounded_and_output_stays_finite() {
+        let mut gain = PianoGain::new(48000);
+        assert_eq!(gain.next_gain(), 1.);
+        gain.set_db(12.);
+        let first = gain.next_gain();
+        assert!(first > 1. && first < 1.01);
+        for _ in 1..960 {
+            gain.next_gain();
+        }
+        assert!((gain.next_gain() - 3.9810717).abs() < 0.00001);
+        for sample in [-10., -1., 0., 0.1, 1., 10.] {
+            let out = crate::instrument_fx::output_sample(sample * gain.next_gain());
+            assert!(out.is_finite() && out.abs() <= 1.);
+        }
+        gain.set_db(f32::NAN);
+        for _ in 0..960 {
+            gain.next_gain();
+        }
+        assert_eq!(gain.next_gain(), 1.);
     }
 }
