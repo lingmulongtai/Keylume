@@ -337,7 +337,7 @@ impl PianoGain {
             self.step = (target - self.current) / self.ramp as f32;
         }
     }
-    pub fn next(&mut self) -> f32 {
+    pub fn next_gain(&mut self) -> f32 {
         if self.remaining > 0 {
             self.current += self.step;
             self.remaining -= 1;
@@ -356,30 +356,32 @@ mod gain_tests {
         let old: PianoSettings = serde_json::from_str(r#"{"volume":0.3}"#).unwrap();
         assert_eq!(old.gain_db, 0.);
         for invalid in [-1., 13., f32::NAN, f32::INFINITY] {
-            let mut settings = PianoSettings::default();
-            settings.gain_db = invalid;
+            let settings = PianoSettings {
+                gain_db: invalid,
+                ..Default::default()
+            };
             assert!(settings.validate().is_err());
         }
     }
     #[test]
     fn gain_is_smooth_bounded_and_output_stays_finite() {
         let mut gain = PianoGain::new(48000);
-        assert_eq!(gain.next(), 1.);
+        assert_eq!(gain.next_gain(), 1.);
         gain.set_db(12.);
-        let first = gain.next();
+        let first = gain.next_gain();
         assert!(first > 1. && first < 1.01);
         for _ in 1..960 {
-            gain.next();
+            gain.next_gain();
         }
-        assert!((gain.next() - 3.9810717).abs() < 0.00001);
+        assert!((gain.next_gain() - 3.9810717).abs() < 0.00001);
         for sample in [-10., -1., 0., 0.1, 1., 10.] {
-            let out = crate::instrument_fx::output_sample(sample * gain.next());
+            let out = crate::instrument_fx::output_sample(sample * gain.next_gain());
             assert!(out.is_finite() && out.abs() <= 1.);
         }
         gain.set_db(f32::NAN);
         for _ in 0..960 {
-            gain.next();
+            gain.next_gain();
         }
-        assert_eq!(gain.next(), 1.);
+        assert_eq!(gain.next_gain(), 1.);
     }
 }

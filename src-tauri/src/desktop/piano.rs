@@ -738,7 +738,7 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                         for i in 0..frames {
                             let (dl, dr) = drums.stereo();
                             let (ll, lr) = loop_drums.stereo();
-                            let boost = gain.next();
+                            let boost = gain.next_gain();
                             left[i] = left[i] * volume * boost + (dl + ll) * drum_volume;
                             right[i] = right[i] * volume * boost + (dr + lr) * drum_volume;
                         }
