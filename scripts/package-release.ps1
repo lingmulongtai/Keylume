@@ -1,4 +1,7 @@
-param([string]$OutputDirectory = 'artifacts/release')
+param(
+    [string]$OutputDirectory = 'artifacts/release',
+    [string]$CargoTargetDirectory = 'src-tauri/target'
+)
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 $root = Split-Path $PSScriptRoot -Parent
@@ -11,13 +14,18 @@ if ($version -ne $tauriVersion -or $version -ne $cargoVersion) { throw 'Version 
 $output = [IO.Path]::GetFullPath((Join-Path $root $OutputDirectory))
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 if (@(Get-ChildItem -LiteralPath $output -File).Count) { throw 'Release output must be empty; use a new directory' }
+$target = if ([IO.Path]::IsPathRooted($CargoTargetDirectory)) {
+    [IO.Path]::GetFullPath($CargoTargetDirectory)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $root $CargoTargetDirectory))
+}
 $portable = Join-Path ([IO.Path]::GetTempPath()) ('keylume-portable-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $portable | Out-Null
-Copy-Item -LiteralPath src-tauri/target/release/keylume.exe -Destination (Join-Path $portable 'Keylume.exe')
+Copy-Item -LiteralPath (Join-Path $target 'release/keylume.exe') -Destination (Join-Path $portable 'Keylume.exe')
 Copy-Item -LiteralPath README.md,THIRD_PARTY_NOTICES.md -Destination $portable
 Copy-Item -LiteralPath licenses,docs -Destination $portable -Recurse
 $installer = "Keylume_${version}_x64-setup.exe"
-Copy-Item -LiteralPath "src-tauri/target/release/bundle/nsis/$installer" -Destination $output
+Copy-Item -LiteralPath (Join-Path $target "release/bundle/nsis/$installer") -Destination $output
 $zip = "Keylume_${version}_windows-x64.zip"
 Compress-Archive -Path (Join-Path $portable '*') -DestinationPath (Join-Path $output $zip)
 
