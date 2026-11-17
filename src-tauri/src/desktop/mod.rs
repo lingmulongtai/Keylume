@@ -474,8 +474,18 @@ fn save_export(path: String, contents: String) -> Result<(), String> {
     std::fs::write(path, contents).map_err(|e| e.to_string())
 }
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
+    let smoke_report = std::env::args()
+        .skip_while(|a| a != "--self-test")
+        .nth(1)
+        .map(PathBuf::from);
+    let builder = tauri::Builder::default();
+    // Isolated MockDevice checks must not activate or exit an already running app.
+    let builder = if smoke_report.is_some() {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
+    };
+    builder
         .plugin(
             tauri_plugin_autostart::Builder::new()
                 .args(["--tray"])
@@ -497,11 +507,7 @@ pub fn run() {
             dismiss_update,
             open_update
         ])
-        .setup(|app| {
-            let smoke_report = std::env::args()
-                .skip_while(|a| a != "--self-test")
-                .nth(1)
-                .map(PathBuf::from);
+        .setup(move |app| {
             let root = smoke_report
                 .as_ref()
                 .map(|p| p.with_extension("data"))
