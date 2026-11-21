@@ -14,13 +14,12 @@ test('persists hand colors, accompaniment, listening and independent audio timin
   const right = midi.addTrack();
   right.name = 'Right Hand';
   right.addNote({ midi: 72, time: 1, duration: 1 });
-  await page
-    .getByLabel('MIDIファイル', { exact: true })
-    .setInputFiles({
-      name: 'hands.mid',
-      mimeType: 'audio/midi',
-      buffer: Buffer.from(midi.toArray()),
-    });
+  await page.getByLabel('MIDIファイル', { exact: true }).setInputFiles({
+    name: 'hands.mid',
+    mimeType: 'audio/midi',
+    buffer: Buffer.from(midi.toArray()),
+  });
+  await page.getByRole('button', { name: '読み込む', exact: true }).click();
   await expect(page.getByText('hands', { exact: true })).toBeVisible();
   await page.getByLabel('練習する手', { exact: true }).selectOption('right');
   await page.getByLabel('左手の色', { exact: true }).fill('#ff8800');

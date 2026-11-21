@@ -1,5 +1,18 @@
 import type { Song } from './types';
-export async function importMidi(file: File, signal?: AbortSignal): Promise<Song> {
+export function midiFileTitle(filename: string): string {
+  return (
+    filename
+      .replace(/\.midi?$/i, '')
+      .trim()
+      .slice(0, 200) || '無題'
+  );
+}
+
+export async function importMidi(
+  file: File,
+  signal?: AbortSignal,
+  title = midiFileTitle(file.name),
+): Promise<Song> {
   signal?.throwIfAborted();
   if (file.size > 16 * 1024 * 1024) throw Error('MIDIは16 MB以下にしてください');
   const bytes = await file.arrayBuffer();
@@ -36,7 +49,7 @@ export async function importMidi(file: File, signal?: AbortSignal): Promise<Song
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) return abort();
     try {
-      worker.postMessage({ bytes, title: file.name }, [bytes]);
+      worker.postMessage({ bytes, title }, [bytes]);
     } catch (error) {
       fail(error);
     }

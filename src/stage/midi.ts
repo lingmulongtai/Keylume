@@ -73,7 +73,7 @@ export function parseMidi(data: ArrayBuffer, title: string): Song {
     beats.push(time);
   }
   return assignHands({
-    title: (midi.name || title.replace(/\.midi?$/i, '')).slice(0, 200),
+    title,
     duration,
     notes,
     tracks,

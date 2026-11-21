@@ -11,19 +11,21 @@ test('imports MIDI in a worker, controls practice and saves calibrated appearanc
   await expect(page.getByRole('heading', { name: '演奏', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'MIDI練習', exact: true }).click();
   const midi = new Midi();
+  midi.name = 'Internal sequence';
   midi.header.setTempo(100);
   midi
     .addTrack()
     .addNote({ midi: 60, time: 0, duration: 1, velocity: 0.8 })
     .addNote({ midi: 64, time: 1, duration: 1, velocity: 0.8 });
-  await page
-    .getByLabel('MIDIファイル', { exact: true })
-    .setInputFiles({
-      name: 'practice.mid',
-      mimeType: 'audio/midi',
-      buffer: Buffer.from(midi.toArray()),
-    });
-  await expect(page.getByText('practice', { exact: true })).toBeVisible();
+  await page.getByLabel('MIDIファイル', { exact: true }).setInputFiles({
+    name: '練習曲.take2.MIDI',
+    mimeType: 'audio/midi',
+    buffer: Buffer.from(midi.toArray()),
+  });
+  const title = page.getByRole('textbox', { name: '曲名', exact: true });
+  await expect(title).toHaveValue('練習曲.take2');
+  await title.press('Enter');
+  await expect(page.getByText('練習曲.take2', { exact: true })).toBeVisible();
   await expect(page.getByLabel('練習の進め方', { exact: true })).toHaveValue('timing');
   await page.getByRole('button', { name: '練習を開始', exact: true }).click();
   await expect(page.getByRole('button', { name: '練習を一時停止', exact: true })).toBeVisible();

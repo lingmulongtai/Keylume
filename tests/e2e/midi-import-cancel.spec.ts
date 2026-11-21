@@ -21,6 +21,7 @@ test('leaving MIDI practice cancels a pending parser without loading a song', as
   await page
     .getByLabel('MIDIファイル', { exact: true })
     .setInputFiles({ name: 'pending.mid', mimeType: 'audio/midi', buffer: Buffer.from('test') });
+  await page.getByRole('button', { name: '読み込む', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).__parserStarted)).toBe(true);
   await page.getByRole('button', { name: 'ライブ表示', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).__parserStopped)).toBe(1);

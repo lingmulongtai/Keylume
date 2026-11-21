@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pause, Play, Square, Upload } from 'lucide-react';
+import { Pause, Play, Square } from 'lucide-react';
 import { getPianoState, native } from './api';
 import { demoSongs } from './demo-library';
 import { stageCommand, subscribeStage } from './stage/api';
+import MidiFilePicker from './stage/MidiFilePicker';
 import { importMidi } from './stage/import-midi';
 import type { StageSnapshot } from './stage/types';
 import type { ViewProps } from './ui-state';
+
+// The Stage revision also changes when another window imports a song with the same title.
+let bundledSelection: { revision: number; id: string } | undefined;
 
 const timestamp = (seconds: number) => {
   const whole = Math.floor(Math.max(0, seconds));
@@ -20,7 +24,6 @@ export default function HomeDemo({
 }: Pick<ViewProps, 'state' | 'act' | 'toast'> & { onKeys: (pitches: number[]) => void }) {
   const [transport, setTransport] = useState<StageSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
   const pending = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -64,8 +67,12 @@ export default function HomeDemo({
     };
   }, [onKeys, toast]);
 
-  const current = demoSongs.find((s) => s.title === transport?.title);
-  const selected = current?.id ?? (transport?.title ? 'imported' : demoSongs[0].id);
+  const selected =
+    bundledSelection && transport?.songRevision === bundledSelection.revision
+      ? bundledSelection.id
+      : transport?.title
+        ? 'imported'
+        : demoSongs[0].id;
 
   const run = async (work: (signal: AbortSignal) => Promise<void>) => {
     if (pending.current) return;
@@ -84,20 +91,25 @@ export default function HomeDemo({
     }
   };
 
-  const load = async (file: File, signal: AbortSignal, title?: string) => {
-    const song = await importMidi(file, signal);
+  const load = async (file: File, signal: AbortSignal, title: string) => {
+    const song = await importMidi(file, signal, title);
     signal.throwIfAborted();
     if (!song.tracks.some((track) => !track.percussion))
       throw Error('試聴できる楽器トラックがありません');
-    if (title) song.title = title;
-    await stageCommand('load', { song });
+    return stageCommand('load', { song });
   };
   const loadDemo = async (id: string, signal: AbortSignal) => {
     const demo = demoSongs.find((s) => s.id === id);
     if (!demo) return;
     const response = await fetch(demo.url, { signal });
     if (!response.ok) throw Error('デモMIDIを読み込めませんでした');
-    await load(new File([await response.blob()], demo.id + '.mid'), signal, demo.title);
+    const loaded = await load(
+      new File([await response.blob()], demo.id + '.mid'),
+      signal,
+      demo.title,
+    );
+    bundledSelection = { revision: loaded.songRevision, id: demo.id };
+    if (!signal.aborted) setTransport(loaded);
   };
   const play = async (signal: AbortSignal) => {
     if (!transport?.title) await loadDemo(demoSongs[0].id, signal);
@@ -176,21 +188,15 @@ export default function HomeDemo({
       <output aria-label="試聴の再生時間">
         {timestamp(transport?.position ?? 0)} / {timestamp(transport?.duration ?? 0)}
       </output>
-      <button disabled={busy} onClick={() => fileInput.current?.click()}>
-        <Upload size={14} />
-        MIDIを開く
-      </button>
-      <input
-        type="file"
-        hidden
-        accept=".mid,.midi"
-        ref={fileInput}
-        aria-label="試聴するMIDIファイル"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = '';
-          if (file) void run((signal) => load(file, signal));
-        }}
+      <MidiFilePicker
+        label="MIDIを開く"
+        inputLabel="試聴するMIDIファイル"
+        disabled={busy}
+        onImport={(file, title) =>
+          void run(async (signal) => {
+            await load(file, signal, title);
+          })
+        }
       />
     </section>
   );

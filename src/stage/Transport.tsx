@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Play, Pause, Square } from 'lucide-react';
+import { Play, Pause, Square } from 'lucide-react';
 import { stageCommand } from './api';
+import MidiFilePicker from './MidiFilePicker';
 import { importMidi } from './import-midi';
 import { demoSong } from './midi';
 import type { Song, StageSettings, StageSnapshot } from './types';
@@ -21,8 +22,7 @@ export default function StageTransport({
   error: (message: string) => void;
   present?: () => Promise<unknown>;
 }) {
-  const input = useRef<HTMLInputElement>(null),
-    [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
   const importing = useRef<AbortController | null>(null);
   useEffect(() => () => importing.current?.abort(), []);
   const run = async (name: string, args: Record<string, unknown> = {}) => {
@@ -37,13 +37,13 @@ export default function StageTransport({
       setBusy(false);
     }
   };
-  const load = async (file: File) => {
+  const load = async (file: File, title: string) => {
     importing.current?.abort();
     const controller = new AbortController();
     importing.current = controller;
     setBusy(true);
     try {
-      const loaded = await importMidi(file, controller.signal);
+      const loaded = await importMidi(file, controller.signal, title);
       controller.signal.throwIfAborted();
       await stageCommand('load', { song: loaded });
       if (!controller.signal.aborted)
@@ -61,22 +61,12 @@ export default function StageTransport({
     <div className="stage-player" aria-label="演奏の再生操作">
       <div className="stage-toolbar">
         <strong title={state.title}>{state.title || 'MIDIファイルを選ぶ'}</strong>
-        <input
-          hidden
-          ref={input}
-          type="file"
-          accept=".mid,.midi"
-          aria-label="MIDIファイル"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void load(f);
-            e.target.value = '';
-          }}
+        <MidiFilePicker
+          label={busy ? '読み込み中…' : 'MIDIを読み込む'}
+          inputLabel="MIDIファイル"
+          disabled={busy}
+          onImport={load}
         />
-        <button disabled={busy} onClick={() => input.current?.click()}>
-          <Upload size={15} />
-          {busy ? '読み込み中…' : 'MIDIを読み込む'}
-        </button>
         <button disabled={busy} onClick={() => void run('load', { song: demoSong() })}>
           お試し曲
         </button>
