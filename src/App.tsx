@@ -242,24 +242,26 @@ export default function App() {
           ))}
         </nav>
         <div className="navigation-utilities">
-          <a
-            className="help repository-link"
-            href={homepage}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) => {
-              if (native) {
-                event.preventDefault();
-                void openLink(homepage).catch((error) => toast(String(error)));
-              }
-            }}
-          >
-            <Github size={17} aria-hidden="true" /> GitHubリポジトリ
-          </a>
-          <button className="help" onClick={() => setSetup(true)}>
-            <CircleHelp size={17} />
-            セットアップガイド
-          </button>
+          <div className="help-links">
+            <a
+              className="help repository-link"
+              href={homepage}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => {
+                if (native) {
+                  event.preventDefault();
+                  void openLink(homepage).catch((error) => toast(String(error)));
+                }
+              }}
+            >
+              <Github size={17} aria-hidden="true" /> GitHubリポジトリ
+            </a>
+            <button className="help" onClick={() => setSetup(true)}>
+              <CircleHelp size={17} />
+              セットアップガイド
+            </button>
+          </div>
           <span>v{appVersion}</span>
         </div>
       </header>

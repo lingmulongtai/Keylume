@@ -389,6 +389,11 @@ code {
   color: var(--muted);
   font-size: 10px;
 }
+.help-links {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
 .navigation-utilities .repository-link {
   display: inline-flex;
   align-items: center;
