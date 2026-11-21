@@ -8,6 +8,7 @@ import {
   Pause,
   Play,
   CircleHelp,
+  Github,
   ChevronRight,
   X,
   Save,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import type { AppState, Preset, Settings, Status } from './types';
 import { uid } from './types';
-import { getState, command, subscribe, native } from './api';
+import { getState, command, subscribe, native, openLink } from './api';
 import Editor from './Editor';
 import Stage from './stage/Stage';
 import Controller from './ControllerScreen';
@@ -29,6 +30,7 @@ import {
 } from './Screens';
 import { Modal } from './components';
 import { appVersion } from './version';
+import { homepage } from '../package.json';
 import { useUpdates, UpdateBanner } from './Updates';
 type Page = 'stage' | 'lighting' | 'controller' | 'profiles' | 'coexist' | 'device' | 'settings';
 const pages = [
@@ -240,6 +242,20 @@ export default function App() {
           ))}
         </nav>
         <div className="navigation-utilities">
+          <a
+            className="help repository-link"
+            href={homepage}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => {
+              if (native) {
+                event.preventDefault();
+                void openLink(homepage).catch((error) => toast(String(error)));
+              }
+            }}
+          >
+            <Github size={17} aria-hidden="true" /> GitHubリポジトリ
+          </a>
           <button className="help" onClick={() => setSetup(true)}>
             <CircleHelp size={17} />
             セットアップガイド

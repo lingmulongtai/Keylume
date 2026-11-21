@@ -3,6 +3,19 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'ホーム', exact: true })).toBeVisible();
 });
+test('opens the project repository and keeps the editor available', async ({ page, context }) => {
+  const url = 'https://github.com/lingmulongtai/Keylume';
+  const link = page.getByRole('link', { name: 'GitHubリポジトリ' });
+  await expect(link).toHaveAttribute('href', url);
+  await context.route(url, (route) => route.fulfill({ body: 'Repository' }));
+  const opened = context.waitForEvent('page');
+  await link.click();
+  const repository = await opened;
+  await repository.waitForURL(url);
+  await repository.close();
+  await expect(page.getByRole('heading', { name: 'ホーム', exact: true })).toBeVisible();
+});
+
 test('edits, saves, reloads, exports and deletes a preset', async ({ page }) => {
   await page.getByRole('button', { name: 'レイヤーを追加', exact: true }).click();
   await page.getByRole('button', { name: '単色 static', exact: true }).click();

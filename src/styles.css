@@ -389,6 +389,16 @@ code {
   color: var(--muted);
   font-size: 10px;
 }
+.navigation-utilities .repository-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.navigation-utilities .repository-link:hover {
+  color: var(--text);
+}
 .help {
   font-size: 10px;
   color: var(--muted);
