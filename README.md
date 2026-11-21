@@ -6,7 +6,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 起動
 
-[Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.1/Keylume_0.8.1_x64-setup.exe)を実行してください。[ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.1/Keylume_0.8.1_windows-x64.zip)は展開して `Keylume.exe` を起動します。Windows 11 と WebView2 Runtime が必要です。コード署名はしていません。
+[Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.2/Keylume_0.8.2_x64-setup.exe)を実行してください。[ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.2/Keylume_0.8.2_windows-x64.zip)は展開して `Keylume.exe` を起動します。Windows 11 と WebView2 Runtime が必要です。コード署名はしていません。
 
 Mac 版は独立した [Keylume-macOS](https://github.com/lingmulongtai/Keylume-macOS) で開発・配布しています。
 
