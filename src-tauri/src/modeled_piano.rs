@@ -4,7 +4,7 @@
 use std::f32::consts::{PI, TAU};
 
 const POLYPHONY: usize = 48;
-const MODES: usize = 28;
+const MODES: usize = 32;
 const BLOCK: usize = 64;
 
 #[derive(Clone, Copy)]
@@ -73,8 +73,9 @@ struct Voice {
     owners: u8,
     latched: bool,
     modes: [Mode; MODES],
+    string_modes: usize,
     count: usize,
-    lifetime: f32,
+    longest_t60: f32,
     level: f32,
     natural_loss: f32,
     damper_loss: f32,
@@ -97,7 +98,10 @@ impl Voice {
         let touch = velocity as f32 / 127. * if soft { 0.75 } else { 1. };
         let impact = 0.16 * touch.powf(1.45);
         let hardness = (0.16 + 0.72 * felt + 0.63 * touch).clamp(0.1, 1.4);
-        let bandwidth = fundamental * 1.8 + 450. + 2400. * hardness * hardness;
+        let register = ((note as f32 - 60.) / 27.).clamp(0., 1.);
+        let treble = register * register * (3. - 2. * register);
+        let bandwidth = fundamental * (1.8 - treble) + 450. + 2400. * hardness * hardness;
+        let slope = 1.42 + treble * (2.7 - 0.8 * hardness);
         let strike_position = 0.115 + 0.02 * ((note as f32 - 21.) / 87.).clamp(0., 1.);
         let stiffness = 0.00009 * 2f32.powf((note as f32 - 55.).abs() / 24.);
         let lifetime = (9.0 * (220. / fundamental).powf(0.32)).clamp(2., 19.);
@@ -108,8 +112,9 @@ impl Voice {
             owners: 0,
             latched: false,
             modes: [Mode::default(); MODES],
+            string_modes: 0,
             count: 0,
-            lifetime,
+            longest_t60: 0.,
             level: impact,
             natural_loss: 1.,
             damper_loss: loss(
@@ -123,13 +128,24 @@ impl Voice {
         };
         // Bass strings have two slightly split transverse polarizations. Higher
         // notes add unison strings with different tuning and bridge loss.
-        let spread = if note < 40 { 0.24 } else { 1.25 };
+        let spread = if note < 40 {
+            0.24
+        } else {
+            1.25 - 0.45 * treble
+        };
+        // The differently coupled unisons give a prompt decay and a quieter
+        // aftersound. Shorter strings lose energy more quickly on both slopes.
+        let top_octaves = ((note as f32 - 84.) / 24.).clamp(0., 1.);
+        let treble_decay = (1_046.5 / fundamental).powf(0.38 + 0.24 * top_octaves);
         let strings = [
-            (18, 1., 0.64, 0.76),
-            (7, 2f32.powf(spread / 1200.), 0.26, 1.3),
-            (3, 2f32.powf(-0.8 * spread / 1200.), 0.10, 1.05),
+            (18, 1., 0.64, 0.76, 4.4),
+            (7, 2f32.powf(spread / 1200.), 0.26, 1.3, 1.85),
+            (3, 2f32.powf(-0.8 * spread / 1200.), 0.10, 1.05, 1.45),
         ];
-        for (partials, detune, share, decay) in strings {
+        for (partials, detune, share, decay, treble_t60) in strings {
+            let bass_t60 = lifetime * decay;
+            let string_t60 = bass_t60 + treble * (treble_t60 * treble_decay - bass_t60);
+            v.longest_t60 = v.longest_t60.max(string_t60);
             for harmonic in 1..=partials {
                 let n = harmonic as f32;
                 let frequency =
@@ -140,16 +156,38 @@ impl Voice {
                 }
                 let position = (PI * n * strike_position).sin() / (PI * strike_position).sin();
                 let contact = (-0.5 * (frequency / bandwidth).powi(2)).exp();
-                let amplitude = impact * share * position * contact / n.powf(1.42);
+                let amplitude = impact * share * position * contact / n.powf(slope);
                 if amplitude.abs() < 0.0000005 {
                     continue;
                 }
                 v.modes[v.count] = Mode {
                     x: amplitude,
                     hz: frequency,
-                    seconds: lifetime * decay / (1. + 0.24 * (n - 1.).powf(1.23)),
+                    seconds: string_t60 / (1. + 0.24 * (n - 1.).powf(1.23)),
                     ..Default::default()
                 };
+                v.count += 1;
+            }
+        }
+        v.string_modes = v.count;
+        // The initial hammer impulse also excites broad, unpitched soundboard
+        // modes. Their frequencies belong to the instrument, independent of
+        // pitch bend, and their brief settling time is independent of string loss.
+        if treble > 0. && v.string_modes > 0 {
+            let coupling = treble * (fundamental / 1_600.).powf(0.75).min(2.5);
+            let knock = impact * coupling * (0.9 + 0.38 * hardness);
+            let bridge_position = ((note as f32 - 60.) / 48.).clamp(0., 1.);
+            for (hz, seconds, share) in [
+                (245., 0.097, 0.55 + 0.15 * bridge_position),
+                (487., 0.075, -0.82 + 0.3 * bridge_position),
+                (917., 0.055, 0.65 - 0.3 * bridge_position),
+                (1_681., 0.037, -0.35 - 0.15 * bridge_position),
+            ] {
+                let mode = &mut v.modes[v.count];
+                mode.x = knock * share;
+                mode.hz = hz;
+                mode.seconds = seconds;
+                mode.tune(rate, 1., 1.);
                 v.count += 1;
             }
         }
@@ -157,8 +195,8 @@ impl Voice {
     }
     fn tune(&mut self, rate: f32, bend: f32, decay: f32) {
         let scale = 0.4 + 1.2 * decay;
-        self.natural_loss = loss(self.lifetime * 1.3 * scale, rate);
-        for mode in &mut self.modes[..self.count] {
+        self.natural_loss = loss(self.longest_t60 * scale, rate);
+        for mode in &mut self.modes[..self.string_modes] {
             mode.tune(rate, bend, scale);
         }
     }
@@ -506,6 +544,54 @@ mod tests {
     fn brightness(s: &[f32]) -> f32 {
         let differences: Vec<_> = s.windows(2).map(|w| w[1] - w[0]).collect();
         energy(&differences) / energy(s)
+    }
+    // A Hann-windowed projection isolates one spectral component of the output.
+    fn amplitude(samples: &[f32], rate: i32, frequency: f32) -> f32 {
+        let mut x = 0.;
+        let mut y = 0.;
+        for (frame, sample) in samples.iter().enumerate() {
+            let angle = TAU * frame as f32;
+            let window = 0.5 - 0.5 * (angle / (samples.len() - 1) as f32).cos();
+            let (sin, cos) = (angle * frequency / rate as f32).sin_cos();
+            x += sample * window * cos;
+            y += sample * window * sin;
+        }
+        x.hypot(y) / samples.len() as f32
+    }
+    #[test]
+    fn treble_has_a_brief_body_impulse_and_a_pitched_aftersound() {
+        for rate in [22050, 48000, 96000] {
+            for note in [84, 96, 108] {
+                let mut p = ModeledPiano::new(rate);
+                p.midi(false, [0x90, note, 85]);
+                let signal = audio(&mut p, rate as usize);
+                let band = |start_ms, end_ms, frequency| {
+                    let frame = |ms: usize| ms * rate as usize / 1000;
+                    amplitude(&signal[frame(start_ms)..frame(end_ms)], rate, frequency)
+                };
+                let pitch = hz(note);
+                let fundamental = band(2, 32, pitch);
+                let knock = band(2, 32, 245.);
+                assert!(knock > 0.08 * fundamental && knock < fundamental);
+                assert!(band(155, 185, 245.) < 0.01 * knock);
+                // Keep the pitch audible after the impact, with the octave
+                // partial well below the fundamental even at the attack.
+                assert!(band(2, 32, pitch * 2.) < 0.22 * fundamental);
+                let tail = band(500, 540, pitch) / fundamental;
+                assert!((0.05..0.45).contains(&tail));
+            }
+        }
+    }
+    #[test]
+    fn a_harder_treble_strike_increases_octave_content() {
+        let octave_ratio = |velocity| {
+            let mut p = ModeledPiano::new(RATE);
+            p.midi(false, [0x90, 96, velocity]);
+            let samples = audio(&mut p, 2048);
+            let onset = &samples[128..1536];
+            amplitude(onset, RATE, 2. * hz(96)) / amplitude(onset, RATE, hz(96))
+        };
+        assert!(octave_ratio(112) > 1.4 * octave_ratio(48));
     }
     #[test]
     fn hammer_changes_level_and_harmonics() {
