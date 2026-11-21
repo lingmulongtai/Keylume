@@ -34,7 +34,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --exit-code -- licenses/THIRD-PARTY-LICENSES.txt
       - name: Build Windows installer
-        run: npm run package
+        run: |
+          $env:CARGO_ENCODED_RUSTFLAGS = @(
+            "--remap-path-prefix=$env:USERPROFILE=/build/home",
+            "--remap-path-prefix=$env:GITHUB_WORKSPACE=/src/keylume",
+            '-C', 'link-arg=/PDBALTPATH:%_PDB%'
+          ) -join [char]31
+          npm run package
       - name: Ensure WebView2 runtime
         run: |
           $runtimePaths = @("${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application\*\msedgewebview2.exe", "$env:LOCALAPPDATA\Microsoft\EdgeWebView\Application\*\msedgewebview2.exe")
