@@ -90,8 +90,17 @@ impl Default for ControllerSettings {
         let desktop = [
             ("fader-8", "systemVolume", ""),
             ("fbtn.9", "mode", ""),
-            ("btn.undo", "shortcut", "Ctrl+Z"),
+            (
+                "btn.undo",
+                "shortcut",
+                if cfg!(target_os = "macos") {
+                    "Cmd+Z"
+                } else {
+                    "Ctrl+Z"
+                },
+            ),
             ("btn.play", "shortcut", "MediaPlayPause"),
+            #[cfg(not(target_os = "macos"))]
             ("btn.stop", "shortcut", "MediaStop"),
             ("btn.trackPrevious", "shortcut", "MediaPrevious"),
             ("btn.trackNext", "shortcut", "MediaNext"),
@@ -188,7 +197,14 @@ pub fn valid_target(target: &str) -> bool {
             .is_some_and(|(_, host)| !host.is_empty() && !host.starts_with('/'));
     }
     let p = std::path::Path::new(target);
-    p.is_absolute() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+    let extension = if cfg!(target_os = "macos") {
+        "app"
+    } else {
+        "exe"
+    };
+    p.is_absolute()
+        && p.extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case(extension))
 }
 pub fn shortcut(text: &str) -> Result<Vec<u16>, String> {
     let keys: Vec<_> = text.split('+').map(str::trim).collect();
@@ -203,6 +219,10 @@ pub fn shortcut(text: &str) -> Result<Vec<u16>, String> {
             "SHIFT" => 0x10,
             "ALT" => 0x12,
             "WIN" => 0x5b,
+            #[cfg(target_os = "macos")]
+            "CMD" | "COMMAND" => 0x5b,
+            #[cfg(target_os = "macos")]
+            "OPTION" => 0x12,
             "ENTER" => 0x0d,
             "ESCAPE" | "ESC" => 0x1b,
             "SPACE" => 0x20,
@@ -491,6 +511,21 @@ mod tests {
         assert!(shortcut("Ctrl+Ctrl+Z").is_err());
         assert!(shortcut("F25").is_err());
         assert!(!valid_target("javascript:alert(1)"));
+    }
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_undo_and_application_targets() {
+        let controller = ControllerSettings::default();
+        assert_eq!(
+            controller.desktop["btn.undo"],
+            Binding::new("shortcut", "Cmd+Z")
+        );
+        assert_eq!(shortcut("Cmd+Option+Z").unwrap(), vec![0x5b, 0x12, 90]);
+        assert!(valid_target("/Applications/Logic Pro.app"));
+        assert!(!valid_target("Logic Pro.app"));
+        assert!(!valid_target(
+            "/Applications/Logic Pro.app/Contents/MacOS/Logic Pro"
+        ));
     }
     #[test]
     fn modes_touches_and_button_edges_are_distinct() {

@@ -176,7 +176,7 @@ export default function StageCanvas({
         for (const dark of [false, true])
           for (const k of layout) {
             if (k.black !== dark) continue;
-            const held = s.held.includes(k.pitch),
+            const held = s.held.includes(k.pitch) || s.playbackHeld.includes(k.pitch),
               waiting = s.waiting.includes(k.pitch);
             ctx.fillStyle = held ? a.color : waiting ? '#eac17c' : dark ? '#121722' : '#d0d6df';
             const x = left + k.x * width,

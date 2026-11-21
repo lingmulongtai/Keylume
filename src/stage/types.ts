@@ -138,6 +138,7 @@ export interface StageSnapshot {
   score: Score;
   live: LiveNote[];
   held: number[];
+  playbackHeld: number[];
   judgements: Judgement[];
   settings: StageSettings;
   songRevision: number;
@@ -180,6 +181,7 @@ export const emptyStage = (): StageSnapshot => ({
   score: emptyScore(),
   live: [],
   held: [],
+  playbackHeld: [],
   judgements: [],
   settings: structuredClone(defaultStageSettings),
   songRevision: 0,

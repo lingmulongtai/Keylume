@@ -328,7 +328,7 @@ impl Looper {
                         };
                         b[1] = pitch;
                     }
-                    0xb0 if [1, 7, 10, 11, 64, 120, 121, 123].contains(&b[1]) => {
+                    0xb0 if [1, 7, 10, 11, 64, 66, 67, 120, 121, 123].contains(&b[1]) => {
                         if [120, 123].contains(&b[1]) {
                             self.held[source][ch] = [None; 128];
                         }

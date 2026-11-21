@@ -18,6 +18,7 @@ import type { ViewProps } from './ui-state';
 import type { Layer, Zone, Blend } from './types';
 import { effects, zones, blends, uid, includesLed } from './types';
 import Piano from './Piano';
+import HomeDemo from './HomeDemo';
 import LightingPicker from './LightingPicker';
 import { command } from './api';
 import DeviceCanvas from './DeviceCanvas';
@@ -30,6 +31,7 @@ export default function Editor({
   onSave,
   saveSettings,
 }: ViewProps & { onSave: () => void }) {
+  const [playbackKeys, setPlaybackKeys] = useState<number[]>([]);
   const [selected, setSelected] = useState<string[]>([]),
     [selectedLayer, setSelectedLayer] = useState(state.preset.layers[0]?.id ?? ''),
     [paint, setPaint] = useState(false),
@@ -129,6 +131,7 @@ export default function Editor({
             )}
           </div>
           <DeviceCanvas
+            playbackKeys={playbackKeys}
             state={state}
             selected={selected}
             onSelect={setSelected}
@@ -175,6 +178,7 @@ export default function Editor({
             </div>
           </div>
         </div>
+        <HomeDemo state={state} act={act} toast={toast} onKeys={setPlaybackKeys} />
         <Piano state={state} saveSettings={saveSettings} toast={toast} />
         <div className="zones">
           <span>ゾーン</span>
@@ -505,7 +509,7 @@ export default function Editor({
                 <Note>
                   {state.status.audio === 'capturing'
                     ? 'PC の再生音を解析しています。'
-                    : '音声キャプチャはデスクトップ版で利用できます。取得できない場合は無音として表示します。'}
+                    : '音声キャプチャは Windows 版で利用できます。取得できない場合は無音として表示します。'}
                 </Note>
               </>
             )}

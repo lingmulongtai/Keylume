@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Star, Upload, Check, Search } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { modeledGrandId } from './piano-sounds';
 import { native } from './api';
 import {
   categoryNames,
@@ -95,7 +96,7 @@ export default function SoundLibrary({
         (category === 'favorites' && piano.favorites.includes(e.id)) ||
         (category === 'installed' && e.installed) ||
         e.category === category) &&
-      `${e.name} ${categoryNames[e.category] ?? e.category}`
+      `${e.name} ${categoryNames[e.category] ?? e.category} ${e.id === modeledGrandId ? '物理モデリング グランド' : ''}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
@@ -217,7 +218,9 @@ export default function SoundLibrary({
                 </div>
                 <strong>{entry.name}</strong>
                 <small>
-                  {categoryNames[entry.category]}
+                  {entry.id === modeledGrandId
+                    ? '物理モデリング・ピアノ'
+                    : categoryNames[entry.category]}
                   {entry.bank > 0 ? ` · Bank ${entry.bank}` : ''}
                 </small>
                 <span className="sound-status">

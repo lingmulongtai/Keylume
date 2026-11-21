@@ -35,6 +35,7 @@ function layoutAreas(state: AppState) {
   ];
 }
 interface Props {
+  playbackKeys: number[];
   state: AppState;
   selected: string[];
   onSelect: (ids: string[]) => void;
@@ -44,6 +45,7 @@ interface Props {
   zoom: number;
 }
 export default function DeviceCanvas({
+  playbackKeys,
   state,
   selected,
   onSelect,
@@ -73,6 +75,7 @@ export default function DeviceCanvas({
   }, []);
   const input = useInput();
   const held = new Set(input.held);
+  for (const pitch of playbackKeys) held.add('key.' + pitch);
   const c = state.settings.controller;
   const bindings = activeBindings(c);
   const assignment = (id: string) => {
@@ -274,6 +277,7 @@ export default function DeviceCanvas({
                 fill="transparent"
                 role="button"
                 tabIndex={0}
+                aria-pressed={held.has('key.' + k.note)}
                 aria-label={`鍵盤 ${k.note}（ピアノ）`}
                 onPointerDown={(e) => {
                   e.stopPropagation();

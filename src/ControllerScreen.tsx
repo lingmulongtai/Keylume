@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ControllerMap from './ControllerMap';
+import { isMac, undoShortcut } from './platform';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { ViewProps } from './ui-state';
 import { command, subscribe, native } from './api';
@@ -90,7 +91,7 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
             : action === 'favorite'
               ? '0'
               : action === 'shortcut'
-                ? 'Ctrl+Z'
+                ? undoShortcut
                 : '',
     });
   const capture = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -111,7 +112,7 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
         event.ctrlKey ? 'Ctrl' : '',
         event.altKey ? 'Alt' : '',
         event.shiftKey ? 'Shift' : '',
-        event.metaKey ? 'Win' : '',
+        event.metaKey ? (isMac ? 'Cmd' : 'Win') : '',
         key,
       ]
         .filter(Boolean)
@@ -350,12 +351,22 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
           {['shortcut', 'open'].includes(draft.action) && (
             <label className="field">
               <span>
-                {draft.action === 'shortcut' ? 'ショートカット' : 'URL / .exe の絶対パス'}
+                {draft.action === 'shortcut'
+                  ? 'ショートカット'
+                  : isMac
+                    ? 'URL / .app の絶対パス'
+                    : 'URL / .exe の絶対パス'}
               </span>
               <input
                 aria-label="割り当ての内容"
                 placeholder={
-                  draft.action === 'shortcut' ? 'Ctrl+Shift+Z' : 'https://… / C:\\…\\app.exe'
+                  draft.action === 'shortcut'
+                    ? isMac
+                      ? 'Cmd+Shift+Z'
+                      : 'Ctrl+Shift+Z'
+                    : isMac
+                      ? '/Applications/Keynote.app'
+                      : 'https://… / C:\\…\\app.exe'
                 }
                 value={recording ? 'キーの組み合わせを押してください' : draft.value}
                 onKeyDown={capture}
@@ -380,8 +391,10 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
                 {recording ? '入力を中止' : 'キーを記録'}
               </button>
               <p className="muted">
-                Ctrl / Shift / Alt /
-                Win、英数字、F1–F24、矢印キーなど。VolumeUp、VolumeDown、VolumeMute、MediaPlayPauseにも対応。
+                {isMac
+                  ? 'Cmd / Ctrl / Shift / Option、英数字、F1–F20、矢印キーなど。ショートカットとスクロールを使うには、システム設定のアクセシビリティで Keylume を許可してください。'
+                  : 'Ctrl / Shift / Alt / Win、英数字、F1–F24、矢印キーなど。'}
+                VolumeUp、VolumeDown、VolumeMute、MediaPlayPauseにも対応。
               </p>
             </>
           )}
@@ -389,7 +402,10 @@ export default function ControllerScreen({ state, saveSettings, act, toast }: Vi
             <button
               disabled={!native}
               onClick={() =>
-                void open({ multiple: false, filters: [{ name: 'アプリ', extensions: ['exe'] }] })
+                void open({
+                  multiple: false,
+                  filters: [{ name: 'アプリ', extensions: [isMac ? 'app' : 'exe'] }],
+                })
                   .then((path) => path && setDraft({ ...draft, value: path }))
                   .catch((e) => toast(String(e)))
               }

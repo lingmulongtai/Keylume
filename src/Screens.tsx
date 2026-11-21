@@ -26,13 +26,20 @@ import type { ViewProps } from './ui-state';
 import type { Preset, Profile, Layout, DisplaySettings } from './types';
 import { uid } from './types';
 import { native, exportJson, openLink } from './api';
+import { isMac, systemName, trayName } from './platform';
 import { renderPreview, ditherImage } from './preview';
 import { Card, PageTitle, Note, Toggle, Slider, Modal } from './components';
 import { appVersion } from './version';
 import HardwareFace from './HardwareFace';
 import { UpdatesCard, type UpdateController } from './Updates';
 const serviceUrl = 'https://microsoft.github.io/MIDI/get-latest/';
-const loopbackUrl = 'https://microsoft.github.io/MIDI/kb/virtual-loopback/';
+const loopbackUrl = isMac
+  ? 'https://support.apple.com/ja-jp/guide/audio-midi-setup/ams1013/mac'
+  : 'https://microsoft.github.io/MIDI/kb/virtual-loopback/';
+const routingGuide = isMac
+  ? '「Audio MIDI 設定」の「MIDI スタジオ」で IAC ドライバをオンラインにし、パッドとコントロール用のバスを作成します。Keylume の出力と DAW の入力に同じバスを選んでください。'
+  : 'MIDI Services で作成したループバックの A 側出力を選択してください。DAW は対応する B 側入力を使います。';
+const routedInput = isMac ? 'IAC バスの入力' : 'ループバックの B 側入力';
 export function Miniature({ preset, layout }: { preset: Preset; layout: Layout }) {
   return (
     <svg viewBox={`0 0 ${layout.canvas.w} ${layout.canvas.h}`} aria-hidden="true">
@@ -206,7 +213,7 @@ export function ProfilesScreen({ state, act, saveSettings, toast }: ViewProps) {
             setDraft({
               id: uid(),
               name: '新しいプロファイル',
-              match: { processes: ['reaper.exe'] },
+              match: { processes: [isMac ? 'REAPER' : 'reaper.exe'] },
               presetId: state.presets[0].id,
               coexistMode: 'handoff',
               priority: 0,
@@ -308,7 +315,7 @@ export function ProfilesScreen({ state, act, saveSettings, toast }: ViewProps) {
                   ...draft,
                   match:
                     e.target.value === 'process'
-                      ? { processes: ['reaper.exe'] }
+                      ? { processes: [isMac ? 'REAPER' : 'reaper.exe'] }
                       : e.target.value === 'time'
                         ? { timeRange: ['23:00', '07:00'] }
                         : { idleMinutes: 10 },
@@ -426,14 +433,10 @@ export function ProfilesScreen({ state, act, saveSettings, toast }: ViewProps) {
   );
 }
 const dawGuides: Record<string, string> = {
-  Ableton:
-    '環境設定 → Link, Tempo & MIDI で Launchkey のコントロールサーフェスを「None」にします。MIDI 入力の Track を鍵盤ポートと各ループバックの B 側入力で ON にします。',
-  FLStudio:
-    'Options → MIDI settings で Launchkey のネイティブスクリプトを解除します。鍵盤とループバック B 側入力を有効にし、Controller type を汎用コントローラーに設定します。',
-  REAPER:
-    'Preferences → MIDI Devices で鍵盤とループバック B 側入力を有効にします。Control/OSC/web で Launchkey のネイティブ制御を解除します。',
-  Other:
-    'DAW の MIDI / Control Surface 設定で Launchkey のネイティブ連携を解除し、鍵盤 MIDI 入力とループバック B 側入力を有効にします。設定名はバージョンにより異なります。',
+  Ableton: `環境設定 → Link, Tempo & MIDI で Launchkey のコントロールサーフェスを「None」にします。MIDI 入力の Track を鍵盤ポートと${routedInput}で ON にします。`,
+  FLStudio: `Options → MIDI settings で Launchkey のネイティブスクリプトを解除します。鍵盤と${routedInput}を有効にし、Controller type を汎用コントローラーに設定します。`,
+  REAPER: `Preferences → MIDI Devices で鍵盤と${routedInput}を有効にします。Control/OSC/web で Launchkey のネイティブ制御を解除します。`,
+  Other: `DAW の MIDI / Control Surface 設定で Launchkey のネイティブ連携を解除し、鍵盤 MIDI 入力と${routedInput}を有効にします。設定名はバージョンにより異なります。`,
 };
 export function CoexistScreen({ state, act, saveSettings }: ViewProps) {
   const [daw, setDaw] = useState('Ableton');
@@ -483,24 +486,33 @@ export function CoexistScreen({ state, act, saveSettings }: ViewProps) {
       </div>
       <div className="two-columns">
         <Card title="MIDI 環境">
-          <div className="status-line">
-            <span>Windows MIDI Services</span>
-            <span className={'badge ' + (state.status.service === 'running' ? 'ok' : 'warn')}>
-              {state.status.service === 'running'
-                ? 'サービス稼働'
-                : state.status.service === 'browser'
-                  ? 'デスクトップ版で確認'
-                  : '未検出 / 停止'}
-            </span>
-          </div>
-          <p className="muted">
-            サービスの稼働だけでは、WinMM の同時利用は保証されません。DAW
-            との実動作を確認してください。
-          </p>
-          <button className="link-button" onClick={() => void openLink(serviceUrl)}>
-            Microsoft のセットアップ案内
-            <ArrowUpRight size={14} />
-          </button>
+          {isMac ? (
+            <p>
+              Launchkey は macOS 標準の Core MIDI で接続します。「Audio MIDI 設定」の「MIDI
+              スタジオ」で接続を確認できます。
+            </p>
+          ) : (
+            <>
+              <div className="status-line">
+                <span>Windows MIDI Services</span>
+                <span className={'badge ' + (state.status.service === 'running' ? 'ok' : 'warn')}>
+                  {state.status.service === 'running'
+                    ? 'サービス稼働'
+                    : state.status.service === 'browser'
+                      ? 'デスクトップ版で確認'
+                      : '未検出 / 停止'}
+                </span>
+              </div>
+              <p className="muted">
+                サービスの稼働だけでは、WinMM の同時利用は保証されません。DAW
+                との実動作を確認してください。
+              </p>
+              <button className="link-button" onClick={() => void openLink(serviceUrl)}>
+                Microsoft のセットアップ案内
+                <ArrowUpRight size={14} />
+              </button>
+            </>
+          )}
         </Card>
         <Card title="DAW の検出">
           <div className="detected-list">
@@ -526,10 +538,7 @@ export function CoexistScreen({ state, act, saveSettings }: ViewProps) {
       </div>
       {s.coexistMode === 'lightingFirst' ? (
         <>
-          <Card
-            title="演奏データの転送"
-            description="MIDI Services で作成したループバックの A 側出力を選択してください。DAW は対応する B 側入力を使います。"
-          >
+          <Card title="演奏データの転送" description={routingGuide}>
             <Toggle
               label="入力転送を有効にする"
               checked={s.forwarding}
@@ -574,9 +583,9 @@ export function CoexistScreen({ state, act, saveSettings }: ViewProps) {
             <div className="routing-flow">
               <span>Launchkey DAW 入力</span>
               <ChevronRight size={16} />
-              <span>Keylume · A 出力</span>
+              <span>Keylume · {isMac ? 'IAC 出力' : 'A 出力'}</span>
               <ChevronRight size={16} />
-              <span>DAW · B 入力</span>
+              <span>DAW · {isMac ? 'IAC 入力' : 'B 入力'}</span>
             </div>
           </Card>
           <Card title="入力のリマップ">
@@ -1140,8 +1149,8 @@ export function SettingsScreen({
         <UpdatesCard updates={updates} settings={s} saveSettings={saveSettings} />
         <Card title="起動と常駐">
           <Toggle
-            label="Windows 起動時に自動起動"
-            description="トレイに最小化した状態で開始します。"
+            label="ログイン時に自動起動"
+            description={`${trayName}に常駐した状態で開始します。`}
             checked={autostart}
             disabled={!native}
             onChange={async (v) => {
@@ -1155,7 +1164,8 @@ export function SettingsScreen({
             }}
           />
           <Note>
-            ウィンドウを閉じてもライティングは続きます。終了するときはトレイメニューから「終了」を選んでください。
+            ウィンドウを閉じてもライティングは続きます。終了するときは{trayName}の Keylume
+            メニューから「終了」を選んでください。
           </Note>
           <button className="secondary" onClick={onSetup}>
             セットアップを開く
@@ -1234,7 +1244,7 @@ export function SettingsScreen({
                 saveSettings({ ...s, piano: { ...s.piano, outputDevice: e.target.value } })
               }
             >
-              <option value="">Windows の既定に自動追従</option>
+              <option value="">{systemName} の既定に自動追従</option>
               {[
                 ...new Set([
                   ...state.status.audioDevices,
@@ -1246,38 +1256,40 @@ export function SettingsScreen({
             </select>
           </label>
           <p className="muted">
-            「Windows
+            「{systemName}{' '}
             の既定」は、ヘッドホンやスピーカーへの出力変更に約1秒で追従します。デバイスを指定すると、その出力先を使い続けます。
           </p>
           <Note>
             出力切り替え中は一時的に音が途切れます。ループの録音内容は保持します。ピアノOFFまたはアプリ終了で消去されます。
           </Note>
         </Card>
-        <Card title="音声入力">
-          <label className="field">
-            <span>ループバックする再生デバイス</span>
-            <select
-              value={s.audioDevice}
-              onChange={(e) => saveSettings({ ...s, audioDevice: e.target.value })}
-            >
-              <option value="">Windows の既定の出力</option>
-              {state.status.audioDevices.map((d) => (
-                <option key={d}>{d}</option>
-              ))}
-            </select>
-          </label>
-          <p className="muted">
-            音声系エフェクトを使う間だけ WASAPI ループバックを開始します。FFT 2048、8
-            バンド、自動ゲインと平滑化を使用します。
-          </p>
-          <span className="badge">
-            {state.status.audio === 'capturing'
-              ? '解析中'
-              : state.status.audio === 'stopped'
-                ? '停止中'
-                : state.status.audio}
-          </span>
-        </Card>
+        {!isMac && (
+          <Card title="音声入力">
+            <label className="field">
+              <span>ループバックする再生デバイス</span>
+              <select
+                value={s.audioDevice}
+                onChange={(e) => saveSettings({ ...s, audioDevice: e.target.value })}
+              >
+                <option value="">Windows の既定の出力</option>
+                {state.status.audioDevices.map((d) => (
+                  <option key={d}>{d}</option>
+                ))}
+              </select>
+            </label>
+            <p className="muted">
+              音声系エフェクトを使う間だけ WASAPI ループバックを開始します。FFT 2048、8
+              バンド、自動ゲインと平滑化を使用します。
+            </p>
+            <span className="badge">
+              {state.status.audio === 'capturing'
+                ? '解析中'
+                : state.status.audio === 'stopped'
+                  ? '停止中'
+                  : state.status.audio}
+            </span>
+          </Card>
+        )}
         <Card title="アイドルと画面ロック">
           <label className="field">
             <span>減光するまでの時間（分、0 で無効）</span>
@@ -1382,21 +1394,27 @@ export function SetupWizard({
           <p className="micro">{state.status.deviceName}</p>
         </>
       )}
-      {step === 1 && (
-        <>
+      {step === 1 &&
+        (isMac ? (
           <Note>
-            Windows MIDI Services は{' '}
-            {state.status.service === 'running'
-              ? '稼働しています'
-              : 'デスクトップ環境で確認してください'}
-            。DAW と同時に使うには、対応する WinMM のマルチクライアント環境が必要です。
+            macOS 標準の Core MIDI を使います。「Audio MIDI 設定」の「MIDI スタジオ」で Launchkey
+            が表示されることを確認してください。
           </Note>
-          <button className="secondary" onClick={() => void openLink(serviceUrl)}>
-            Microsoft の案内を開く
-            <ArrowUpRight size={14} />
-          </button>
-        </>
-      )}
+        ) : (
+          <>
+            <Note>
+              Windows MIDI Services は{' '}
+              {state.status.service === 'running'
+                ? '稼働しています'
+                : 'デスクトップ環境で確認してください'}
+              。DAW と同時に使うには、対応する WinMM のマルチクライアント環境が必要です。
+            </Note>
+            <button className="secondary" onClick={() => void openLink(serviceUrl)}>
+              Microsoft の案内を開く
+              <ArrowUpRight size={14} />
+            </button>
+          </>
+        ))}
       {step === 2 && (
         <>
           <div className="setup-art">
@@ -1431,15 +1449,15 @@ export function SetupWizard({
       )}
       {step === 4 && (
         <>
-          <p>ライティング優先では、ループバックを 2 組作成してパッドとコントロールを転送します。</p>
+          <p>{routingGuide}</p>
           <div className="routing-flow">
-            <span>Keylume → A</span>
+            <span>Keylume → {isMac ? 'IAC バス' : 'A'}</span>
             <ChevronRight size={16} />
-            <span>B → DAW</span>
+            <span>{isMac ? 'IAC バス' : 'B'} → DAW</span>
           </div>
           <p>
-            DAW では Launchkey の制御サーフェスを解除し、鍵盤の MIDI ポートと B
-            側入力を有効にします。
+            DAW では Launchkey の制御サーフェスを解除し、鍵盤の MIDI ポートと{routedInput}
+            を有効にします。
           </p>
           <button className="secondary" onClick={() => void openLink(loopbackUrl)}>
             転送ポートの作成手順

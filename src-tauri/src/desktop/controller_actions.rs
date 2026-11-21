@@ -17,7 +17,7 @@ pub fn perform(
         if !core.control.lock().unwrap().settings.mock {
             desktop.volume(input.value, input.delta);
         } else {
-            core.show_feedback("Windows Volume", "Preview");
+            core.show_feedback("System Volume", "Preview");
         }
         return Ok(false);
     }

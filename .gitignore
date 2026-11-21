@@ -12,7 +12,6 @@ test-results/
 *.tsbuildinfo
 src-tauri/icons/android/
 src-tauri/icons/ios/
-src-tauri/icons/*.icns
 src-tauri/icons/Square*.png
 src-tauri/icons/StoreLogo.png
 src-tauri/icons/32x32.png

@@ -27,6 +27,14 @@ struct GithubRelease {
     assets: Vec<GithubAsset>,
 }
 
+fn installer_name(version: &Version) -> String {
+    if cfg!(target_os = "macos") {
+        format!("Keylume_{version}_universal.dmg")
+    } else {
+        format!("Keylume_{version}_x64-setup.exe")
+    }
+}
+
 pub fn select_release(
     bytes: &[u8],
     current: &str,
@@ -43,7 +51,7 @@ pub fn select_release(
             if r.draft || (!include_previews && preview) || version <= current {
                 return None;
             }
-            let asset = format!("Keylume_{version}_x64-setup.exe");
+            let asset = installer_name(&version);
             let download = format!("{REPOSITORY}/releases/download/{}/{asset}", r.tag_name);
             if !r.assets.iter().any(|a| {
                 a.name == asset
@@ -106,7 +114,8 @@ mod tests {
     use super::*;
     use serde_json::{json, Value};
     fn release(version: &str, preview: bool) -> Value {
-        json!({"tag_name":format!("v{version}"),"draft":false,"prerelease":preview,"assets":[{"name":format!("Keylume_{version}_x64-setup.exe"),"state":"uploaded","size":100,"browser_download_url":format!("{REPOSITORY}/releases/download/v{version}/Keylume_{version}_x64-setup.exe")} ]})
+        let asset = installer_name(&Version::parse(version).unwrap());
+        json!({"tag_name":format!("v{version}"),"draft":false,"prerelease":preview,"assets":[{"name":asset,"state":"uploaded","size":100,"browser_download_url":format!("{REPOSITORY}/releases/download/v{version}/{asset}")} ]})
     }
     fn select(values: Vec<Value>, previews: bool) -> Option<Release> {
         select_release(&serde_json::to_vec(&values).unwrap(), "0.1.9", previews).unwrap()

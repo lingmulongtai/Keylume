@@ -1,3 +1,4 @@
+import { trayName } from '../platform';
 import { useCallback, useEffect, useState } from 'react';
 import { Monitor, Maximize2 } from 'lucide-react';
 import type { ViewProps } from '../ui-state';
@@ -267,7 +268,7 @@ export default function Stage(props: ViewProps) {
           ))}
           <button onClick={refresh}>画面を再検出</button>
           <p className="stage-hint">
-            複数選ぶと連続した1つの鍵盤になります。Windowsの画面配置を基準に、左右端と高さを調整してください。演奏画面は
+            複数選ぶと連続した1つの鍵盤になります。システムの画面配置を基準に、左右端と高さを調整してください。演奏画面は
             Esc で閉じられます。
           </p>
         </fieldset>
@@ -316,7 +317,7 @@ export default function Stage(props: ViewProps) {
             背景を透明にする
           </label>
           <p className="stage-hint">
-            固定中は常にクリックを下のアプリへ通します。位置合わせは操作パネルかトレイから開けます。操作パネルはクリックできます。
+            固定中は常にクリックを下のアプリへ通します。位置合わせは操作パネルか{trayName}から開けます。操作パネルはクリックできます。
           </p>
           <label className="stage-field">
             <span>スタイル</span>

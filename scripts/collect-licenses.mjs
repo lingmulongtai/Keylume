@@ -3,23 +3,29 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 
 // Collect license texts from the exact installed/locked dependency versions.
-const metadata = JSON.parse(
-  execFileSync(
-    'cargo',
-    [
-      'metadata',
-      '--manifest-path',
-      'src-tauri/Cargo.toml',
-      '--locked',
-      '--format-version',
-      '1',
-      '--filter-platform',
-      'x86_64-pc-windows-msvc',
-    ],
-    { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
-  ),
-);
-const resolved = new Set(metadata.resolve.nodes.map((node) => node.id));
+const rustPackages = new Map();
+for (const target of ['x86_64-pc-windows-msvc', 'aarch64-apple-darwin', 'x86_64-apple-darwin']) {
+  const metadata = JSON.parse(
+    execFileSync(
+      'cargo',
+      [
+        'metadata',
+        '--manifest-path',
+        'src-tauri/Cargo.toml',
+        '--locked',
+        '--format-version',
+        '1',
+        '--filter-platform',
+        target,
+      ],
+      { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+    ),
+  );
+  const resolved = new Set(metadata.resolve.nodes.map((node) => node.id));
+  for (const pkg of metadata.packages) {
+    if (pkg.name !== 'keylume' && resolved.has(pkg.id)) rustPackages.set(pkg.id, pkg);
+  }
+}
 const overrides = JSON.parse(readFileSync('licenses/upstream/sources.json', 'utf8'));
 const packages = [];
 const missing = [];
@@ -57,9 +63,7 @@ function add(kind, name, version, root, license, source) {
   if (!texts.length) missing.push(`${kind}:${name}@${version} (${license ?? 'unknown license'})`);
   packages.push({ kind, name, version, license, source, texts });
 }
-for (const pkg of metadata.packages.filter(
-  (pkg) => resolved.has(pkg.id) && pkg.name !== 'keylume',
-)) {
+for (const pkg of rustPackages.values()) {
   add(
     'cargo',
     pkg.name,
@@ -88,7 +92,7 @@ packages.sort((a, b) =>
 );
 const output = [
   'Keylume third-party license notices',
-  'Generated from Cargo.lock (Windows dependency graph, including build tools) and production npm dependencies.',
+  'Generated from Cargo.lock (Windows and macOS dependency graphs, including build tools) and production npm dependencies.',
   'Upstream packages are unmodified. Build dependencies are included conservatively.',
   'This document does not grant a license to Keylume application code.',
   '',

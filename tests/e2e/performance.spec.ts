@@ -165,7 +165,7 @@ test('selected hardware fader controls piano volume and can be disabled', async 
   await expect(page.getByLabel('ピアノ音量', { exact: true })).toHaveValue('0');
 });
 
-test('settings offers a persistent output choice and Windows default following', async ({
+test('settings offers a persistent output choice and system default following', async ({
   page,
 }) => {
   await page.goto('/');
@@ -173,7 +173,8 @@ test('settings offers a persistent output choice and Windows default following',
   const output = page.getByLabel('楽器の音声出力先', { exact: true });
   await expect(output).toBeVisible();
   await expect(output).toHaveValue('');
-  await expect(output.locator('option:checked')).toHaveText('Windows の既定に自動追従');
+  const platform = await page.evaluate(() => (/Mac/i.test(navigator.platform) ? 'Mac' : 'Windows'));
+  await expect(output.locator('option:checked')).toHaveText(`${platform} の既定に自動追従`);
   await page.getByRole('button', { name: 'ホーム', exact: true }).click();
   await page.getByText('音声と演奏の設定', { exact: true }).click();
   await expect(page.getByLabel('ピアノの出力先', { exact: true })).toHaveValue('');

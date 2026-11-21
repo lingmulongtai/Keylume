@@ -1,10 +1,11 @@
+import { systemName } from './platform';
 import { useEffect, useState } from 'react';
 import { Power, Minus, Plus, Volume2, Square } from 'lucide-react';
 import { command, getPianoState, native, subscribe } from './api';
 import type { PianoStatus, PianoSettings } from './types';
 import type { ViewProps } from './ui-state';
 import { Modal, Slider, Toggle } from './components';
-import { pianoSounds } from './piano-sounds';
+import { modeledGrandId, pianoSounds } from './piano-sounds';
 import InstrumentEffects from './InstrumentEffects';
 import SoundLibrary from './SoundLibrary';
 import { soundName, libraryCommand } from './sounds';
@@ -128,6 +129,25 @@ export default function Piano({
           {status.error}
         </p>
       )}
+      {p.sound === modeledGrandId && (
+        <fieldset className="piano-character">
+          <legend>グランドピアノの音作り</legend>
+          {(
+            [
+              ['felt', 'ハンマーの硬さ'],
+              ['decay', '弦の余韻'],
+              ['resonance', '共鳴の強さ'],
+            ] as const
+          ).map(([key, label]) => (
+            <Slider
+              key={key}
+              label={label}
+              value={p.character[key]}
+              onChange={(value) => update({ character: { ...p.character, [key]: value } })}
+            />
+          ))}
+        </fieldset>
+      )}
       <InstrumentEffects value={p.effects} change={(effects) => update({ effects })} />
       <details className="piano-details">
         <summary>音声と演奏の設定</summary>
@@ -175,7 +195,7 @@ export default function Piano({
               value={p.outputDevice}
               onChange={(e) => update({ outputDevice: e.target.value })}
             >
-              <option value="">Windows の既定に自動追従</option>
+              <option value="">{systemName} の既定に自動追従</option>
               {[
                 ...new Set([
                   ...state.status.audioDevices,
@@ -221,12 +241,18 @@ export default function Piano({
             に譲るモードでは鍵盤入力も解放します。
           </p>
           <p className="piano-credit">
-            {p.sound.startsWith('generaluser:')
-              ? 'GeneralUser GS · License v2.0'
-              : p.sound.startsWith('user:')
-                ? '持ち込みSoundFont'
-                : `${pianoSounds.find((s) => s.id === p.sound)?.credit} · CC0 1.0`}{' '}
-            · 128音ポリフォニー
+            {p.sound === modeledGrandId ? (
+              'Keylume 物理モデリング・ピアノ · 48音ポリフォニー'
+            ) : (
+              <>
+                {p.sound.startsWith('generaluser:')
+                  ? 'GeneralUser GS · License v2.0'
+                  : p.sound.startsWith('user:')
+                    ? '持ち込みSoundFont'
+                    : `${pianoSounds.find((s) => s.id === p.sound)?.credit} · CC0 1.0`}{' '}
+                · 128音ポリフォニー
+              </>
+            )}
           </p>
         </div>
       </details>

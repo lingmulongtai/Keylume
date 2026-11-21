@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { practiced } from './hands';
 import { emptyStage, type StageSnapshot, type Song } from './types';
 const native = isTauri();
 let state = emptyStage(),
@@ -19,6 +20,24 @@ try {
   /* Defaults recover an unreadable preview preference. */
 }
 function emit() {
+  const pitches = new Set<number>();
+  const settings = state.settings;
+  if (state.running && song && settings.mode === 'practice' && settings.playbackMode !== 'off') {
+    const at = state.position - (settings.audioOffsetMs * settings.speed) / 1000;
+    for (const note of song.notes) {
+      if (note.start > at) break;
+      if (
+        note.end > at &&
+        settings.tracks.includes(note.track) &&
+        (settings.practiceMode === 'listen' ||
+          settings.playbackMode === 'full' ||
+          !practiced(note, settings))
+      ) {
+        pitches.add(note.pitch);
+      }
+    }
+  }
+  state.playbackHeld = [...pitches].sort((a, b) => a - b);
   for (const fn of listeners) fn(structuredClone(state));
 }
 function start() {

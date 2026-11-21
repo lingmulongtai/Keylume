@@ -1,5 +1,6 @@
 import { previewStageInput } from './stage/api';
 import { defaultController } from './controller';
+import { isMac } from './platform';
 import { mergeSettings } from './settings-patch';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -36,14 +37,25 @@ export const defaults: Settings = {
   dawDrum: false,
   autoRepair: true,
   fadeOnRelease: true,
-  dawProcesses: [
-    'Ableton Live*.exe',
-    'FL64.exe',
-    'Cubase*.exe',
-    'Bitwig Studio.exe',
-    'Studio One.exe',
-    'reaper.exe',
-  ],
+  dawProcesses: isMac
+    ? [
+        'Live',
+        'Logic Pro',
+        'GarageBand',
+        'FL Studio',
+        'Cubase*',
+        'Bitwig Studio',
+        'Studio One',
+        'REAPER',
+      ]
+    : [
+        'Ableton Live*.exe',
+        'FL64.exe',
+        'Cubase*.exe',
+        'Bitwig Studio.exe',
+        'Studio One.exe',
+        'reaper.exe',
+      ],
   padsPort: 'Keylume Pads',
   controlsPort: 'Keylume Controls',
   forwarding: true,
@@ -76,7 +88,9 @@ export const defaults: Settings = {
       'generaluser:0:81',
       'generaluser:0:89',
       'generaluser:0:48',
+      'modeled-grand',
     ],
+    character: { felt: 0.5, decay: 0.5, resonance: 0.5 },
     effects: { ...defaultInstrumentFx },
     enabled: false,
     sound: 'upright',
@@ -148,6 +162,7 @@ try {
         piano: {
           ...defaults.piano,
           ...saved.settings.piano,
+          character: { ...defaults.piano.character, ...saved.settings.piano?.character },
           effects: { ...defaultInstrumentFx, ...saved.settings.piano?.effects },
         },
       },

@@ -1,4 +1,6 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+#[cfg(any(windows, target_os = "macos"))]
+use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 pub static RESUME_GENERATION: AtomicU64 = AtomicU64::new(0);
 pub static SUSPENDED: AtomicBool = AtomicBool::new(false);
 pub static LOCKED: AtomicBool = AtomicBool::new(false);
@@ -27,7 +29,7 @@ pub fn midi_service() -> String {
         }
     }
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn midi_service() -> String {
     "notWindows".into()
 }
@@ -49,7 +51,7 @@ pub fn idle_minutes() -> u32 {
         }
     }
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn idle_minutes() -> u32 {
     0
 }
@@ -62,7 +64,7 @@ pub fn foreground_pid() -> u32 {
         pid
     }
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn foreground_pid() -> u32 {
     0
 }
@@ -130,5 +132,44 @@ pub fn listen() {
         }
     });
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn listen() {}
+
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn keylume_idle_minutes() -> u32;
+    fn keylume_foreground_pid() -> u32;
+    fn keylume_observe_session(
+        sleep_changed: extern "C" fn(bool),
+        lock_changed: extern "C" fn(bool),
+    );
+}
+
+#[cfg(target_os = "macos")]
+pub fn midi_service() -> String {
+    "coreMIDI".into()
+}
+
+#[cfg(target_os = "macos")]
+pub fn idle_minutes() -> u32 {
+    unsafe { keylume_idle_minutes() }
+}
+
+#[cfg(target_os = "macos")]
+pub fn foreground_pid() -> u32 {
+    unsafe { keylume_foreground_pid() }
+}
+
+#[cfg(target_os = "macos")]
+pub fn listen() {
+    extern "C" fn sleep_changed(sleeping: bool) {
+        SUSPENDED.store(sleeping, Ordering::SeqCst);
+        if !sleeping {
+            RESUME_GENERATION.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    extern "C" fn lock_changed(locked: bool) {
+        LOCKED.store(locked, Ordering::SeqCst);
+    }
+    unsafe { keylume_observe_session(sleep_changed, lock_changed) }
+}

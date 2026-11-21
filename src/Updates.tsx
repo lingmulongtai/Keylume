@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { native } from './api';
 import { appVersion } from './version';
+import { systemName } from './platform';
 import type { Settings } from './types';
 import { Card, Toggle } from './components';
 
@@ -56,7 +57,7 @@ export function useUpdates(toast: (message: string) => void): UpdateController {
   const run = useCallback(
     async (command: string) => {
       if (!native) {
-        toast('更新確認は Windows アプリで利用できます');
+        toast('更新確認はデスクトップ版で利用できます');
         return;
       }
       try {
@@ -82,7 +83,7 @@ export function UpdateBanner({ updates }: { updates: UpdateController }) {
     <aside className="update-banner" aria-label="アップデートのお知らせ" role="status">
       <div>
         <strong>Keylume v{state.release.version} が利用できます</strong>
-        <span>Windows 版をダウンロードして更新してください。</span>
+        <span>{systemName} 版をダウンロードして更新してください。</span>
       </div>
       <button className="primary small" onClick={() => void open()}>
         更新ページを開く
@@ -132,7 +133,7 @@ export function UpdatesCard({
       />
       <p className="micro">現在のバージョン: v{state.currentVersion}</p>
       <p role="status" className={state.status === 'error' ? 'update-error' : 'muted'}>
-        {enabled ? message : '更新確認は Windows アプリで利用できます。'}
+        {enabled ? message : '更新確認はデスクトップ版で利用できます。'}
       </p>
       {state.checkedAt && (
         <p className="micro">最終確認: {new Date(state.checkedAt).toLocaleString('ja-JP')}</p>

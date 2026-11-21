@@ -68,6 +68,7 @@ function HardwareFace({
           <rect
             key={k.note}
             data-key={k.note}
+            transform={held?.has('key.' + k.note) ? 'translate(0 1.5)' : undefined}
             x={k.x}
             y={bed.y}
             width={k.w}
@@ -81,7 +82,11 @@ function HardwareFace({
       {layout.decor.keys
         .filter((k) => k.black)
         .map((k) => (
-          <g key={k.note} data-key={k.note}>
+          <g
+            key={k.note}
+            data-key={k.note}
+            transform={held?.has('key.' + k.note) ? 'translate(0 1.2)' : undefined}
+          >
             <rect
               x={k.x - 0.6}
               y={bed.y}

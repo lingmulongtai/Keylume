@@ -512,14 +512,17 @@ pub fn run() {
                 .as_ref()
                 .map(|p| p.with_extension("data"))
                 .unwrap_or_else(|| {
-                    std::env::var_os("APPDATA")
-                        .map(PathBuf::from)
-                        .unwrap_or_else(|| {
-                            app.path()
-                                .app_config_dir()
-                                .expect("configuration directory")
-                        })
-                        .join("Keylume")
+                    #[cfg(windows)]
+                    if let Some(dir) = std::env::var_os("APPDATA") {
+                        return PathBuf::from(dir).join("Keylume");
+                    }
+                    let root = app
+                        .path()
+                        .app_config_dir()
+                        .expect("configuration directory");
+                    #[cfg(windows)]
+                    let root = root.join("Keylume");
+                    root
                 });
             let storage = Storage::new(root).map_err(std::io::Error::other)?;
             let (core, rx) = Core::create(storage);
@@ -609,7 +612,7 @@ pub fn run() {
                 .icon(icon)
                 .tooltip("Keylume · Light your sound")
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(cfg!(target_os = "macos"))
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
@@ -617,7 +620,9 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        show(tray.app_handle());
+                        if !cfg!(target_os = "macos") {
+                            show(tray.app_handle());
+                        }
                     }
                 })
                 .on_menu_event(|app, event| {
@@ -690,6 +695,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Unable to start Keylume")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows: false,
+                ..
+            } = event
+            {
+                show(app);
+            }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 let core = app.state::<Arc<Core>>();
                 if !core.terminated.load(Ordering::SeqCst) {

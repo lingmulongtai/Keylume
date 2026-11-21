@@ -24,6 +24,7 @@ pub struct SoundEntry {
 pub fn catalog() -> Vec<SoundEntry> {
     let mut entries = vec![];
     for (id, name) in [
+        (crate::piano::MODELED_GRAND_ID, "Modeled Grand"),
         ("upright", "Upright Piano"),
         ("bright", "Bright Upright"),
         ("fm-piano", "FM Electric"),
@@ -51,7 +52,15 @@ pub struct SoundId {
 }
 impl SoundId {
     pub fn parse(id: &str) -> Result<Self, String> {
-        if ["upright", "bright", "fm-piano", "honky-tonk"].contains(&id) {
+        if [
+            crate::piano::MODELED_GRAND_ID,
+            "upright",
+            "bright",
+            "fm-piano",
+            "honky-tonk",
+        ]
+        .contains(&id)
+        {
             return Ok(Self {
                 key: id.into(),
                 bank: 0,

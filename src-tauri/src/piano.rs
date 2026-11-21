@@ -2,11 +2,36 @@ use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 use serde::{Deserialize, Serialize};
 use std::{io::Cursor, sync::Arc};
 
+pub const MODELED_GRAND_ID: &str = "modeled-grand";
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PianoCharacter {
+    pub felt: f32,
+    pub decay: f32,
+    pub resonance: f32,
+}
+impl Default for PianoCharacter {
+    fn default() -> Self {
+        Self {
+            felt: 0.5,
+            decay: 0.5,
+            resonance: 0.5,
+        }
+    }
+}
+impl PianoCharacter {
+    pub fn values(self) -> [f32; 3] {
+        [self.felt, self.decay, self.resonance]
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PianoSettings {
     pub enabled: bool,
     pub sound: String,
+    pub character: PianoCharacter,
     pub drums: bool,
     pub drum_kit: crate::drums::DrumSettings,
     pub drum_volume: f32,
@@ -25,6 +50,7 @@ impl Default for PianoSettings {
         Self {
             enabled: false,
             sound: "upright".into(),
+            character: Default::default(),
             drums: true,
             drum_kit: Default::default(),
             drum_volume: 0.7,
@@ -45,6 +71,7 @@ impl Default for PianoSettings {
                 "generaluser:0:81",
                 "generaluser:0:89",
                 "generaluser:0:48",
+                MODELED_GRAND_ID,
             ]
             .into_iter()
             .map(str::to_owned)
@@ -54,6 +81,14 @@ impl Default for PianoSettings {
 }
 impl PianoSettings {
     pub fn validate(&self) -> Result<(), String> {
+        if self
+            .character
+            .values()
+            .iter()
+            .any(|v| !(0.0..=1.0).contains(v))
+        {
+            return Err("物理ピアノの設定値が範囲外です".into());
+        }
         self.effects.validate()?;
         self.drum_kit.validate()?;
         if self.favorites.len() > 128

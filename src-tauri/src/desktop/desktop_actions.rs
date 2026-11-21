@@ -50,7 +50,7 @@ impl DesktopActions {
                 if let Some(volume) = volume {
                     match system_volume(volume.value, volume.delta) {
                         Ok(level) => {
-                            core.show_feedback("Windows Volume", format!("{:.0}%", level * 100.))
+                            core.show_feedback("System Volume", format!("{:.0}%", level * 100.))
                         }
                         Err(error) => {
                             let _ = app.emit("notice", error);
@@ -167,7 +167,7 @@ fn system_volume(value: f32, delta: Option<f32>) -> Result<f32, String> {
         result.map_err(|e| format!("Windows音量を変更できませんでした: {e}"))
     }
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn system_volume(_: f32, _: Option<f32>) -> Result<f32, String> {
     Err("Windowsで利用できます".into())
 }
@@ -187,13 +187,23 @@ fn open_target(app: &tauri::AppHandle, target: &str) -> Result<(), String> {
             .open_url(target, None::<&str>)
             .map_err(|e| e.to_string())
     } else {
-        let mut command = std::process::Command::new(target);
-        #[cfg(windows)]
+        #[cfg(target_os = "macos")]
         {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(0x08000000);
+            use tauri_plugin_opener::OpenerExt;
+            app.opener()
+                .open_path(target, None::<&str>)
+                .map_err(|e| e.to_string())
         }
-        command.spawn().map(|_| ()).map_err(|e| e.to_string())
+        #[cfg(not(target_os = "macos"))]
+        {
+            let mut command = std::process::Command::new(target);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(0x08000000);
+            }
+            command.spawn().map(|_| ()).map_err(|e| e.to_string())
+        }
     }
 }
 #[cfg(windows)]
@@ -276,13 +286,46 @@ fn send_wheel(delta: i32) -> Result<(), String> {
         Err("Windowsがスクロール操作を受け付けませんでした".into())
     }
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn send_keys(_: &[u16]) -> Result<(), String> {
     Err("Windowsで利用できます".into())
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn send_wheel(_: i32) -> Result<(), String> {
     Err("Windowsで利用できます".into())
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn keylume_mac_keys(keys: *const u16, count: usize) -> i32;
+    fn keylume_mac_scroll(pixels: i32) -> i32;
+    fn keylume_mac_volume(level: *mut f32, relative: bool) -> bool;
+}
+
+#[cfg(target_os = "macos")]
+fn mac_event_result(result: i32) -> Result<(), String> {
+    match result {
+        0 => Ok(()),
+        1 => Err("システム設定 → プライバシーとセキュリティ → アクセシビリティで Keylume を許可してください".into()),
+        _ => Err("このキー操作は Mac で使用できません".into()),
+    }
+}
+#[cfg(target_os = "macos")]
+fn send_keys(keys: &[u16]) -> Result<(), String> {
+    mac_event_result(unsafe { keylume_mac_keys(keys.as_ptr(), keys.len()) })
+}
+#[cfg(target_os = "macos")]
+fn send_wheel(delta: i32) -> Result<(), String> {
+    mac_event_result(unsafe { keylume_mac_scroll(delta) })
+}
+#[cfg(target_os = "macos")]
+fn system_volume(value: f32, delta: Option<f32>) -> Result<f32, String> {
+    let mut level = delta.unwrap_or(value);
+    if unsafe { keylume_mac_volume(&mut level, delta.is_some()) } {
+        Ok(level)
+    } else {
+        Err("この出力デバイスのシステム音量を変更できませんでした".into())
+    }
 }
 
 #[cfg(test)]

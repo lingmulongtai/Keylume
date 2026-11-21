@@ -34,5 +34,5 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
           test -f "docs/releases/$GITHUB_REF_NAME.md"
           gh release create "$GITHUB_REF_NAME" release-assets/* --verify-tag \
-            --title "Keylume $GITHUB_REF_NAME Preview" \
+            --title "Keylume Windows $GITHUB_REF_NAME Preview" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md" --prerelease

@@ -1,5 +1,12 @@
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use crossbeam_channel::{bounded, Receiver, Sender};
+#[cfg(windows)]
+use cpal::traits::StreamTrait;
+use cpal::traits::{DeviceTrait, HostTrait};
+#[cfg(any(windows, test))]
+use crossbeam_channel::bounded;
+use crossbeam_channel::Receiver;
+#[cfg(any(windows, test))]
+use crossbeam_channel::Sender;
+#[cfg(any(windows, test))]
 use rustfft::{num_complex::Complex, FftPlanner};
 pub struct AudioCapture {
     _stream: cpal::Stream,
@@ -13,6 +20,12 @@ pub fn devices() -> Vec<String> {
         .unwrap_or_default()
 }
 impl AudioCapture {
+    #[cfg(not(windows))]
+    pub fn start(_: &str) -> Result<Self, String> {
+        Err("システム音声のループバックは Windows 版で利用できます".into())
+    }
+
+    #[cfg(windows)]
     pub fn start(name: &str) -> Result<Self, String> {
         let host = cpal::default_host();
         let device = if name.is_empty() {
@@ -61,6 +74,7 @@ impl AudioCapture {
         })
     }
 }
+#[cfg(any(windows, test))]
 struct Analyzer {
     channels: usize,
     rate: f32,
@@ -74,6 +88,7 @@ struct Analyzer {
     gain: f32,
     tx: Sender<[f32; 8]>,
 }
+#[cfg(any(windows, test))]
 impl Analyzer {
     fn new(channels: usize, rate: u32, tx: Sender<[f32; 8]>) -> Self {
         let fft = FftPlanner::new().plan_fft_forward(2048);

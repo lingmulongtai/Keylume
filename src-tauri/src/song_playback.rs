@@ -47,6 +47,14 @@ impl Default for SongPlayback {
     }
 }
 impl SongPlayback {
+    pub fn held_pitches(&self) -> Vec<u8> {
+        self.counts
+            .iter()
+            .enumerate()
+            .filter(|(_, count)| **count > 0)
+            .map(|(pitch, _)| pitch as u8)
+            .collect()
+    }
     pub fn invalidate(&mut self) {
         self.epoch = None;
     }
@@ -288,11 +296,13 @@ mod tests {
         assert!(player.update(&e).reset);
         e.tick(0.5);
         assert_eq!(player.update(&e).messages, vec![[0x90, 48, 90]]);
+        assert_eq!(player.held_pitches(), vec![48]);
         assert_eq!(e.snapshot().waiting, vec![72]);
         e.tick(0.6);
         assert!(player.update(&e).messages.is_empty());
         e.tick(1.1);
         assert_eq!(player.update(&e).messages, vec![[0x80, 48, 0]]);
+        assert!(player.held_pitches().is_empty());
         e.tick(1.2);
         assert!(player.update(&e).messages.is_empty());
         e.pause();

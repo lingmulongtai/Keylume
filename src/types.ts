@@ -78,6 +78,7 @@ export interface Profile {
   priority: number;
 }
 export interface PianoSettings {
+  character: { felt: number; decay: number; resonance: number };
   favorites: string[];
   effects: InstrumentFx;
   enabled: boolean;

@@ -1,33 +1,32 @@
-# Keylume
+# Keylume for Windows
 
 Launchkey MK4 61 向けの非公式ライティングコントローラー＆常駐演奏アプリ。Tauri 2 + Rust + React で、ウィンドウを閉じても演奏とライティングを続けます。
 
-**v0.7 は実機受け入れ未完了のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
+**v0.8 は実機受け入れ未完了のプレビュー版です。** 初期状態は MockDevice。実機の動作、DAW ごとの共存、スリープ復帰、72 時間連続稼働は、同梱の受け入れチェックリストで確認してください。Novation / Focusrite とは関係ありません。
 
 ## 起動
 
-[GitHub Releases — v0.7.0 Preview](https://github.com/lingmulongtai/Keylume/releases/tag/v0.7.0) からダウンロードできます。
+[Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.0/Keylume_0.8.0_x64-setup.exe)を実行してください。[ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.0/Keylume_0.8.0_windows-x64.zip)は展開して `Keylume.exe` を起動します。Windows 11 と WebView2 Runtime が必要です。コード署名はしていません。
 
-片手練習、左右の色分け、反対の手の自動伴奏、試聴、MIDI音量・音声タイミング調整を利用できます。固定した演奏表示は常にクリックを背面へ通し、操作パネルは独立して操作できます。Windows音量のフェーダーと、デスクトップ操作中の鍵盤演奏にも対応しています。Scale/Arp/Chord Mapの本体機能との干渉を避けるため、これらのアプリ割り当ては標準では無効です。
+Mac 版は独立した [Keylume-macOS](https://github.com/lingmulongtai/Keylume-macOS) で開発・配布しています。
 
-- [Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.7.0/Keylume_0.7.0_x64-setup.exe)
-- [ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.7.0/Keylume_0.7.0_windows-x64.zip)
-
-![画面を離れずに選べるライティング](docs/images/v050-lighting.png)
-
-インストーラーはダウンロードした `Keylume_0.7.0_x64-setup.exe` を実行してください。ポータブル版は `Keylume_0.7.0_windows-x64.zip` を展開して直下の `Keylume.exe` を実行します。WebView2 Runtime が必要です。インストーラーは未導入時に Runtime の導入を案内します。コード署名はしていません。
+![ライティング画面](docs/images/v050-lighting.png)
 
 1. 起動してデバイスプレビューを確認します。
 2. 「設定 → デバイス」で **MockDevice でプレビュー** を OFF にすると、Launchkey MK4 61 の DAW ポートを探します。
 3. 「設定 → 共存設定」で、ライティング優先または DAW に譲るを選択します。
 4. LED マップ検証で、RGB ID、単色ボタンの種類、B3 / 93 の違いを確認します。
-5. × はトレイへ格納。終了はトレイの「終了」を使います。
+5. ウィンドウを閉じると常駐します。終了するときは、Mac ではメニューバー、Windows ではトレイの Keylume メニューで「終了」を選びます。
 
 鍵盤とノブには LED がありません。キャンバスの鍵盤ハイライトは画面上だけの表示です。
 
+## ホームで音源を試す
+
+「テスト演奏」でデモ曲を選んで再生すると、その音源の演奏に合わせて鍵盤が動きます。内蔵曲は静かな分散和音の **Rain on Glass**、スウィングの **Pocket Swing**、三拍子の **Lantern Waltz**。自分のMIDIファイルも読み込めます。ホームと「演奏」タブは同じ曲と再生位置を使います。別の曲を選ぶと、読み込み中の曲が切り替わります。物理モデリング音源を試すには「選ぶ」で **Modeled Grand** に切り替えてください。
+
 ## ピアノを弾く
 
-ホーム画面の **Upright Piano の電源**をオンにしてください。4種類の無料ピアノ音源を同梱しているため、DAWや追加インストールは不要です。ベロシティ、サステインペダル（CC64）、本体のOctave変更、アプリの追加オクターブ、音量、出力デバイス選択に対応。設定を保存し、ウィンドウを閉じても使えます。[詳しい使い方と対応範囲](docs/piano.md)
+ホーム画面の **Upright Piano の電源**をオンにしてください。物理モデリング音源 **Modeled Grand** と4種類のサンプル音源を同梱しているため、DAWや追加インストールは不要です。ベロシティ、サステインペダル（CC64）、本体のOctave変更、アプリの追加オクターブ、音量、出力デバイス選択に対応。設定を保存し、ウィンドウを閉じても使えます。[詳しい使い方と対応範囲](docs/piano.md)
 
 「選ぶ」で音源カードを開くと、グランドピアノ、シンセ、パッド、ストリングスなど追加274音色を選べます。初回だけ約32MBを取得し、その後はオフラインで使えます。自分のSF2もインポートできます。本体の8ノブではリバーブなどの音作りを操作できます。
 
@@ -36,6 +35,8 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 ## 本体を自分のコントローラーにする
 
 「コントローラー」で演奏用とデスクトップ用の割り当てを別々に保存できます。右端のフェーダー下ボタンでモード切替。上下ボタンで音色／キット、中央の左右でライティングを選べます。Undo、ショートカット、メディア、アプリ／URL起動、Pitchホイールのスクロールにも対応します。[初期割り当てと変更方法](docs/controller.md)
+
+Mac でキー操作やスクロールを使う場合は「システム設定 → プライバシーとセキュリティ → アクセシビリティ」で Keylume を許可します。Undo の標準割り当ては `Cmd+Z` です。アプリの起動先には `.app` を選べます。
 
 ## 演奏画面・MIDI練習・ルーパー
 
@@ -49,10 +50,11 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 - 公式の61鍵モデルに合わせた本体図。16 パッド、9 フェーダーボタン、17 単色候補、61 鍵、8エンコーダーを描画。選択、範囲選択、ペイント、200%までの拡大。
 - つまみ・フェーダー・ホイール・鍵盤・パッド・DAWボタン・ペダルのライブ表示。Playは緑、Recordは赤。受信したArp/Scale、Touch、圧力にも対応。
+- サンプル不要の物理モデリング・ピアノ Modeled Grand。打鍵の強弱に応じた音色、ハンマーの硬さ・弦の余韻・共鳴の調整。
 - 4種類の内蔵CC0ピアノ、128ボイス、サステイン、±3オクターブ、音量・出力・バッファ設定、全音停止、DAW使用中の自動消音。
 - 追加274音色のオンデマンド取得、音源カード、検索・お気に入り、SF2インポート、8種類のリアルタイム音声エフェクト。
 - 演奏／デスクトップ別の操作割り当て、MIDI Learn、ショートカット、メディア、アプリ起動、連続スクロール。
-- 選択したハードウェアフェーダーでピアノ音量を操作。出力先を「設定」から選択し、Windowsの既定出力変更に自動追従。
+- 選択したハードウェアフェーダーでピアノ音量を操作。出力先を「設定」から選択し、OS の既定出力変更に自動追従。
 - 演奏ノートの軌跡、光・粒・音ごとのカラー、音域と鍵盤位置調整、複数モニターへの連続表示。
 - MIDI形式0/1読込、テンポ変更、トラック選択、タイミング採点／待機、速度・遅延補正・区間リピート。
 - 6キット・16パッドの編集可能な合成ドラム、1/2/4/8小節の録音・重ね録り・再生・停止・消去・8段階Undo、4拍カウントインとクリック。
@@ -63,7 +65,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 - Rust の常駐描画、差分送信、LED アドレスごとの最新値を保つ送信スレッド、トレイ、単一インスタンス、自動起動。
 - DAW プロセス監視、ハンドオフ、入力転送、ノート / CC / チャンネルの変換、ポート再接続、転送停止時のノート解放。
 - 前面アプリ / プロセス / 時間帯 / アイドルのプロファイル、手動固定、夜間・ロック時の減光。
-- WASAPI ループバック、FFT 2048、8 バンド、平滑化・自動ゲイン。音声機能を使う間だけ取得。
+- Windows 版では再生音に合わせて LED や OLED を動かせます（WASAPI ループバック、FFT 2048、8 バンド）。
 - OLED の ASCII テキスト、時計、1bit 画像、スペクトラム。画像は ACK 待ち・最大 10 fps・タイムアウト時は画像だけを停止。連続切替は最新の表示にまとめ、出力待ちで描画を止めません。
 - LED 検証、レイアウト編集・書き出し、MIDI モニタ、設定バックアップ、初回セットアップ案内。
 
@@ -71,13 +73,15 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 更新
 
-**v0.1.0からはv0.7.0を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
+**v0.1.0からはv0.7.0を一度手動でインストールしてください。** v0.2以降は新しいWindows版を検出すると、アプリ内またはトレイ常駐時に案内します。Mac 版は Universal DMG を含む新しいリリースを案内します。「更新ページを開く」からダウンロードしてインストールできます。自動確認は設定でオフにできます。[更新確認の詳細](docs/updates.md)
 
 プリセットと設定はそのまま保持します。旧既定レイアウトは61鍵モデルの配置へ移行し、LEDアドレス・種類・検証状態を保持します。座標を編集したカスタムレイアウトは維持します。[本体図と移行仕様](docs/device-layout.md)
 
 ## DAW と同時に使う
 
 ライティング優先では、DAW の Launchkey ネイティブ制御サーフェスを解除します。鍵盤の MIDI 入力を有効にし、パッドとコントロールはユーザー作成のループバックで転送します。
+
+Mac では「Audio MIDI 設定 → ウインドウ → MIDI スタジオを表示」で IAC ドライバを開き、オンラインにします。パッドとコントロール用のバスを 1 本ずつ作り、Keylume の「共存設定」で出力に、DAW で同じバスを入力に指定します。[Apple の IAC 設定手順](https://support.apple.com/ja-jp/guide/audio-midi-setup/ams1013/mac)
 
 通常の Windows MIDI Services のループバックは **A 出力 → B 入力** の対です。Keylume で A 側を、DAW で B 側を選んでください。Windows の `midir` は仮想ポートを作成しないため、自動作成は行いません。サービス稼働だけで WinMM のマルチクライアント対応を保証できません。
 
@@ -88,26 +92,33 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 開発
 
-Windows 11、Node.js 22.12 以降、Rust 1.95（検証環境）、MSVC C++ Build Tools、WebView2 Runtime が必要です。
+Node.js 22.12 以降と Rust 1.95 を使用します。Mac は Xcode Command Line Tools、Windows 11 は MSVC C++ Build Tools と WebView2 Runtime が必要です。
 
 ```powershell
 npm ci
 npm run desktop      # Rust コア + WebView
 npm run dev          # ブラウザーで UI プレビューのみ
-npm run package      # Windows NSIS インストーラー
+npm run package      # Mac は .app と DMG、Windows は NSIS インストーラー
 ```
 
 ブラウザー版は実機 MIDI、ピアノの発音、OS プロセス監視、音声ループバック、自動起動を行いません。保存先も native 版とは独立した localStorage です。実機と同じフレームを表示するのはデスクトップ版です。
+
+Mac で両方の CPU に対応する版を作る場合は、次を実行します。DMG は `src-tauri/target/universal-apple-darwin/release/bundle/dmg/` に生成されます。
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run package -- --target universal-apple-darwin
+```
 
 ## 検証
 
 前回の確認範囲は [v0.6.1検証記録](docs/verification-v0.6.1.md)、その前の確認とコミット一覧は [v0.6.0検証記録](docs/verification-v0.6.0.md)、機能全体の記録は [v0.5.0検証記録](docs/verification-v0.5.0.md) にまとめています。掲載画像はv0.5.0のUIのブラウザープレビューです。
 
-GitHub Actions は PR と `main` で Windows のテスト・インストーラー生成・ネイティブ自己テストを実行します。`main` に含まれる `v*` タグから同じ検証を行い、成功した成果物だけを Preview Release に公開します。Release には SHA-256、ビルド元コミット、Mock 検証結果を添付します。
+GitHub Actions はこのリポジトリで Windows 版をビルドして自己テストを実行します。`main` に含まれる `v*` タグが検証を通過すると、このリポジトリの Releases に配布物を公開します。
 
 ```powershell
 npm test
-npx playwright test  # Microsoft Edge を使用
+npx playwright test  # Windows は Microsoft Edge、Mac は Playwright Chromium を使用
 npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
@@ -124,7 +135,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
 ## 保存場所と構成
 
-通常の設定: `%APPDATA%\Keylume\`。`settings.json`、`performance.json`、`presets/`、`profiles/`、`layouts/layout.json`、`logs/` を使用します。正常な前回値は `.json.bak` に保持します。破損ファイルは `.corrupt-*` に隔離します。
+設定の保存先は Mac が `~/Library/Application Support/app.keylume.desktop/`、Windows が `%APPDATA%\Keylume\` です。`settings.json`、`performance.json`、`presets/`、`profiles/`、`layouts/layout.json`、`logs/` を使用します。正常な前回値は `.json.bak` に保持します。破損ファイルは `.corrupt-*` に隔離します。
 
 - `src-tauri/src/engine.rs`: レンダリングとエフェクト
 - `src-tauri/src/device/`: プロトコル、Mock / hardware、非同期送信

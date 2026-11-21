@@ -7,7 +7,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:1420',
     viewport: { width: 1280, height: 800 },
-    channel: 'msedge',
+    channel: process.platform === 'win32' ? 'msedge' : undefined,
     screenshot: 'only-on-failure',
   },
   webServer: { command: 'npm run dev', url: 'http://127.0.0.1:1420', reuseExistingServer: true },

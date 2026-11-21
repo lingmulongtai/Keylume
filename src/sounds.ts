@@ -34,7 +34,7 @@ export async function libraryCommand<T = LibraryState>(
       entries: factorySounds,
       progress: { active: false, received: 0, total: 32319396, error: '' },
     } as T;
-  throw Error('音源の取得・インポートはWindows版で利用できます');
+  throw Error('音源の取得・インポートはデスクトップ版で利用できます');
 }
 export const categoryNames: Record<string, string> = {
   Piano: 'ピアノ',

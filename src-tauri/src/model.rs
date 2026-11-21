@@ -450,14 +450,27 @@ impl Default for Settings {
             daw_drum: false,
             auto_repair: true,
             fade_on_release: true,
-            daw_processes: vec![
-                "Ableton Live*.exe",
-                "FL64.exe",
-                "Cubase*.exe",
-                "Bitwig Studio.exe",
-                "Studio One.exe",
-                "reaper.exe",
-            ]
+            daw_processes: if cfg!(target_os = "macos") {
+                vec![
+                    "Live",
+                    "Logic Pro",
+                    "GarageBand",
+                    "FL Studio",
+                    "Cubase*",
+                    "Bitwig Studio",
+                    "Studio One",
+                    "REAPER",
+                ]
+            } else {
+                vec![
+                    "Ableton Live*.exe",
+                    "FL64.exe",
+                    "Cubase*.exe",
+                    "Bitwig Studio.exe",
+                    "Studio One.exe",
+                    "reaper.exe",
+                ]
+            }
             .into_iter()
             .map(str::to_owned)
             .collect(),

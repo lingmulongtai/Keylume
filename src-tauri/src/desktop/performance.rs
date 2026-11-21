@@ -133,7 +133,11 @@ pub fn spawn(app: tauri::AppHandle, core: Arc<Core>) {
                 }
                 if Instant::now() >= next {
                     next = Instant::now() + Duration::from_millis(33);
-                    Some(e.snapshot())
+                    let mut snapshot = e.snapshot();
+                    if snapshot.running {
+                        snapshot.playback_held = playback.held_pitches();
+                    }
+                    Some(snapshot)
                 } else {
                     None
                 }
@@ -321,7 +325,7 @@ pub async fn stage_command(
             let max = bottom - bounds.y as f64 - kh - 20.;
             if min > max {
                 return Err(
-                    "鍵盤を連続表示するには、Windowsの画面設定でモニターの高さを揃えてください"
+                    "鍵盤を連続表示するには、ディスプレイ設定でモニターの高さを揃えてください"
                         .into(),
                 );
             }

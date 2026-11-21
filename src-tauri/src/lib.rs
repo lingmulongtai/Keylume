@@ -3,6 +3,7 @@ pub mod desktop;
 pub mod device;
 pub mod engine;
 pub mod model;
+pub mod modeled_piano;
 pub mod piano;
 pub mod profiles;
 pub mod routing;

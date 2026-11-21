@@ -1,3 +1,5 @@
+import { isMac, systemName, undoShortcut } from './platform';
+
 export interface Binding {
   action: string;
   value: string;
@@ -74,9 +76,9 @@ export const defaultController = (): ControllerSettings => {
       [
         ['fader-8', 'systemVolume', ''],
         ['fbtn.9', 'mode', ''],
-        ['btn.undo', 'shortcut', 'Ctrl+Z'],
+        ['btn.undo', 'shortcut', undoShortcut],
         ['btn.play', 'shortcut', 'MediaPlayPause'],
-        ['btn.stop', 'shortcut', 'MediaStop'],
+        ...(isMac ? [] : [['btn.stop', 'shortcut', 'MediaStop']]),
         ['btn.trackPrevious', 'shortcut', 'MediaPrevious'],
         ['btn.trackNext', 'shortcut', 'MediaNext'],
         ['pitch-wheel', 'scroll', ''],
@@ -98,7 +100,7 @@ export const actionNames: Record<string, string> = {
   mode: '演奏 / デスクトップ切替',
   effect: '音源エフェクト',
   volume: '楽器の音量',
-  systemVolume: 'Windowsの音量（既定の出力）',
+  systemVolume: `${systemName}の音量（既定の出力）`,
   brightness: 'ライティングの明るさ',
   sound: '音源を切替',
   kit: 'ドラムキットを切替',

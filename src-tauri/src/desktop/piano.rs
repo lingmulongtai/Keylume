@@ -1,5 +1,6 @@
 use crate::instrument_fx::{output_sample, Effects, InstrumentFx};
-use crate::piano::{PianoSettings, PianoSynth};
+use crate::modeled_piano::ModeledPiano;
+use crate::piano::{PianoCharacter, PianoSettings, PianoSynth, MODELED_GRAND_ID};
 use crate::sound_library::SoundId;
 use crate::{
     drums::{DrumSettings, DrumSynth, PadSound},
@@ -53,6 +54,7 @@ struct Shared {
     drum_kit: AtomicU32,
     drum_pads: [[AtomicU32; 5]; 16],
     effects: [AtomicU32; 8],
+    character: [AtomicU32; 3],
     patch: AtomicU32,
     loop_mode: AtomicU32,
     loop_beat: AtomicU64,
@@ -257,6 +259,9 @@ impl Piano {
                 [p.kind as f32, p.tune, p.decay, p.level, p.pan]
                     .map(|v| AtomicU32::new(v.to_bits()))
             }),
+            character: PianoCharacter::default()
+                .values()
+                .map(|v| AtomicU32::new(v.to_bits())),
             effects: InstrumentFx::default()
                 .values()
                 .map(|v| AtomicU32::new(v.to_bits())),
@@ -285,7 +290,7 @@ impl Piano {
             (bus.clone(), config.clone(), status.clone(), stop.clone());
         std::thread::spawn(move || {
             let mut stream = None;
-            let mut font = None;
+            let mut cached_instrument = None;
             let mut current = PianoSettings::default();
             let mut retry = Instant::now();
             let mut endpoint: Option<cpal::Device> = None;
@@ -351,11 +356,16 @@ impl Piano {
                     thread_status.lock().unwrap().state = "loading".into();
                     let result = (|| {
                         let key = bank_key(&current.sound);
-                        if font.as_ref().is_none_or(|(id, _)| id != &key) {
-                            font = Some((key, library.load(&current.sound)?));
+                        if cached_instrument.as_ref().is_none_or(|(id, _)| id != &key) {
+                            let instrument = if key == MODELED_GRAND_ID {
+                                InstrumentSource::Modeled
+                            } else {
+                                InstrumentSource::Font(library.load(&current.sound)?)
+                            };
+                            cached_instrument = Some((key, instrument));
                         }
                         start(
-                            &font.as_ref().unwrap().1,
+                            &cached_instrument.as_ref().unwrap().1,
                             &current,
                             rx.clone(),
                             playback_rx.clone(),
@@ -400,6 +410,15 @@ impl Piano {
         let mut config = self.config.lock().unwrap();
         if *config == *settings {
             return;
+        }
+        for (atomic, value) in self
+            .bus
+            .shared
+            .character
+            .iter()
+            .zip(settings.character.values())
+        {
+            atomic.store(value.to_bits(), Ordering::Release);
         }
         for (atomic, value) in self
             .bus
@@ -497,8 +516,57 @@ impl Drop for Piano {
     }
 }
 
+enum InstrumentSource {
+    Modeled,
+    Font(Arc<rustysynth::SoundFont>),
+}
+enum Instrument {
+    Modeled(Box<ModeledPiano>),
+    Sampled(Box<PianoSynth>),
+}
+impl InstrumentSource {
+    fn create(&self, rate: i32) -> Result<Instrument, String> {
+        match self {
+            Self::Modeled => Ok(Instrument::Modeled(Box::new(ModeledPiano::new(rate)))),
+            Self::Font(font) => Ok(Instrument::Sampled(Box::new(PianoSynth::new(font, rate)?))),
+        }
+    }
+}
+impl Instrument {
+    fn midi(&mut self, screen: bool, bytes: [u8; 3]) {
+        match self {
+            Self::Modeled(s) => s.midi(screen, bytes),
+            Self::Sampled(s) => s.midi(screen, bytes),
+        }
+    }
+    fn render(&mut self, left: &mut [f32], right: &mut [f32]) {
+        match self {
+            Self::Modeled(s) => s.render(left, right),
+            Self::Sampled(s) => s.render(left, right),
+        }
+    }
+    fn panic(&mut self) {
+        match self {
+            Self::Modeled(s) => s.panic(),
+            Self::Sampled(s) => s.panic(),
+        }
+    }
+    fn configure(&mut self, patch: u32, [felt, decay, resonance]: [f32; 3]) {
+        match self {
+            Self::Modeled(s) => s.set_character(felt, decay, resonance),
+            Self::Sampled(s) => s.set_patch((patch >> 8) as u16, patch as u8),
+        }
+    }
+    fn set_octave(&mut self, octave: i8) {
+        match self {
+            Self::Modeled(s) => s.set_octave(octave),
+            Self::Sampled(s) => s.set_octave(octave),
+        }
+    }
+}
+
 fn start(
-    font: &Arc<rustysynth::SoundFont>,
+    source: &InstrumentSource,
     settings: &PianoSettings,
     rx: Receiver<Event>,
     playback_rx: Receiver<PlaybackEvent>,
@@ -526,7 +594,7 @@ fn start(
         cpal::SampleFormat::F32 => build::<f32>(
             &device,
             config,
-            font,
+            source,
             rx.clone(),
             playback_rx.clone(),
             shared.clone(),
@@ -535,7 +603,7 @@ fn start(
         cpal::SampleFormat::I16 => build::<i16>(
             &device,
             config,
-            font,
+            source,
             rx.clone(),
             playback_rx.clone(),
             shared.clone(),
@@ -544,7 +612,7 @@ fn start(
         cpal::SampleFormat::U16 => build::<u16>(
             &device,
             config,
-            font,
+            source,
             rx.clone(),
             playback_rx.clone(),
             shared.clone(),
@@ -574,7 +642,7 @@ fn start(
 }
 fn loop_command(
     looper: &mut Looper,
-    synth: &mut PianoSynth,
+    synth: &mut Instrument,
     drums: &mut DrumSynth,
     command: LoopCommand,
 ) {
@@ -593,7 +661,7 @@ fn loop_command(
     }
 }
 fn playback_event(
-    synth: &mut PianoSynth,
+    synth: &mut Instrument,
     generation: &mut u64,
     current: u64,
     event: PlaybackEvent,
@@ -612,15 +680,15 @@ fn playback_event(
 fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    font: &Arc<rustysynth::SoundFont>,
+    source: &InstrumentSource,
     rx: Receiver<Event>,
     playback_rx: Receiver<PlaybackEvent>,
     shared: Arc<Shared>,
     errors: Sender<String>,
 ) -> Result<cpal::Stream, String> {
-    let mut synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
-    let mut loop_synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
-    let mut playback_synth = PianoSynth::new(font, config.sample_rate.0 as i32)?;
+    let mut synth = source.create(config.sample_rate.0 as i32)?;
+    let mut loop_synth = source.create(config.sample_rate.0 as i32)?;
+    let mut playback_synth = source.create(config.sample_rate.0 as i32)?;
     let mut playback_left = [0.; 256];
     let mut playback_right = [0.; 256];
     let mut playback_generation = shared.playback_generation.load(Ordering::Acquire);
@@ -663,9 +731,13 @@ fn build<T: cpal::SizedSample + cpal::FromSample<f32>>(
                 }
                 synth.set_octave(shared.octave.load(Ordering::Acquire));
                 let patch = shared.patch.load(Ordering::Acquire);
-                synth.set_patch((patch >> 8) as u16, patch as u8);
-                loop_synth.set_patch((patch >> 8) as u16, patch as u8);
-                playback_synth.set_patch((patch >> 8) as u16, patch as u8);
+                let character = shared
+                    .character
+                    .each_ref()
+                    .map(|v| f32::from_bits(v.load(Ordering::Acquire)));
+                for instrument in [&mut synth, &mut loop_synth, &mut playback_synth] {
+                    instrument.configure(patch, character);
+                }
                 let next_playback = shared.playback_generation.load(Ordering::Acquire);
                 if next_playback != playback_generation {
                     playback_synth.panic();
@@ -828,10 +900,49 @@ fn same_endpoint(a: Option<&cpal::Device>, b: Option<&cpal::Device>) -> bool {
 mod tests {
     use super::*;
     #[test]
+    #[ignore = "requires a real output device and plays a quiet note"]
+    fn modeled_grand_plays_on_the_default_output() {
+        let root = std::env::temp_dir().join(format!("keylume-audio-test-{}", std::process::id()));
+        let piano = Piano::new(super::super::sound_library::Library::new(root.clone()));
+        let settings = PianoSettings {
+            enabled: true,
+            sound: MODELED_GRAND_ID.into(),
+            volume: 0.15,
+            ..Default::default()
+        };
+        piano.configure(&settings);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !piano.bus.shared.enabled.load(Ordering::Acquire) {
+            let status = piano.view();
+            assert!(Instant::now() < deadline, "output failed: {}", status.error);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        piano.bus.midi(false, &[0x90, 60, 84]);
+        let deadline = Instant::now() + Duration::from_secs(1);
+        loop {
+            let status = piano.view();
+            if status.peak > 0.0001 {
+                println!(
+                    "{}: {} Hz, {} frames, peak {}",
+                    status.device, status.sample_rate, status.buffer_frames, status.peak
+                );
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "no signal in the device callback"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        piano.bus.midi(false, &[0x80, 60, 0]);
+        drop(piano);
+        std::fs::remove_dir(root).unwrap();
+    }
+    #[test]
     fn playback_adopts_a_reset_that_arrived_after_the_callback_snapshot() {
-        let font = crate::piano::sound_font().unwrap();
-        let mut live = PianoSynth::new(&font, 48000).unwrap();
-        let mut playback = PianoSynth::new(&font, 48000).unwrap();
+        let source = InstrumentSource::Font(crate::piano::sound_font().unwrap());
+        let mut live = source.create(48000).unwrap();
+        let mut playback = source.create(48000).unwrap();
         let mut generation = 0;
         live.midi(false, [0x90, 60, 100]);
         playback_event(
@@ -863,8 +974,8 @@ mod tests {
     }
     #[test]
     fn record_button_keeps_a_sustained_loop_voice_when_toggling_overdub() {
-        let font = crate::piano::sound_font().unwrap();
-        let mut synth = PianoSynth::new(&font, 48000).unwrap();
+        let source = InstrumentSource::Font(crate::piano::sound_font().unwrap());
+        let mut synth = source.create(48000).unwrap();
         let mut drums = DrumSynth::new(48000);
         let mut looper = Looper::default();
         let mut events = Vec::new();

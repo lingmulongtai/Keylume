@@ -17,7 +17,10 @@ test('controller keeps independent mode bindings and records keyboard shortcuts'
   ).toBeVisible();
   await page.getByRole('button', { name: 'デスクトップ時の割り当て', exact: true }).click();
   await page.locator('.controller-list button').filter({ hasText: 'Undo' }).click();
-  await expect(page.getByLabel('割り当ての内容', { exact: true })).toHaveValue('Ctrl+Z');
+  const mac = await page.evaluate(() => /Mac/i.test(navigator.platform));
+  await expect(page.getByLabel('割り当ての内容', { exact: true })).toHaveValue(
+    mac ? 'Cmd+Z' : 'Ctrl+Z',
+  );
   await page.getByRole('button', { name: 'キーを記録', exact: true }).click();
   await expect(page.getByLabel('割り当ての内容', { exact: true })).toBeFocused();
   await page.keyboard.press('Control+Shift+KeyK');
@@ -40,4 +43,21 @@ test('controller keeps independent mode bindings and records keyboard shortcuts'
   await expect(
     page.getByRole('button', { name: '演奏とデスクトップを切替', exact: true }),
   ).toHaveText('デスクトップモード');
+});
+
+test('Mac setup guides players to Core MIDI and IAC', async ({ page }) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, 'platform', { value: 'MacIntel' }),
+  );
+  await page.goto('/');
+  await page.getByRole('button', { name: 'セットアップガイド' }).click();
+  await page.getByRole('button', { name: '次へ' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Core MIDI');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await expect(page.getByLabel('楽器の音声出力先')).toContainText('Mac の既定');
+  await expect(page.getByText('ループバックする再生デバイス')).toHaveCount(0);
+  await page.getByRole('button', { name: '共存設定', exact: true }).click();
+  await expect(page.getByText('IAC ドライバをオンラインにし', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Microsoft のセットアップ案内' })).toHaveCount(0);
 });

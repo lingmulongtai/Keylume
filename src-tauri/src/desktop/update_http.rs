@@ -143,7 +143,34 @@ pub fn fetch_releases() -> Result<Vec<u8>, String> {
 
 #[cfg(not(windows))]
 pub fn fetch_releases() -> Result<Vec<u8>, String> {
-    Err("更新確認は Windows 版で利用できます".into())
+    use std::{io::Read, time::Duration};
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(concat!("Keylume/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let response = client
+        .get("https://api.github.com/repos/lingmulongtai/Keylume/releases?per_page=100")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .map_err(|e| format!("更新サーバーへ接続できません: {e}"))?;
+    if response.status() != reqwest::StatusCode::OK {
+        return Err(format!(
+            "更新を確認できませんでした（HTTP {}）",
+            response.status()
+        ));
+    }
+    const LIMIT: u64 = 2 * 1024 * 1024;
+    let mut body = Vec::new();
+    response
+        .take(LIMIT + 1)
+        .read_to_end(&mut body)
+        .map_err(|e| e.to_string())?;
+    if body.len() as u64 > LIMIT {
+        return Err("更新情報が大きすぎます".into());
+    }
+    Ok(body)
 }
 
 #[cfg(all(test, windows))]
