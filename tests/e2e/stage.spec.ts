@@ -24,7 +24,8 @@ test('imports MIDI in a worker, controls practice and saves calibrated appearanc
   });
   const title = page.getByRole('textbox', { name: '曲名', exact: true });
   await expect(title).toHaveValue('練習曲.take2');
-  await title.press('Enter');
+  await expect(title).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(page.getByText('練習曲.take2', { exact: true })).toBeVisible();
   await expect(page.getByLabel('練習の進め方', { exact: true })).toHaveValue('timing');
   await page.getByRole('button', { name: '練習を開始', exact: true }).click();

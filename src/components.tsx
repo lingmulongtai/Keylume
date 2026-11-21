@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { X, ChevronRight, Info } from 'lucide-react';
 export function Slider({
   label,
@@ -126,16 +126,21 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  initialFocus,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  initialFocus?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    ref.current?.showModal();
-  }, []);
+    const dialog = ref.current;
+    dialog?.showModal();
+    initialFocus?.current?.focus();
+    return () => dialog?.close();
+  }, [initialFocus]);
   return (
     <dialog
       ref={ref}

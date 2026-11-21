@@ -15,6 +15,7 @@ export default function MidiFilePicker({
   onImport: (file: File, title: string) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   return (
@@ -39,7 +40,7 @@ export default function MidiFilePicker({
         }}
       />
       {file && (
-        <Modal title="MIDIの曲名" onClose={() => setFile(null)}>
+        <Modal title="MIDIの曲名" initialFocus={titleInput} onClose={() => setFile(null)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -53,7 +54,7 @@ export default function MidiFilePicker({
             <label className="field">
               <span>曲名</span>
               <input
-                autoFocus
+                ref={titleInput}
                 type="text"
                 maxLength={200}
                 value={title}
