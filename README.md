@@ -6,7 +6,7 @@ Launchkey MK4 61 向けの非公式ライティングコントローラー＆常
 
 ## 起動
 
-[Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.0/Keylume_0.8.0_x64-setup.exe)を実行してください。[ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.0/Keylume_0.8.0_windows-x64.zip)は展開して `Keylume.exe` を起動します。Windows 11 と WebView2 Runtime が必要です。コード署名はしていません。
+[Windows インストーラー](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.1/Keylume_0.8.1_x64-setup.exe)を実行してください。[ポータブル ZIP](https://github.com/lingmulongtai/Keylume/releases/download/v0.8.1/Keylume_0.8.1_windows-x64.zip)は展開して `Keylume.exe` を起動します。Windows 11 と WebView2 Runtime が必要です。コード署名はしていません。
 
 Mac 版は独立した [Keylume-macOS](https://github.com/lingmulongtai/Keylume-macOS) で開発・配布しています。
 
@@ -22,7 +22,7 @@ Mac 版は独立した [Keylume-macOS](https://github.com/lingmulongtai/Keylume-
 
 ## ホームで音源を試す
 
-「テスト演奏」でデモ曲を選んで再生すると、その音源の演奏に合わせて鍵盤が動きます。内蔵曲は静かな分散和音の **Rain on Glass**、スウィングの **Pocket Swing**、三拍子の **Lantern Waltz**。自分のMIDIファイルも読み込めます。ホームと「演奏」タブは同じ曲と再生位置を使います。別の曲を選ぶと、読み込み中の曲が切り替わります。物理モデリング音源を試すには「選ぶ」で **Modeled Grand** に切り替えてください。
+「テスト演奏」でデモ曲を選んで再生すると、その音源の演奏に合わせて鍵盤が動きます。内蔵曲は静かな分散和音の **Rain on Glass**、スウィングの **Pocket Swing**、三拍子の **Lantern Waltz**。自分のMIDIファイルを開くと、ファイル名から曲名が入ります。そのまま確定するか、好きな曲名に変更できます。ホームと「演奏」タブは同じ曲と再生位置を使います。別の曲を選ぶと、読み込み中の曲が切り替わります。物理モデリング音源を試すには「選ぶ」で **Modeled Grand** に切り替えてください。
 
 ## ピアノを弾く
 
